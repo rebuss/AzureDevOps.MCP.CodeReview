@@ -59,6 +59,18 @@ Use this to avoid loading the entire PR diff at once.
 
 ---
 
+### get_pr_diff(prNumber)
+
+Use for **small PRs** as a faster alternative to iterating `get_file_diff` over each file.
+
+Purpose:
+- retrieve the complete diff for all changed files in a single call
+- get a quick overview of all changes at once
+
+Do not use for large PRs — prefer `get_file_diff` to keep context small.
+
+---
+
 ### get_file_diff(prNumber, path)
 
 Default method for reviewing code.
@@ -138,8 +150,7 @@ Choose the strategy depending on PR size.
 
 If the PR contains only a few files and limited changes:
 
-- review each file sequentially
-- call `get_file_diff(prNumber, path)` for each file
+- call `get_pr_diff(prNumber)` to retrieve all changes in a single call
 - only retrieve full file content when necessary
 
 ---
