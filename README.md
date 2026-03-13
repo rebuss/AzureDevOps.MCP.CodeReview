@@ -182,7 +182,7 @@ REBUSS.PR was designed with the following goals:
 
 # Configuration
 
-REBUSS.PR requires Azure DevOps connection settings. These can be provided via `appsettings.json` or environment variables.
+REBUSS.PR requires Azure DevOps connection settings.
 
 Required settings under the `AzureDevOps` section:
 
@@ -193,7 +193,17 @@ Required settings under the `AzureDevOps` section:
 | `RepositoryName` | Git repository name within the project |
 | `PersonalAccessToken` | PAT with read access to code and pull requests |
 
-Example `appsettings.json`:
+The server will fail to start if any required field is missing.
+
+---
+
+## Storing Secrets Locally
+
+> **Never put real secrets in `appsettings.json`.** That file is committed to the repository and must only contain empty defaults or non-sensitive values.
+
+### Option 1 — `appsettings.Local.json` (recommended)
+
+Create a file named `appsettings.Local.json` in the `REBUSS.Pure` project directory:
 
 ```json
 {
@@ -206,7 +216,28 @@ Example `appsettings.json`:
 }
 ```
 
-The server will fail to start if any required field is missing.
+This file is **already excluded from Git** via `.gitignore` (`appsettings.*.json`) and will never be committed.
+
+The application loads it automatically and its values override anything in `appsettings.json`.
+
+### Option 2 — Environment Variables
+
+Set environment variables using the `AzureDevOps__` prefix (double underscore):
+
+```
+AzureDevOps__OrganizationName=your-org
+AzureDevOps__ProjectName=your-project
+AzureDevOps__RepositoryName=your-repo
+AzureDevOps__PersonalAccessToken=your-pat
+```
+
+Environment variables take the highest priority and override both JSON files.
+
+### Configuration priority (lowest → highest)
+
+1. `appsettings.json` — committed, contains defaults (no secrets)
+2. `appsettings.Local.json` — not committed, contains your personal secrets
+3. Environment variables — highest priority, useful for CI/CD or container deployments
 
 ---
 
