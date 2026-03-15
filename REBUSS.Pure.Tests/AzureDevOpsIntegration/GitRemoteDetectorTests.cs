@@ -110,9 +110,12 @@ public class GitRemoteDetectorTests
     [Fact]
     public void FindGitRepositoryRoot_ReturnsNull_WhenNoGitDirectory()
     {
-        // Use a system root where no .git directory exists
-        var root = GitRemoteDetector.FindGitRepositoryRoot(
-            Path.GetPathRoot(Environment.SystemDirectory)!);
+        // Use the filesystem root where no .git directory exists.
+        // On Linux Environment.SystemDirectory can be empty, so fall back to "/".
+        var systemRoot = Path.GetPathRoot(Environment.SystemDirectory);
+        var searchPath = string.IsNullOrEmpty(systemRoot) ? "/" : systemRoot;
+
+        var root = GitRemoteDetector.FindGitRepositoryRoot(searchPath);
 
         Assert.Null(root);
     }

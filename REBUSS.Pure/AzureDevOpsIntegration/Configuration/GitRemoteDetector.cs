@@ -151,8 +151,11 @@ public partial class GitRemoteDetector : IGitRemoteDetector
     /// Walks up from <paramref name="startDirectory"/> looking for a directory that contains
     /// a <c>.git</c> subdirectory. Returns the first match, or <c>null</c>.
     /// </summary>
-    internal static string? FindGitRepositoryRoot(string startDirectory)
+    internal static string? FindGitRepositoryRoot(string? startDirectory)
     {
+        if (string.IsNullOrWhiteSpace(startDirectory))
+            return null;
+
         var dir = new DirectoryInfo(startDirectory);
 
         while (dir is not null)

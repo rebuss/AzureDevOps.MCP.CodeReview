@@ -169,8 +169,11 @@ namespace REBUSS.Pure.Mcp
             return null;
         }
 
-        internal static string? FindGitRepositoryRoot(string startDirectory)
+        internal static string? FindGitRepositoryRoot(string? startDirectory)
         {
+            if (string.IsNullOrWhiteSpace(startDirectory))
+                return null;
+
             var dir = new DirectoryInfo(startDirectory);
 
             while (dir is not null)

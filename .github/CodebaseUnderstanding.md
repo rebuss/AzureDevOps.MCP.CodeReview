@@ -124,7 +124,7 @@ Full codebase context is included below (file-role map, dependency graph, DI reg
 | `REBUSS.Pure\Mcp\IMcpMethodHandler.cs` | Interface: handles one JSON-RPC method |
 | `REBUSS.Pure\Mcp\IMcpToolHandler.cs` | Interface: MCP tool (definition + execution) |
 | `REBUSS.Pure\Mcp\IWorkspaceRootProvider.cs` | Interface: stores CLI repo path, MCP roots, resolves repository root path |
-| `REBUSS.Pure\Mcp\McpWorkspaceRootProvider.cs` | Implementation: resolves repo root from CLI `--repo` (highest priority), MCP roots, or `localRepoPath` config; guards against unexpanded variables (e.g. `${workspaceFolder}` passed literally by Visual Studio); reads `LocalRepoPath` directly from `IConfiguration` to avoid circular dependency with `IPostConfigureOptions<AzureDevOpsOptions>` |
+| `REBUSS.Pure\Mcp\McpWorkspaceRootProvider.cs` | Implementation: resolves repo root from CLI `--repo` (highest priority), MCP roots, or `localRepoPath` config; guards against unexpanded variables (e.g. `${workspaceFolder}` passed literally by Visual Studio); reads `LocalRepoPath` directly from `IConfiguration` to avoid circular dependency with `IPostConfigureOptions<AzureDevOpsOptions>`; `FindGitRepositoryRoot` accepts nullable `string?` and returns `null` for null/empty input |
 | `REBUSS.Pure\Mcp\Handlers\InitializeMethodHandler.cs` | `initialize` method handler — extracts MCP roots, stores via `IWorkspaceRootProvider` |
 | `REBUSS.Pure\Mcp\Handlers\ToolsListMethodHandler.cs` | `tools/list` method handler |
 | `REBUSS.Pure\Mcp\Handlers\ToolsCallMethodHandler.cs` | `tools/call` method handler — resolves tool by name, delegates |
@@ -165,7 +165,7 @@ Full codebase context is included below (file-role map, dependency graph, DI reg
 | `REBUSS.Pure\AzureDevOpsIntegration\Configuration\AzureDevOpsOptions.cs` | Config model: org, project, repo, PAT, LocalRepoPath (all optional) |
 | `REBUSS.Pure\AzureDevOpsIntegration\Configuration\AzureDevOpsOptionsValidator.cs` | Validates config field format (all fields optional) |
 | `REBUSS.Pure\AzureDevOpsIntegration\Configuration\IGitRemoteDetector.cs` | Interface + `DetectedGitInfo` record: detects Azure DevOps repo from Git remote; supports `Detect()` and `Detect(string repositoryPath)` |
-| `REBUSS.Pure\AzureDevOpsIntegration\Configuration\GitRemoteDetector.cs` | Parses HTTPS/SSH Azure DevOps remote URLs via `git remote get-url origin`; tries current directory and walks up from executable location to find repo root |
+| `REBUSS.Pure\AzureDevOpsIntegration\Configuration\GitRemoteDetector.cs` | Parses HTTPS/SSH Azure DevOps remote URLs via `git remote get-url origin`; tries current directory and walks up from executable location to find repo root; `FindGitRepositoryRoot` accepts nullable `string?` and returns `null` for null/empty input |
 | `REBUSS.Pure\AzureDevOpsIntegration\Configuration\ILocalConfigStore.cs` | Interface + `CachedConfig` model: persists/retrieves cached config |
 | `REBUSS.Pure\AzureDevOpsIntegration\Configuration\LocalConfigStore.cs` | JSON file store under `%LOCALAPPDATA%/REBUSS.Pure/config.json` |
 | `REBUSS.Pure\AzureDevOpsIntegration\Configuration\IAuthenticationProvider.cs` | Interface: provides `AuthenticationHeaderValue` for API calls |

@@ -108,8 +108,11 @@ public class McpWorkspaceRootProviderTests
     [Fact]
     public void FindGitRepositoryRoot_ReturnsNull_WhenNoGitDirectory()
     {
-        var root = McpWorkspaceRootProvider.FindGitRepositoryRoot(
-            Path.GetPathRoot(Environment.SystemDirectory)!);
+        // On Linux Environment.SystemDirectory can be empty, so fall back to "/".
+        var systemRoot = Path.GetPathRoot(Environment.SystemDirectory);
+        var searchPath = string.IsNullOrEmpty(systemRoot) ? "/" : systemRoot;
+
+        var root = McpWorkspaceRootProvider.FindGitRepositoryRoot(searchPath);
 
         Assert.Null(root);
     }
