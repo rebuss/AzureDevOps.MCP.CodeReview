@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using REBUSS.Pure.Mcp.Handlers;
@@ -60,9 +61,13 @@ namespace REBUSS.Pure.Mcp
         {
             var serializer = new SystemTextJsonSerializer();
             var tools = toolHandlers.ToList();
+            var emptyConfiguration = new ConfigurationBuilder().Build();
+            var workspaceRootProvider = new McpWorkspaceRootProvider(
+                emptyConfiguration,
+                NullLogger<McpWorkspaceRootProvider>.Instance);
             return new IMcpMethodHandler[]
             {
-                new InitializeMethodHandler(),
+                new InitializeMethodHandler(workspaceRootProvider, serializer, NullLogger<InitializeMethodHandler>.Instance),
                 new ToolsListMethodHandler(tools),
                 new ToolsCallMethodHandler(tools, serializer, NullLogger<ToolsCallMethodHandler>.Instance)
             };

@@ -8,5 +8,11 @@ namespace REBUSS.Pure.AzureDevOpsIntegration.Configuration
         public string ProjectName { get; set; } = string.Empty;
         public string RepositoryName { get; set; } = string.Empty;
         public string PersonalAccessToken { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Optional local filesystem path to the Git repository.
+        /// Used as a fallback when MCP roots are not provided by the client.
+        /// </summary>
+        public string LocalRepoPath { get; set; } = string.Empty;
     }
 }

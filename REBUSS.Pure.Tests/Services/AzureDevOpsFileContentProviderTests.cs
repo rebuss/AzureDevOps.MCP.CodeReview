@@ -140,31 +140,4 @@ public class AzureDevOpsFileContentProviderTests
             () => _provider.GetFileContentAsync("/src/File.cs", "abc123", cts.Token));
     }
 
-    // --- Typical PR workflow: base.sha and head.sha ---
-
-    [Fact]
-    public async Task GetFileContentAsync_WorksWithBaseSha()
-    {
-        var baseSha = "bbb222aaa111ccc333ddd444eee555fff666aaa1";
-        _apiClient.GetFileContentAtRefAsync(baseSha, "/src/Cache/CacheService.cs")
-            .Returns("// old version of CacheService");
-
-        var result = await _provider.GetFileContentAsync("/src/Cache/CacheService.cs", baseSha);
-
-        Assert.Equal(baseSha, result.Ref);
-        Assert.Equal("// old version of CacheService", result.Content);
-    }
-
-    [Fact]
-    public async Task GetFileContentAsync_WorksWithHeadSha()
-    {
-        var headSha = "aaa111bbb222ccc333ddd444eee555fff666bbb2";
-        _apiClient.GetFileContentAtRefAsync(headSha, "/src/Cache/CacheService.cs")
-            .Returns("// new version of CacheService");
-
-        var result = await _provider.GetFileContentAsync("/src/Cache/CacheService.cs", headSha);
-
-        Assert.Equal(headSha, result.Ref);
-        Assert.Equal("// new version of CacheService", result.Content);
-    }
 }

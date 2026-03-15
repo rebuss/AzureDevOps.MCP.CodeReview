@@ -23,6 +23,11 @@ namespace REBUSS.Pure.AzureDevOpsIntegration.Services
             _httpClient = httpClient;
             _options = options.Value;
             _logger = logger;
+
+            if (_httpClient.BaseAddress is null && !string.IsNullOrWhiteSpace(_options.OrganizationName))
+            {
+                _httpClient.BaseAddress = new Uri($"https://dev.azure.com/{_options.OrganizationName}/");
+            }
         }
 
         public async Task<string> GetPullRequestDetailsAsync(int pullRequestId)
@@ -198,9 +203,12 @@ namespace REBUSS.Pure.AzureDevOpsIntegration.Services
             if (!response.IsSuccessStatusCode)
             {
                 var errorContent = await response.Content.ReadAsStringAsync();
+                var truncated = errorContent.Length > 500
+                    ? errorContent[..500] + "...[truncated]"
+                    : errorContent;
                 _logger.LogError(
                     "Azure DevOps API {Endpoint} returned {StatusCode} in {ElapsedMs}ms: {ErrorContent}",
-                    endpointName, (int)response.StatusCode, sw.ElapsedMilliseconds, errorContent);
+                    endpointName, (int)response.StatusCode, sw.ElapsedMilliseconds, truncated);
             }
 
             response.EnsureSuccessStatusCode();

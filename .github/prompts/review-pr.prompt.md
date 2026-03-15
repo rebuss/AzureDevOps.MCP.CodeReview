@@ -4,7 +4,7 @@ Perform a professional code review of the pull request.
 
 Pull request number: {{input}}
 
-Use MCP server: `REBUSS.PR`.
+Use MCP server: `REBUSS.Pure`.
 
 The goal is to detect real technical risks while minimizing unnecessary context usage.
 
@@ -32,7 +32,7 @@ Avoid focusing on minor style issues unless they affect correctness or maintaina
 
 # MCP Tools
 
-Use the following MCP tools from `REBUSS.PR`.
+Use the following MCP tools from `REBUSS.Pure`.
 
 ### get_pr_metadata(prNumber)
 

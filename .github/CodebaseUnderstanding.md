@@ -109,7 +109,9 @@ Full codebase context is included below (file-role map, dependency graph, DI reg
 | `REBUSS.Pure\Mcp\McpServer.cs` | Main server loop: reads JSON-RPC over stdio, dispatches to method handlers |
 | `REBUSS.Pure\Mcp\IMcpMethodHandler.cs` | Interface: handles one JSON-RPC method |
 | `REBUSS.Pure\Mcp\IMcpToolHandler.cs` | Interface: MCP tool (definition + execution) |
-| `REBUSS.Pure\Mcp\Handlers\InitializeMethodHandler.cs` | `initialize` method handler |
+| `REBUSS.Pure\Mcp\IWorkspaceRootProvider.cs` | Interface: stores CLI repo path, MCP roots, resolves repository root path |
+| `REBUSS.Pure\Mcp\McpWorkspaceRootProvider.cs` | Implementation: resolves repo root from CLI `--repo` (highest priority), MCP roots, or `localRepoPath` config; guards against unexpanded variables (e.g. `${workspaceFolder}` passed literally by Visual Studio); reads `LocalRepoPath` directly from `IConfiguration` to avoid circular dependency with `IPostConfigureOptions<AzureDevOpsOptions>` |
+| `REBUSS.Pure\Mcp\Handlers\InitializeMethodHandler.cs` | `initialize` method handler — extracts MCP roots, stores via `IWorkspaceRootProvider` |
 | `REBUSS.Pure\Mcp\Handlers\ToolsListMethodHandler.cs` | `tools/list` method handler |
 | `REBUSS.Pure\Mcp\Handlers\ToolsCallMethodHandler.cs` | `tools/call` method handler — resolves tool by name, delegates |
 | `REBUSS.Pure\Mcp\IJsonRpcSerializer.cs` | Interface: JSON-RPC serialization |
@@ -133,6 +135,8 @@ Full codebase context is included below (file-role map, dependency graph, DI reg
 | `REBUSS.Pure\Mcp\Models\ToolResult.cs` | Tool result: content items, isError |
 | `REBUSS.Pure\Mcp\Models\ContentItem.cs` | Content item: type, text |
 | `REBUSS.Pure\Mcp\Models\InitializeResult.cs` | Initialize result: protocol version, capabilities, server info |
+| `REBUSS.Pure\Mcp\Models\InitializeParams.cs` | Initialize params: roots list from MCP client |
+| `REBUSS.Pure\Mcp\Models\McpRoot.cs` | MCP root: uri, name |
 | `REBUSS.Pure\Mcp\Models\ServerCapabilities.cs` | Server capabilities |
 | `REBUSS.Pure\Mcp\Models\ServerInfo.cs` | Server info: name, version |
 | `REBUSS.Pure\Mcp\Models\ToolsCapability.cs` | Tools capability: listChanged |
@@ -143,16 +147,37 @@ Full codebase context is included below (file-role map, dependency graph, DI reg
 | File | Role |
 |---|---|
 | `REBUSS.Pure\AzureDevOpsIntegration\Services\IAzureDevOpsApiClient.cs` | Interface: Azure DevOps REST API client |
-| `REBUSS.Pure\AzureDevOpsIntegration\Services\AzureDevOpsApiClient.cs` | HTTP client for Azure DevOps (pre-configured HttpClient, PAT auth) |
-| `REBUSS.Pure\AzureDevOpsIntegration\Configuration\AzureDevOpsOptions.cs` | Config model: org, project, repo, PAT |
-| `REBUSS.Pure\AzureDevOpsIntegration\Configuration\AzureDevOpsOptionsValidator.cs` | Validates required config fields |
+| `REBUSS.Pure\AzureDevOpsIntegration\Services\AzureDevOpsApiClient.cs` | HTTP client for Azure DevOps; sets BaseAddress lazily in constructor from `IOptions<AzureDevOpsOptions>`, auth delegated to `AuthenticationDelegatingHandler` |
+| `REBUSS.Pure\AzureDevOpsIntegration\Configuration\AzureDevOpsOptions.cs` | Config model: org, project, repo, PAT, LocalRepoPath (all optional) |
+| `REBUSS.Pure\AzureDevOpsIntegration\Configuration\AzureDevOpsOptionsValidator.cs` | Validates config field format (all fields optional) |
+| `REBUSS.Pure\AzureDevOpsIntegration\Configuration\IGitRemoteDetector.cs` | Interface + `DetectedGitInfo` record: detects Azure DevOps repo from Git remote; supports `Detect()` and `Detect(string repositoryPath)` |
+| `REBUSS.Pure\AzureDevOpsIntegration\Configuration\GitRemoteDetector.cs` | Parses HTTPS/SSH Azure DevOps remote URLs via `git remote get-url origin`; tries current directory and walks up from executable location to find repo root |
+| `REBUSS.Pure\AzureDevOpsIntegration\Configuration\ILocalConfigStore.cs` | Interface + `CachedConfig` model: persists/retrieves cached config |
+| `REBUSS.Pure\AzureDevOpsIntegration\Configuration\LocalConfigStore.cs` | JSON file store under `%LOCALAPPDATA%/REBUSS.Pure/config.json` |
+| `REBUSS.Pure\AzureDevOpsIntegration\Configuration\IAuthenticationProvider.cs` | Interface: provides `AuthenticationHeaderValue` for API calls |
+| `REBUSS.Pure\AzureDevOpsIntegration\Configuration\ChainedAuthenticationProvider.cs` | Auth chain: PAT → cached token → error with PAT instructions; accepts `IOptions<AzureDevOpsOptions>` for lazy resolution; `BuildPatRequiredMessage` produces clear user-facing error with PAT config example and creation link |
+| `REBUSS.Pure\AzureDevOpsIntegration\Configuration\AuthenticationDelegatingHandler.cs` | `DelegatingHandler` that lazily sets auth header on each outgoing HTTP request via `IAuthenticationProvider` |
+| `REBUSS.Pure\AzureDevOpsIntegration\Configuration\ConfigurationResolver.cs` | `IPostConfigureOptions<AzureDevOpsOptions>` impl: merges explicit config, cached, and auto-detected values; returns empty strings for unresolved fields (no throw), skips caching when incomplete; uses `IWorkspaceRootProvider` for repo path resolution |
+
+### CLI infrastructure
+
+| File | Role |
+|---|---|
+| `REBUSS.Pure\Cli\CliArgumentParser.cs` | Parses CLI args: detects `init` command vs server mode, extracts `--repo`, `--pat`, `--org`, `--project`, `--repository` |
+| `REBUSS.Pure\Cli\ICliCommand.cs` | Interface: executable CLI command |
+| `REBUSS.Pure\Cli\InitCommand.cs` | `init` command: generates `.vscode/mcp.json` in current repo with `--repo ${workspaceFolder}` |
+
+### Logging
+
+| File | Role |
+|---|---|
+| `REBUSS.Pure\Logging\FileLoggerProvider.cs` | `ILoggerProvider` implementation that appends to `%LOCALAPPDATA%\REBUSS.Pure\server.log`; enables diagnostics for clients (e.g. Visual Studio) that do not expose server stderr |
 
 ### Entry point
 
 | File | Role |
 |---|---|
-| `REBUSS.Pure\Program.cs` | DI composition root, configures all services, starts McpServer |
-
+| `REBUSS.Pure\Program.cs` | DI composition root; dual-mode: CLI commands (`init`) or MCP server; parses `--repo` argument and passes it to `IWorkspaceRootProvider` before server starts |
 ### Documentation
 
 | File | Role |
@@ -181,8 +206,15 @@ Full codebase context is included below (file-role map, dependency graph, DI reg
 | `REBUSS.Pure.Tests\Tools\GetFileContentAtRefToolHandlerTests.cs` | `GetFileContentAtRefToolHandler` |
 | `REBUSS.Pure.Tests\Integration\EndToEndTests.cs` | Full JSON-RPC pipeline: request → McpServer → handler → response |
 | `REBUSS.Pure.Tests\Mcp\McpServerTests.cs` | `McpServer` |
-| `REBUSS.Pure.Tests\AzureDevOpsIntegration\AzureDevOpsOptionsTests.cs` | Options validation |
+| `REBUSS.Pure.Tests\Mcp\InitializeMethodHandlerTests.cs` | `InitializeMethodHandler` — roots extraction, storage, edge cases |
+| `REBUSS.Pure.Tests\Mcp\McpWorkspaceRootProviderTests.cs` | `McpWorkspaceRootProvider` — URI conversion, repo root resolution, MCP roots, localRepoPath fallback, CLI `--repo` precedence, unexpanded variable guard |
+| `REBUSS.Pure.Tests\Cli\CliArgumentParserTests.cs` | `CliArgumentParser` — server mode, `--repo`, `--pat`, `--org`, `--project`, `--repository`, `init` command, combined args, edge cases |
+| `REBUSS.Pure.Tests\Cli\InitCommandTests.cs` | `InitCommand` — generates `.vscode/mcp.json`, error cases, subdirectory support |
+| `REBUSS.Pure.Tests\AzureDevOpsIntegration\AzureDevOpsOptionsTests.cs` | Options validation (format-only, all fields optional) |
 | `REBUSS.Pure.Tests\AzureDevOpsIntegration\AzureDevOpsApiClientTests.cs` | API client |
+| `REBUSS.Pure.Tests\AzureDevOpsIntegration\GitRemoteDetectorTests.cs` | `GitRemoteDetector.ParseRemoteUrl` — HTTPS, SSH, GitHub, edge cases; `FindGitRepositoryRoot`, `GetCandidateDirectories` |
+| `REBUSS.Pure.Tests\AzureDevOpsIntegration\ConfigurationResolverTests.cs` | `ConfigurationResolver` — PostConfigure precedence, fallback, caching, mixed sources, Resolve static method |
+| `REBUSS.Pure.Tests\AzureDevOpsIntegration\ChainedAuthenticationProviderTests.cs` | `ChainedAuthenticationProvider` — PAT precedence, cached tokens, expired token error, `BuildPatRequiredMessage` content validation |
 
 ---
 
@@ -231,28 +263,80 @@ FileContent
 PullRequestFiles / PullRequestFileInfo / PullRequestFilesSummary
   → AzureDevOpsFilesProvider        (produces)
   → GetPullRequestFilesToolHandler  (consumes)
+
+AzureDevOpsOptions (+ LocalRepoPath)
+→ ConfigurationResolver           (IPostConfigureOptions: merges cached + detected values into options)
+→ ChainedAuthenticationProvider   (consumes via IOptions<AzureDevOpsOptions>: reads PersonalAccessToken lazily)
+→ AzureDevOpsApiClient            (consumes via IOptions<AzureDevOpsOptions>: reads ProjectName, RepositoryName, sets BaseAddress lazily)
+→ AuthenticationDelegatingHandler (consumes IAuthenticationProvider: sets auth header lazily on each request)
+→ Program.cs                      (lazy resolution via IOptions<AzureDevOpsOptions>.Value)
+
+IConfiguration
+  → McpWorkspaceRootProvider        (consumes: reads AzureDevOps:LocalRepoPath directly to avoid circular dependency)
+
+CliParseResult (+ Pat, Organization, Project, Repository)
+→ Program.Main                    (produces via CliArgumentParser.Parse)
+→ Program.RunMcpServerAsync       (consumes: reads RepoPath, passes to IWorkspaceRootProvider;
+                                    reads Pat/Organization/Project/Repository, adds as in-memory config overrides)
+→ Program.RunCliCommandAsync      (consumes: reads CommandName, dispatches to ICliCommand)
+
+McpRoot / InitializeParams
+  → InitializeMethodHandler         (consumes: extracts roots from initialize request)
+  → IWorkspaceRootProvider          (stores: root URIs from MCP client)
+  → McpWorkspaceRootProvider        (resolves: repo root from CLI --repo, MCP roots, or localRepoPath)
+  → ConfigurationResolver           (consumes: workspace root for git detection)
+
+DetectedGitInfo
+  → GitRemoteDetector               (produces via synchronous Detect())
+  → ConfigurationResolver           (consumes: fallback for org/project/repo)
+
+CachedConfig
+  → LocalConfigStore                (produces/consumes: file I/O)
+  → ConfigurationResolver           (consumes: fallback for org/project/repo)
+  → ChainedAuthenticationProvider   (consumes: cached token; produces: saves new token)
 ```
 
 ---
 
 # 3. DI Registration Summary
 
-From `REBUSS.Pure\Program.cs` → `ConfigureServices`:
+From `REBUSS.Pure\Program.cs` → `ConfigureServices` and `RunMcpServerAsync`:
 
 ```csharp
-// Logging
+// IConfiguration — registered so McpWorkspaceRootProvider can read LocalRepoPath
+// directly without going through IOptions<AzureDevOpsOptions> (avoids circular dependency)
+services.AddSingleton<IConfiguration>(configuration);
+
+// Logging — also writes to %LOCALAPPDATA%\REBUSS.Pure\server.log for clients that don't expose stderr
 services.AddLogging(builder =>
 {
     builder.AddConsole(options => options.LogToStandardErrorThreshold = LogLevel.Trace);
-    builder.SetMinimumLevel(LogLevel.Information);
+    builder.AddProvider(new FileLoggerProvider(GetLogFilePath()));
+    builder.SetMinimumLevel(LogLevel.Debug);
 });
 
-// Configuration
+// Configuration (all fields optional)
 services.Configure<AzureDevOpsOptions>(configuration.GetSection(AzureDevOpsOptions.SectionName));
 services.AddSingleton<IValidateOptions<AzureDevOpsOptions>, AzureDevOpsOptionsValidator>();
 
-// HTTP client (pre-configured with base URL + PAT auth)
-services.AddHttpClient<IAzureDevOpsApiClient, AzureDevOpsApiClient>(...)
+// Workspace root provider: resolves repository path from CLI --repo, MCP roots, or localRepoPath
+services.AddSingleton<IWorkspaceRootProvider, McpWorkspaceRootProvider>();
+
+// Configuration resolution: merges explicit config, cached, and auto-detected values
+// via IPostConfigureOptions — runs automatically on first IOptions<AzureDevOpsOptions>.Value access
+services.AddSingleton<IGitRemoteDetector, GitRemoteDetector>();
+services.AddSingleton<ILocalConfigStore, LocalConfigStore>();
+services.AddSingleton<IPostConfigureOptions<AzureDevOpsOptions>, ConfigurationResolver>();
+
+// Authentication provider (chained: PAT → cached token → Entra ID)
+// Accepts IOptions<AzureDevOpsOptions> — options resolved lazily on first GetAuthenticationAsync call
+services.AddSingleton<IAuthenticationProvider, ChainedAuthenticationProvider>();
+services.AddTransient<AuthenticationDelegatingHandler>();
+
+// HTTP client — BaseAddress set lazily in AzureDevOpsApiClient constructor,
+// auth header set lazily per-request by AuthenticationDelegatingHandler
+services.AddHttpClient<IAzureDevOpsApiClient, AzureDevOpsApiClient>()
+    .AddHttpMessageHandler<AuthenticationDelegatingHandler>()
     .AddStandardResilienceHandler();
 
 // Parsers
@@ -294,6 +378,13 @@ services.AddSingleton<IMcpMethodHandler, ToolsCallMethodHandler>();
 
 // Server
 services.AddSingleton<McpServer>(...);
+
+// In RunMcpServerAsync: CLI arguments (--pat, --org, --project, --repository) are
+// collected into a Dictionary and added via AddInMemoryCollection to the configuration
+// builder AFTER environment variables, giving them highest priority.
+// CLI --repo is applied after building the service provider:
+// if parseResult.RepoPath is not null, it's set via IWorkspaceRootProvider.SetCliRepositoryPath
+// before server.RunAsync is called.
 ```
 
 ---
@@ -319,6 +410,7 @@ services.AddSingleton<McpServer>(...);
 | **Comments** | XML doc on public types/methods; no inline comments unless complex |
 | **Naming** | Standard C# conventions; private fields prefixed with `_`; interfaces prefixed with `I` |
 | **File naming** | Interface and class in same-named files (e.g., `IUnifiedDiffBuilder.cs` contains `IStructuredDiffBuilder`) — note: file names may not match type names after refactoring |
+| **CLI pattern** | `CliArgumentParser` for parsing, `ICliCommand` for commands; CLI output goes to `Console.Error` (stdout reserved for MCP stdio) |
 
 ---
 
@@ -1641,6 +1733,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using REBUSS.Pure.AzureDevOpsIntegration.Configuration;
 using REBUSS.Pure.AzureDevOpsIntegration.Services;
+using REBUSS.Pure.Cli;
 using REBUSS.Pure.Mcp;
 using REBUSS.Pure.Mcp.Handlers;
 using REBUSS.Pure.Services.Common;
@@ -1651,106 +1744,63 @@ using REBUSS.Pure.Services.FileList;
 using REBUSS.Pure.Services.FileList.Classification;
 using REBUSS.Pure.Services.Metadata;
 using REBUSS.Pure.Tools;
-using System.Net.Http.Headers;
-using System.Text;
 
 namespace REBUSS.Pure
 {
     class Program
     {
-        static async Task Main(string[] args)
+        static async Task<int> Main(string[] args)
         {
-            var configuration = new ConfigurationBuilder()
-                .SetBasePath(AppContext.BaseDirectory)
-                .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
-                .AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true)
-                .AddEnvironmentVariables()
-                .Build();
+            var parseResult = CliArgumentParser.Parse(args);
 
-            var services = new ServiceCollection();
-            ConfigureServices(services, configuration);
-            var serviceProvider = services.BuildServiceProvider();
+            if (!parseResult.IsServerMode)
+                return await RunCliCommandAsync(parseResult);
 
-            // Fail fast if Azure DevOps configuration is incomplete
-            _ = serviceProvider.GetRequiredService<IOptions<AzureDevOpsOptions>>().Value;
+            await RunMcpServerAsync(parseResult);
+            return 0;
+        }
 
-            var server = serviceProvider.GetRequiredService<McpServer>();
-            using var cts = new CancellationTokenSource();
-
-            Console.CancelKeyPress += (_, e) =>
+        private static async Task<int> RunCliCommandAsync(CliParseResult parseResult)
+        {
+            ICliCommand command = parseResult.CommandName switch
             {
-                e.Cancel = true;
-                cts.Cancel();
+                "init" => new InitCommand(
+                    Console.Error,
+                    Environment.CurrentDirectory,
+                    GetExecutablePath()),
+                _ => throw new InvalidOperationException($"Unknown command: {parseResult.CommandName}")
             };
 
-            try
-            {
-                await server.RunAsync(cts.Token);
-            }
-            catch (Exception ex)
-            {
-                await Console.Error.WriteLineAsync($"Fatal error: {ex.Message}");
-                await Console.Error.WriteLineAsync(ex.StackTrace);
-                Environment.Exit(1);
-            }
+            return await command.ExecuteAsync();
+        }
+
+        private static string GetExecutablePath()
+        {
+            var processPath = Environment.ProcessPath;
+            if (!string.IsNullOrEmpty(processPath))
+                return processPath;
+
+            return Path.Combine(AppContext.BaseDirectory, "REBUSS.Pure.exe");
+        }
+
+        private static async Task RunMcpServerAsync(CliParseResult parseResult)
+        {
+            // ... CLI args (--pat, --org, --project, --repository) are collected via
+            // BuildCliConfigOverrides and added as in-memory config overrides (highest priority).
+            // After building the service provider:
+            // if parseResult.RepoPath is not null, it's set via
+            // IWorkspaceRootProvider.SetCliRepositoryPath before server.RunAsync
+        }
+
+        private static Dictionary<string, string?> BuildCliConfigOverrides(CliParseResult parseResult)
+        {
+            // Maps CLI arguments to AzureDevOps config section keys.
+            // Non-null values override all other configuration sources.
         }
 
         private static void ConfigureServices(IServiceCollection services, IConfiguration configuration)
         {
-            services.AddLogging(builder =>
-            {
-                builder.AddConsole(options =>
-                {
-                    options.LogToStandardErrorThreshold = LogLevel.Trace;
-                });
-                builder.SetMinimumLevel(LogLevel.Information);
-            });
-
-            services.Configure<AzureDevOpsOptions>(configuration.GetSection(AzureDevOpsOptions.SectionName));
-            services.AddSingleton<IValidateOptions<AzureDevOpsOptions>, AzureDevOpsOptionsValidator>();
-
-            services.AddHttpClient<IAzureDevOpsApiClient, AzureDevOpsApiClient>((sp, client) =>
-            {
-                var options = sp.GetRequiredService<IOptions<AzureDevOpsOptions>>().Value;
-                var base64Pat = Convert.ToBase64String(
-                    Encoding.ASCII.GetBytes($":{options.PersonalAccessToken}"));
-                client.BaseAddress = new Uri($"https://dev.azure.com/{options.OrganizationName}/");
-                client.DefaultRequestHeaders.Authorization =
-                    new AuthenticationHeaderValue("Basic", base64Pat);
-            })
-            .AddStandardResilienceHandler();
-
-            services.AddSingleton<IPullRequestMetadataParser, PullRequestMetadataParser>();
-            services.AddSingleton<IIterationInfoParser, IterationInfoParser>();
-            services.AddSingleton<IFileChangesParser, FileChangesParser>();
-            services.AddSingleton<IDiffAlgorithm, LcsDiffAlgorithm>();
-            services.AddSingleton<IStructuredDiffBuilder, StructuredDiffBuilder>();
-            services.AddSingleton<IPullRequestDiffProvider, AzureDevOpsDiffProvider>();
-            services.AddSingleton<IPullRequestMetadataProvider, AzureDevOpsMetadataProvider>();
-            services.AddSingleton<IFileClassifier, FileClassifier>();
-            services.AddSingleton<IPullRequestFilesProvider, AzureDevOpsFilesProvider>();
-            services.AddSingleton<IFileContentProvider, AzureDevOpsFileContentProvider>();
-            services.AddSingleton<IMcpToolHandler, GetPullRequestDiffToolHandler>();
-            services.AddSingleton<IMcpToolHandler, GetFileDiffToolHandler>();
-            services.AddSingleton<IMcpToolHandler, GetPullRequestMetadataToolHandler>();
-            services.AddSingleton<IMcpToolHandler, GetPullRequestFilesToolHandler>();
-            services.AddSingleton<IMcpToolHandler, GetFileContentAtRefToolHandler>();
-
-            // JSON-RPC infrastructure
-            services.AddSingleton<IJsonRpcSerializer, SystemTextJsonSerializer>();
-            services.AddSingleton<IJsonRpcTransport>(_ =>
-                new StreamJsonRpcTransport(Console.OpenStandardInput(), Console.OpenStandardOutput()));
-
-            // Method handlers
-            services.AddSingleton<IMcpMethodHandler, InitializeMethodHandler>();
-            services.AddSingleton<IMcpMethodHandler, ToolsListMethodHandler>();
-            services.AddSingleton<IMcpMethodHandler, ToolsCallMethodHandler>();
-
-            services.AddSingleton<McpServer>(sp => new McpServer(
-                sp.GetRequiredService<ILogger<McpServer>>(),
-                sp.GetRequiredService<IEnumerable<IMcpMethodHandler>>(),
-                sp.GetRequiredService<IJsonRpcTransport>(),
-                sp.GetRequiredService<IJsonRpcSerializer>()));
+            // ... same DI registrations as in Section 3 ...
         }
     }
 }

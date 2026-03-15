@@ -22,33 +22,35 @@ public class AzureDevOpsOptionsValidatorTests
         Assert.True(result.Succeeded);
     }
 
+    [Fact]
+    public void Validate_Succeeds_WhenAllFieldsEmpty()
+    {
+        var result = _validator.Validate(null, new AzureDevOpsOptions());
+        Assert.True(result.Succeeded);
+    }
+
+    [Fact]
+    public void Validate_Succeeds_WhenOnlyPatProvided()
+    {
+        var options = new AzureDevOpsOptions { PersonalAccessToken = "my-pat" };
+        var result = _validator.Validate(null, options);
+        Assert.True(result.Succeeded);
+    }
+
     [Theory]
     [InlineData(nameof(AzureDevOpsOptions.OrganizationName))]
     [InlineData(nameof(AzureDevOpsOptions.ProjectName))]
     [InlineData(nameof(AzureDevOpsOptions.RepositoryName))]
-    [InlineData(nameof(AzureDevOpsOptions.PersonalAccessToken))]
-    public void Validate_Fails_WhenRequiredFieldMissing(string fieldName)
+    public void Validate_Fails_WhenFieldContainsSpaces(string fieldName)
     {
         var options = CreateValid();
         typeof(AzureDevOpsOptions)
             .GetProperty(fieldName)!
-            .SetValue(options, string.Empty);
+            .SetValue(options, "invalid value");
 
         var result = _validator.Validate(null, options);
 
         Assert.True(result.Failed);
         Assert.Contains(fieldName, result.FailureMessage);
-    }
-
-    [Fact]
-    public void Validate_ReportsAllFailures_WhenMultipleFieldsMissing()
-    {
-        var options = new AzureDevOpsOptions();
-
-        var result = _validator.Validate(null, options);
-
-        Assert.True(result.Failed);
-        Assert.Contains(nameof(AzureDevOpsOptions.OrganizationName), result.FailureMessage);
-        Assert.Contains(nameof(AzureDevOpsOptions.PersonalAccessToken), result.FailureMessage);
     }
 }

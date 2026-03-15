@@ -42,6 +42,74 @@ Instead of sending a large diff to the AI model, the MCP server exposes tools th
 
 ---
 
+# Quick Start
+
+## Recommended configuration
+
+The recommended way to configure REBUSS.Pure is to pass **`--repo`** and **`--pat`** directly as command-line arguments in your `mcp.json` file. This is the simplest and most reliable setup — the server receives the workspace path and authentication token at startup, with no additional configuration files or environment variables needed.
+
+## 1. Initialize the MCP configuration
+
+Navigate to your Azure DevOps repository and run:
+
+```
+REBUSS.Pure.exe init
+```
+
+This creates a `.vscode/mcp.json` file in your repository root. After running `init`, **add your PAT** to the generated configuration:
+
+```json
+{
+  "servers": {
+    "REBUSS.Pure": {
+      "type": "stdio",
+      "command": "path/to/REBUSS.Pure.exe",
+      "args": [
+        "--repo", "${workspaceFolder}",
+        "--pat", "your-pat-here"
+      ]
+    }
+  }
+}
+```
+
+> **Why `--repo` and `--pat` in args?**
+> - `--repo ${workspaceFolder}` ensures the server always knows which repository to analyze, regardless of the working directory.
+> - `--pat` provides authentication inline — no need to manage separate config files or environment variables.
+> - Both arguments take the **highest priority** and override all other configuration sources.
+
+> **Alternative authentication methods:** If you prefer not to put the PAT in `mcp.json`, you can use `appsettings.Local.json` or environment variables instead (see [Storing Secrets Locally](#storing-secrets-locally)).
+
+> **Visual Studio Professional** uses a global `%USERPROFILE%\.mcp.json` and does **not** expand `${workspaceFolder}`.
+> However, Visual Studio automatically sends the open solution folder as an MCP root during initialization,
+> so the server detects the repository without `--repo`. You still need to provide the PAT:
+>
+> ```json
+> {
+>   "servers": {
+>     "REBUSS.Pure": {
+>       "type": "stdio",
+>       "command": "C:\\path\\to\\REBUSS.Pure.exe",
+>       "args": ["--pat", "your-pat-here"]
+>     }
+>   }
+> }
+> ```
+
+## 2. Open the repository in VS Code
+
+The MCP client will automatically detect the configuration and launch the server with the correct `--repo` and `--pat` arguments.
+
+## 3. Use it with GitHub Copilot
+
+In GitHub Copilot Chat:
+
+```
+PullRequest 123 #review-pr
+```
+
+---
+
 # Available MCP Tools
 
 ## get_pr_metadata(prNumber)
@@ -235,20 +303,142 @@ REBUSS.Pure was designed with the following goals:
 
 ---
 
+# CLI Commands
+
+## `init`
+
+Generates a `.vscode/mcp.json` configuration file in the current repository root.
+
+```
+cd /path/to/your/azure-devops-repo
+REBUSS.Pure.exe init
+```
+
+The generated configuration tells MCP clients to launch the server with `--repo ${workspaceFolder}`, which automatically passes the workspace path to the server at startup.
+
+If a `.vscode/mcp.json` already exists, the command prints a message and exits without overwriting.
+
+---
+
 # Configuration
 
-REBUSS.Pure requires Azure DevOps connection settings.
+REBUSS.Pure connects to Azure DevOps and supports flexible configuration — all fields are optional and can be auto-detected.
 
-Required settings under the `AzureDevOps` section:
+## Configuration fields
 
-| Setting | Description |
-|---|---|
-| `OrganizationName` | Azure DevOps organization name |
-| `ProjectName` | Azure DevOps project name |
-| `RepositoryName` | Git repository name within the project |
-| `PersonalAccessToken` | PAT with read access to code and pull requests |
+| Setting | Description | Required |
+|---|---|---|
+| `OrganizationName` | Azure DevOps organization name | Auto-detected from Git remote |
+| `ProjectName` | Azure DevOps project name | Auto-detected from Git remote |
+| `RepositoryName` | Git repository name within the project | Auto-detected from Git remote |
+| `PersonalAccessToken` | PAT with read access to code and pull requests | Optional (see Authentication below) |
+| `LocalRepoPath` | Local filesystem path to the Git repository | Optional (fallback for workspace detection) |
 
-The server will fail to start if any required field is missing.
+## Workspace detection
+
+The server resolves the Git repository path using the following priority order:
+
+1. **`--repo` argument** (highest priority) — passed by the MCP client at server startup. The `init` command configures this automatically using `${workspaceFolder}`.
+2. **MCP Roots** — the client sends workspace root URIs (`file://` scheme) during the `initialize` handshake. The server selects the first root that exists locally and contains a `.git` directory.
+3. **`LocalRepoPath` configuration** — if no valid MCP root is available, the server uses `AzureDevOps:LocalRepoPath` from configuration.
+4. **Default detection** — falls back to the current working directory and the executable's ancestor directories.
+
+Repository detection is **lazy** — it happens only when a tool requires it (after the MCP `initialize` handshake), not during server startup. If resolution fails, the server returns a clear error suggesting to either provide an MCP root or configure `LocalRepoPath`.
+
+## Manual MCP client configuration
+
+If you prefer not to use `init`, you can manually create the configuration. The recommended setup includes both `--repo` and `--pat`:
+
+```json
+{
+  "servers": {
+    "REBUSS.Pure": {
+      "type": "stdio",
+      "command": "path/to/REBUSS.Pure.exe",
+      "args": [
+        "--repo", "${workspaceFolder}",
+        "--pat", "your-pat-here"
+      ]
+    }
+  }
+}
+```
+
+Place this in `.vscode/mcp.json` (per-workspace) or `~/.mcp.json` (global).
+
+## Command-line arguments
+
+All configuration fields can also be provided as command-line arguments. CLI arguments take the **highest priority** and override all other configuration sources (environment variables, JSON files, cached values, and auto-detected values).
+
+| Argument | Description | Example |
+|---|---|---|
+| `--repo <path>` | Local repository path (workspace root) | `--repo ${workspaceFolder}` |
+| `--pat <token>` | Personal Access Token | `--pat your-pat-here` |
+| `--org <name>` | Azure DevOps organization name | `--org my-organization` |
+| `--project <name>` | Azure DevOps project name | `--project my-project` |
+| `--repository <name>` | Azure DevOps repository name | `--repository my-repo` |
+
+Example with all arguments:
+
+```json
+{
+  "servers": {
+    "REBUSS.Pure": {
+      "type": "stdio",
+      "command": "path/to/REBUSS.Pure.exe",
+      "args": [
+        "--repo", "${workspaceFolder}",
+        "--org", "my-organization",
+        "--project", "my-project",
+        "--repository", "my-repo",
+        "--pat", "your-pat-here"
+      ]
+    }
+  }
+}
+```
+
+## Automatic repository detection
+
+If no configuration is provided, the server detects the Azure DevOps organization, project, and repository from the `origin` Git remote URL at the resolved workspace path.
+
+Supported remote URL formats:
+
+- `https://dev.azure.com/{org}/{project}/_git/{repo}`
+- `https://{org}@dev.azure.com/{org}/{project}/_git/{repo}`
+- `git@ssh.dev.azure.com:v3/{org}/{project}/{repo}`
+
+Successfully detected values are cached locally for future runs.
+
+## Authentication
+
+The server uses the following authentication chain (in priority order):
+
+1. **Personal Access Token** (recommended) — if `PersonalAccessToken` is provided in configuration, it is always used (Basic auth).
+2. **Cached token** — if a token was previously acquired and is not expired, it is reused.
+3. **Error with instructions** — if no PAT is configured and no cached token is available, the server returns a clear error message with step-by-step instructions for creating and configuring a PAT.
+
+## Configuration resolution priority
+
+For each field, the first non-empty value wins:
+
+1. Explicit configuration (appsettings, environment variables)
+2. Locally cached configuration (`%LOCALAPPDATA%/REBUSS.Pure/config.json`)
+3. Auto-detected from Git remote
+
+---
+
+## Diagnostics
+
+The server writes detailed logs (including the full `initialize` request payload from the MCP client)
+to a file at:
+
+```
+%LOCALAPPDATA%\REBUSS.Pure\server.log
+```
+
+This is useful when debugging workspace detection issues with clients such as Visual Studio Professional
+that do not expose the server's stderr stream in their UI.
 
 ---
 
@@ -292,7 +482,8 @@ Environment variables take the highest priority and override both JSON files.
 
 1. `appsettings.json` — committed, contains defaults (no secrets)
 2. `appsettings.Local.json` — not committed, contains your personal secrets
-3. Environment variables — highest priority, useful for CI/CD or container deployments
+3. Environment variables — useful for CI/CD or container deployments
+4. Command-line arguments (`--pat`, `--org`, `--project`, `--repository`) — highest priority
 
 ---
 
