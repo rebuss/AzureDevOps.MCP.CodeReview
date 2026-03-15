@@ -668,35 +668,55 @@ Environment variables take the highest priority and override both JSON files.
 
 # Integration with GitHub Copilot
 
-This repository includes a prompt file:
+This repository includes two prompt files:
 
-.github/prompts/review-pr.prompt.md
+`.github/prompts/review-pr.prompt.md` — structured PR code review using Azure DevOps tools.
 
+`.github/prompts/self-review.prompt.md` — structured self-review of local git changes using local tools (no Azure DevOps required).
 
-The prompt instructs GitHub Copilot how to perform a structured code review using the MCP tools provided by REBUSS.Pure.
-
-The agent follows a controlled workflow:
-
-1. metadata analysis
-2. file list analysis
-3. diff-based inspection
-4. optional full file retrieval
+Both prompts instruct GitHub Copilot how to follow the incremental review workflow using the MCP tools provided by REBUSS.Pure.
 
 ---
 
 # Example Usage
 
-In GitHub Copilot Chat you can trigger the review workflow:
+## PR review
 
+In GitHub Copilot Chat:
+
+```
 PullRequest 123 #review-pr
+```
 
-
-Copilot will then:
-
+Copilot will:
 1. load the review prompt file
-2. call the MCP tools
+2. call `get_pr_metadata` → `get_pr_files` → `get_file_diff` (per file)
 3. analyze the pull request incrementally
 4. generate a structured code review report
+
+## Self-review
+
+In GitHub Copilot Chat (no arguments needed for working-tree review):
+
+```
+#self-review
+```
+
+Or with an explicit scope:
+
+```
+main #self-review
+```
+
+```
+staged #self-review
+```
+
+Copilot will:
+1. load the self-review prompt file
+2. call `get_local_files` to discover changed files
+3. call `get_local_file_diff` for each relevant file
+4. generate a structured review report — entirely offline, no Azure DevOps credentials needed
 
 ---
 

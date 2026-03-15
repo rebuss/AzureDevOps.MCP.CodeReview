@@ -197,7 +197,8 @@ Full codebase context is included below (file-role map, dependency graph, DI reg
 | File | Role |
 |---|---|
 | `README.md` | Project documentation |
-| `.github\prompts\review-pr.prompt.md` | GitHub Copilot review prompt |
+| `.github\prompts\review-pr.prompt.md` | GitHub Copilot prompt for Azure DevOps PR review |
+| `.github\prompts\self-review.prompt.md` | GitHub Copilot prompt for local self-review (no Azure DevOps required) |
 
 ---
 
