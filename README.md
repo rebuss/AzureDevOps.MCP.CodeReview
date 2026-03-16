@@ -162,23 +162,8 @@ Generated config:
 > **Why `--repo` in args?**
 > `--repo ${workspaceFolder}` ensures the server always knows which repository to analyze, regardless of the working directory. It takes the **highest priority** and overrides all other configuration sources.
 
-> **Visual Studio Professional** uses a global `%USERPROFILE%\.mcp.json` and does **not** expand `${workspaceFolder}`.
-> However, Visual Studio automatically sends the open solution folder as an MCP root during initialization,
-> so the server detects the repository without `--repo`. Configure the PAT via `appsettings.Local.json` or an environment variable:
->
-> ```json
-> {
->   "servers": {
->     "REBUSS.Pure": {
->       "type": "stdio",
->       "command": "C:\\path\\to\\REBUSS.Pure.exe",
->       "args": []
->     }
->   }
-> }
-> ```
 
-## 2. Open the repository in VS Code
+## 2. Open the repository in VS Code / Visual Studio
 
 The MCP client will automatically detect the configuration and launch the server with the correct `--repo` argument.
 
@@ -187,9 +172,13 @@ The MCP client will automatically detect the configuration and launch the server
 In GitHub Copilot Chat:
 
 ```
-PullRequest 123 #review-pr
+input = 123 #review-pr.prompt.md
 ```
+or
 
+```
+#self-review.prompt.md
+```
 ---
 
 # Available MCP Tools
