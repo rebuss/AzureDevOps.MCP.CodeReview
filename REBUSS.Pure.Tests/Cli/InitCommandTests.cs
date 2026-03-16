@@ -35,7 +35,7 @@ public class InitCommandTests
     // -------------------------------------------------------------------------
 
     [Fact]
-    public async Task ExecuteAsync_CreatesVsCodeMcpJson_WhenNoIdeMarkersPresent()
+    public async Task ExecuteAsync_CreatesBothMcpJsons_WhenNoIdeMarkersPresent()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(Path.Combine(tempDir, ".git"));
@@ -50,8 +50,9 @@ public class InitCommandTests
             Assert.Equal(0, exitCode);
 
             var vsCodeConfig = Path.Combine(tempDir, ".vscode", "mcp.json");
+            var vsConfig = Path.Combine(tempDir, ".vs", "mcp.json");
             Assert.True(File.Exists(vsCodeConfig));
-            Assert.False(File.Exists(Path.Combine(tempDir, ".vs", "mcp.json")));
+            Assert.True(File.Exists(vsConfig));
 
             var content = await File.ReadAllTextAsync(vsCodeConfig);
             Assert.Contains("REBUSS.Pure", content);
@@ -83,6 +84,7 @@ public class InitCommandTests
 
             Assert.Equal(0, exitCode);
             Assert.True(File.Exists(Path.Combine(tempDir, ".vscode", "mcp.json")));
+            Assert.True(File.Exists(Path.Combine(tempDir, ".vs", "mcp.json")));
         }
         finally
         {
@@ -381,7 +383,7 @@ public class InitCommandTests
     // -------------------------------------------------------------------------
 
     [Fact]
-    public void ResolveConfigTargets_ReturnsVsCodeOnly_WhenNoMarkers()
+    public void ResolveConfigTargets_ReturnsBoth_WhenNoMarkers()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(tempDir);
@@ -390,8 +392,9 @@ public class InitCommandTests
         {
             var targets = InitCommand.ResolveConfigTargets(tempDir);
 
-            Assert.Single(targets);
-            Assert.Equal("VS Code", targets[0].IdeName);
+            Assert.Equal(2, targets.Count);
+            Assert.Contains(targets, t => t.IdeName == "VS Code");
+            Assert.Contains(targets, t => t.IdeName == "Visual Studio");
         }
         finally
         {
@@ -528,6 +531,48 @@ public class InitCommandTests
         {
             Directory.Delete(tempDir, recursive: true);
         }
+    }
+
+    [Fact]
+    public void MergeConfigContent_CarriesOverExistingPat_WhenNoPATProvided()
+    {
+        var existing = """
+            {
+              "servers": {
+                "REBUSS.Pure": {
+                  "type": "stdio",
+                  "command": "old.exe",
+                  "args": ["--repo", "C:\\\\old", "--pat", "saved-pat"]
+                }
+              }
+            }
+            """;
+
+        var result = InitCommand.MergeConfigContent(existing, "new.exe", @"C:\newrepo");
+
+        Assert.Contains("\"--pat\"", result);
+        Assert.Contains("\"saved-pat\"", result);
+    }
+
+    [Fact]
+    public void MergeConfigContent_DoesNotDuplicatePat_WhenPatAlsoProvided()
+    {
+        var existing = """
+            {
+              "servers": {
+                "REBUSS.Pure": {
+                  "type": "stdio",
+                  "command": "old.exe",
+                  "args": ["--repo", "C:\\\\old", "--pat", "old-pat"]
+                }
+              }
+            }
+            """;
+
+        var result = InitCommand.MergeConfigContent(existing, "new.exe", @"C:\newrepo", "new-pat");
+
+        Assert.Contains("\"new-pat\"", result);
+        Assert.DoesNotContain("old-pat", result);
     }
 
     // -------------------------------------------------------------------------

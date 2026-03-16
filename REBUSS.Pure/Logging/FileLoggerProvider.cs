@@ -3,39 +3,130 @@ using Microsoft.Extensions.Logging;
 namespace REBUSS.Pure.Logging;
 
 /// <summary>
-/// A minimal <see cref="ILoggerProvider"/> that appends log entries to a single file.
-/// Used to capture server-side diagnostics (including the MCP <c>initialize</c> request payload)
-/// from clients such as Visual Studio Professional that do not expose the server's stderr stream.
-/// Log location: <c>%LOCALAPPDATA%\REBUSS.Pure\server.log</c>
+/// An <see cref="ILoggerProvider"/> that writes log entries to a daily-rotated file
+/// and automatically deletes log files older than <see cref="RetainDays"/> days.
+/// <para>
+/// File naming pattern: <c>&lt;logDirectory&gt;\server-yyyy-MM-dd.log</c><br/>
+/// A new file is opened on the first write after midnight.
+/// Old files are pruned on startup and on each daily roll-over.
+/// </para>
+/// <para>
+/// Log location: <c>%LOCALAPPDATA%\REBUSS.Pure\server-yyyy-MM-dd.log</c>
+/// </para>
 /// </summary>
 public sealed class FileLoggerProvider : ILoggerProvider
 {
-    private readonly StreamWriter _writer;
+    internal const int RetainDays = 3;
+    internal const string FilePrefix = "server-";
+    internal const string FileSuffix = ".log";
+
+    private readonly string _logDirectory;
+    private readonly Func<DateTime> _nowFactory;
+
+    internal DateTime Now => _nowFactory();
     private readonly object _lock = new();
 
-    public FileLoggerProvider(string filePath)
+    private StreamWriter? _writer;
+    private DateTime _currentDate;
+
+    /// <param name="logDirectory">
+    /// Directory where log files are written (e.g. <c>%LOCALAPPDATA%\REBUSS.Pure</c>).
+    /// </param>
+    /// <param name="nowFactory">
+    /// Optional factory for the current date/time; defaults to <see cref="DateTime.Now"/>.
+    /// Provided for testability.
+    /// </param>
+    public FileLoggerProvider(string logDirectory, Func<DateTime>? nowFactory = null)
     {
-        var stream = new FileStream(filePath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
-        _writer = new StreamWriter(stream, leaveOpen: false) { AutoFlush = true };
+        _logDirectory = logDirectory;
+        _nowFactory = nowFactory ?? (() => DateTime.Now);
+
+        var today = _nowFactory().Date;
+        _currentDate = today;
+        _writer = OpenWriter(today);
+        DeleteOldLogs(today);
     }
 
     public ILogger CreateLogger(string categoryName) =>
-        new FileLogger(categoryName, _writer, _lock);
+        new FileLogger(categoryName, this);
 
-    public void Dispose() => _writer.Dispose();
+    /// <summary>
+    /// Writes a pre-formatted log line, rolling to a new file when the calendar date changes.
+    /// </summary>
+    internal void WriteLine(string line)
+    {
+        lock (_lock)
+        {
+            var today = _nowFactory().Date;
+
+            if (today != _currentDate)
+            {
+                _writer?.Dispose();
+                _currentDate = today;
+                _writer = OpenWriter(today);
+                DeleteOldLogs(today);
+            }
+
+            _writer?.WriteLine(line);
+        }
+    }
+
+    public void Dispose()
+    {
+        lock (_lock)
+        {
+            _writer?.Dispose();
+            _writer = null;
+        }
+    }
+
+    // --- Helpers -----------------------------------------------------------------
+
+    internal string LogFilePath(DateTime date) =>
+        Path.Combine(_logDirectory, $"{FilePrefix}{date:yyyy-MM-dd}{FileSuffix}");
+
+    private StreamWriter OpenWriter(DateTime date)
+    {
+        var path = LogFilePath(date);
+        var stream = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.Read | FileShare.Write);
+        return new StreamWriter(stream, leaveOpen: false) { AutoFlush = true };
+    }
+
+    private void DeleteOldLogs(DateTime today)
+    {
+        try
+        {
+            var cutoff = today.AddDays(-RetainDays);
+            foreach (var file in Directory.EnumerateFiles(_logDirectory, $"{FilePrefix}*{FileSuffix}"))
+            {
+                var name = Path.GetFileNameWithoutExtension(file);
+                var datePart = name[FilePrefix.Length..];
+                if (DateTime.TryParseExact(datePart, "yyyy-MM-dd",
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        System.Globalization.DateTimeStyles.None,
+                        out var fileDate)
+                    && fileDate < cutoff)
+                {
+                    File.Delete(file);
+                }
+            }
+        }
+        catch
+        {
+            // Deletion is best-effort — never crash the server over a stale log file.
+        }
+    }
 }
 
 internal sealed class FileLogger : ILogger
 {
     private readonly string _categoryName;
-    private readonly StreamWriter _writer;
-    private readonly object _lock;
+    private readonly FileLoggerProvider _provider;
 
-    internal FileLogger(string categoryName, StreamWriter writer, object @lock)
+    internal FileLogger(string categoryName, FileLoggerProvider provider)
     {
         _categoryName = categoryName;
-        _writer = writer;
-        _lock = @lock;
+        _provider = provider;
     }
 
     public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
@@ -53,14 +144,11 @@ internal sealed class FileLogger : ILogger
             return;
 
         var message = formatter(state, exception);
-        var line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} [{logLevel,-11}] {_categoryName}: {message}";
+        var line = $"{_provider.Now:yyyy-MM-dd HH:mm:ss.fff} [{logLevel,-11}] {_categoryName}: {message}";
 
         if (exception is not null)
             line += Environment.NewLine + exception;
 
-        lock (_lock)
-        {
-            _writer.WriteLine(line);
-        }
+        _provider.WriteLine(line);
     }
 }

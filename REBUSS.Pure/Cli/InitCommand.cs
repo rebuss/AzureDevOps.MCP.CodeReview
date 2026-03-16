@@ -87,7 +87,9 @@ public class InitCommand : ICliCommand
 
     /// <summary>
     /// Detects which IDE(s) are in use and returns the list of config file targets to write.
-    /// Falls back to VS Code when no IDE markers are found.
+    /// Selection is based on which IDE folders physically exist:
+    /// only <c>.vscode</c> ? VS Code only; only <c>.vs</c> ? Visual Studio only;
+    /// both or neither ? both targets.
     /// </summary>
     internal static List<McpConfigTarget> ResolveConfigTargets(string gitRoot)
     {
@@ -96,13 +98,16 @@ public class InitCommand : ICliCommand
         bool hasVsCode = DetectsVsCode(gitRoot);
         bool hasVisualStudio = DetectsVisualStudio(gitRoot);
 
-        if (hasVsCode || !hasVisualStudio)
+        bool writeVsCode = hasVsCode || !hasVisualStudio;
+        bool writeVisualStudio = hasVisualStudio || !hasVsCode;
+
+        if (writeVsCode)
             targets.Add(new McpConfigTarget(
                 "VS Code",
                 Path.Combine(gitRoot, VsCodeDir),
                 Path.Combine(gitRoot, VsCodeDir, McpConfigFileName)));
 
-        if (hasVisualStudio)
+        if (writeVisualStudio)
             targets.Add(new McpConfigTarget(
                 "Visual Studio",
                 Path.Combine(gitRoot, VisualStudioDir),
@@ -183,6 +188,11 @@ public class InitCommand : ICliCommand
                 }
 
                 // Write the REBUSS.Pure entry — Utf8JsonWriter handles JSON escaping of raw paths
+                // If no PAT was supplied, carry over any existing PAT from the current config.
+                var effectivePat = pat;
+                if (string.IsNullOrWhiteSpace(effectivePat))
+                    effectivePat = ExtractExistingPat(root);
+
                 writer.WritePropertyName("REBUSS.Pure");
                 writer.WriteStartObject();
                 writer.WriteString("type", "stdio");
@@ -191,10 +201,10 @@ public class InitCommand : ICliCommand
                 writer.WriteStartArray();
                 writer.WriteStringValue("--repo");
                 writer.WriteStringValue(rawRepoPath);
-                if (!string.IsNullOrWhiteSpace(pat))
+                if (!string.IsNullOrWhiteSpace(effectivePat))
                 {
                     writer.WriteStringValue("--pat");
-                    writer.WriteStringValue(pat);
+                    writer.WriteStringValue(effectivePat);
                 }
                 writer.WriteEndArray();
                 writer.WriteEndObject();
@@ -212,6 +222,29 @@ public class InitCommand : ICliCommand
             var normalizedRepoPath = rawRepoPath.Replace("\\", "\\\\");
             return BuildConfigContent(normalizedExePath, normalizedRepoPath, pat);
         }
+    }
+
+    /// <summary>
+    /// Extracts the <c>--pat</c> argument value from an existing REBUSS.Pure server entry,
+    /// or returns <c>null</c> if no PAT is present.
+    /// </summary>
+    private static string? ExtractExistingPat(System.Text.Json.JsonElement root)
+    {
+        if (!root.TryGetProperty("servers", out var servers))
+            return null;
+
+        if (!servers.TryGetProperty("REBUSS.Pure", out var entry))
+            return null;
+
+        if (!entry.TryGetProperty("args", out var args))
+            return null;
+
+        var argList = args.EnumerateArray().Select(a => a.GetString()).ToList();
+        var patIndex = argList.IndexOf("--pat");
+        if (patIndex >= 0 && patIndex + 1 < argList.Count)
+            return argList[patIndex + 1];
+
+        return null;
     }
 
     private async Task CopyPromptFilesAsync(string gitRoot, CancellationToken cancellationToken)

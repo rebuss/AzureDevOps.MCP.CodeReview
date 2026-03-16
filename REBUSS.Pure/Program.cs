@@ -57,13 +57,13 @@ namespace REBUSS.Pure
             return Path.Combine(AppContext.BaseDirectory, "REBUSS.Pure.exe");
         }
 
-        private static string GetLogFilePath()
+        private static string GetLogDirectory()
         {
             var logDir = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "REBUSS.Pure");
             Directory.CreateDirectory(logDir);
-            return Path.Combine(logDir, "server.log");
+            return logDir;
         }
 
         private static async Task RunMcpServerAsync(CliParseResult parseResult)
@@ -142,7 +142,7 @@ namespace REBUSS.Pure
                 {
                     options.LogToStandardErrorThreshold = LogLevel.Trace;
                 });
-                builder.AddProvider(new FileLoggerProvider(GetLogFilePath()));
+                builder.AddProvider(new FileLoggerProvider(GetLogDirectory()));
                 builder.SetMinimumLevel(LogLevel.Debug);
             });
 

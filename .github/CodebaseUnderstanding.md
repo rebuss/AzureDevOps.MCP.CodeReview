@@ -179,7 +179,7 @@ Full codebase context is included below (file-role map, dependency graph, DI reg
 |---|---|
 | `REBUSS.Pure\Cli\CliArgumentParser.cs` | Parses CLI args: detects `init` command vs server mode, extracts `--repo`, `--pat`, `--org`, `--project`, `--repository` |
 | `REBUSS.Pure\Cli\ICliCommand.cs` | Interface: executable CLI command |
-| `REBUSS.Pure\Cli\InitCommand.cs` | `init` command: detects IDE by presence of `.vscode/`, `*.code-workspace` (VS Code) and/or `.vs/`, `*.sln` (Visual Studio) in the git root; writes `mcp.json` to each detected IDE's config directory (`.vscode/mcp.json` and/or `.vs/mcp.json`); falls back to VS Code only when no IDE markers found; both configs may be written simultaneously; if a config file already exists, **merges** the `REBUSS.Pure` server entry into the existing `servers` object (preserving other servers and top-level properties) via `MergeConfigContent`; falls back to full overwrite when existing file is not valid JSON; optionally embeds `--pat`; copies embedded review prompt files (`review-pr.prompt.md`, `self-review.prompt.md`) to `.github/prompts/` (skips existing files); exposes `ResolveConfigTargets`, `DetectsVsCode`, `DetectsVisualStudio`, `BuildConfigContent`, `MergeConfigContent` as `internal static` |
+| `REBUSS.Pure\Cli\InitCommand.cs` | `init` command: detects IDE by presence of `.vscode/`, `*.code-workspace` (VS Code) and/or `.vs/`, `*.sln` (Visual Studio) in the git root; target selection: only `.vscode` → VS Code only; only `.vs` → Visual Studio only; both or neither → both; if a config file already exists, **merges** the `REBUSS.Pure` server entry into the existing `servers` object (preserving other servers and top-level properties) via `MergeConfigContent`; falls back to full overwrite when existing file is not valid JSON; `MergeConfigContent` carries over existing `--pat` value when no new PAT is provided via `ExtractExistingPat`; copies embedded review prompt files (`review-pr.prompt.md`, `self-review.prompt.md`) to `.github/prompts/` (skips existing files); exposes `ResolveConfigTargets`, `DetectsVsCode`, `DetectsVisualStudio`, `BuildConfigContent`, `MergeConfigContent` as `internal static` |
 | `REBUSS.Pure\Cli\Prompts\review-pr.prompt.md` | Embedded resource: PR review prompt template (bundled into assembly, copied by `init`) |
 | `REBUSS.Pure\Cli\Prompts\self-review.prompt.md` | Embedded resource: self-review prompt template (bundled into assembly, copied by `init`) |
 
@@ -187,7 +187,7 @@ Full codebase context is included below (file-role map, dependency graph, DI reg
 
 | File | Role |
 |---|---|
-| `REBUSS.Pure\Logging\FileLoggerProvider.cs` | `ILoggerProvider` implementation that appends to `%LOCALAPPDATA%\REBUSS.Pure\server.log`; enables diagnostics for clients (e.g. Visual Studio) that do not expose server stderr |
+| `REBUSS.Pure\Logging\FileLoggerProvider.cs` | `ILoggerProvider` that writes to daily-rotated files (`server-yyyy-MM-dd.log`) under the log directory; rolls to a new file after midnight; deletes files older than 3 days on startup and on each roll-over; accepts an optional `Func<DateTime>` for testability |
 
 ### Entry point
 
@@ -226,12 +226,13 @@ Full codebase context is included below (file-role map, dependency graph, DI reg
 | `REBUSS.Pure.Tests\Services\LocalReview\LocalReviewScopeTests.cs` | `LocalReviewScope.Parse` — all scope kinds, ToString |
 | `REBUSS.Pure.Tests\Services\LocalReview\LocalGitClientParseTests.cs` | `LocalGitClient` porcelain/name-status parsing — via reflection on internal static methods |
 | `REBUSS.Pure.Tests\Services\LocalReview\LocalReviewProviderTests.cs` | `LocalReviewProvider` — files listing, status mapping, classification, file diff, skip reasons, exception cases |
+| `REBUSS.Pure.Tests\Logging\FileLoggerProviderTests.cs` | `FileLoggerProvider` — daily rotation, file naming, write content, timestamp, retention/deletion, roll-over, non-log file safety |
 | `REBUSS.Pure.Tests\Integration\EndToEndTests.cs` | Full JSON-RPC pipeline: request → McpServer → handler → response |
 | `REBUSS.Pure.Tests\Mcp\McpServerTests.cs` | `McpServer` |
 | `REBUSS.Pure.Tests\Mcp\InitializeMethodHandlerTests.cs` | `InitializeMethodHandler` — roots extraction, storage, edge cases |
 | `REBUSS.Pure.Tests\Mcp\McpWorkspaceRootProviderTests.cs` | `McpWorkspaceRootProvider` — URI conversion, repo root resolution, MCP roots, localRepoPath fallback, CLI `--repo` precedence, unexpanded variable guard |
 | `REBUSS.Pure.Tests\Cli\CliArgumentParserTests.cs` | `CliArgumentParser` — server mode, `--repo`, `--pat`, `--org`, `--project`, `--repository`, `init` command, combined args, edge cases |
-| `REBUSS.Pure.Tests\Cli\InitCommandTests.cs` | `InitCommand` — generates `.vscode/mcp.json`, copies prompt files to `.github/prompts/`, error cases, subdirectory support, skip-existing prompts |
+| `REBUSS.Pure.Tests\Cli\InitCommandTests.cs` | `InitCommand` — generates `mcp.json` for correct IDE target(s), copies prompt files to `.github/prompts/`, error cases, subdirectory support, skip-existing prompts, PAT carry-over in `MergeConfigContent` |
 | `REBUSS.Pure.Tests\AzureDevOpsIntegration\AzureDevOpsOptionsTests.cs` | Options validation (format-only, all fields optional) |
 | `REBUSS.Pure.Tests\AzureDevOpsIntegration\AzureDevOpsApiClientTests.cs` | API client |
 | `REBUSS.Pure.Tests\AzureDevOpsIntegration\GitRemoteDetectorTests.cs` | `GitRemoteDetector.ParseRemoteUrl` — HTTPS, SSH, GitHub, edge cases; `FindGitRepositoryRoot`, `GetCandidateDirectories` |
