@@ -91,10 +91,6 @@ The scripts download the `.nupkg` from the latest GitHub Release and install `RE
 
 **The recommended authentication method is Azure CLI** — run `az login` once (or let `rebuss-pure init` do it for you), and the server will automatically acquire and refresh tokens for Azure DevOps. No PAT needed.
 
-If you prefer to use a Personal Access Token, store it in **`appsettings.Local.json`** (never committed to Git) or as an **environment variable**. This keeps secrets out of `mcp.json`, which may be visible in MCP client UIs or accidentally committed to source control.
-
-`--pat` as a command-line argument in `mcp.json` is supported and convenient, but treat it as a shortcut — not a best practice for shared or versioned configurations.
-
 ## 1. Initialize the MCP configuration
 
 Navigate to your Azure DevOps repository and run:
@@ -109,31 +105,47 @@ or, if installed as a global .NET tool:
 rebuss-pure init
 ```
 
-This creates:
-- `.vscode/mcp.json` — MCP server configuration with `--repo` pre-configured
-- `.github/prompts/review-pr.prompt.md` — GitHub Copilot prompt for PR reviews
-- `.github/prompts/self-review.prompt.md` — GitHub Copilot prompt for local self-reviews
+This creates MCP server configuration files in the detected IDE directories:
+
+- `.vscode/mcp.json` — for VS Code (created when a `.vscode` folder or `.code-workspace` file is detected)
+- `.vs/mcp.json` — for Visual Studio (created when a `.vs` folder or `.sln` file is detected)
+- both files are written when both IDEs are detected, or when neither is detected
+
+It also copies GitHub Copilot prompt files to `.github/prompts/`:
+
+- `review-pr.prompt.md` — GitHub Copilot prompt for PR reviews
+- `self-review.prompt.md` — GitHub Copilot prompt for local self-reviews
 
 If any of these files already exist, they are **not overwritten** — the command skips them and prints a message.
 
 ### Authentication during init
 
-When you run `init` **without `--pat`**, the command automatically attempts Azure CLI authentication:
+`init` uses **Azure CLI** as the authentication method. No PAT is needed.
 
-1. If you are already logged in via `az login`, the existing session is reused.
-2. If not, a browser window opens for interactive Azure login.
-3. On success, an Azure DevOps token is acquired and cached locally.
-4. If Azure CLI is not installed or login fails, the command continues — you can authenticate later.
+When you run `init`:
 
-This means in most cases, **no PAT is needed** — just run `init` and log in once.
+1. If Azure CLI is not installed, the command offers to install it automatically.
+2. If you are already logged in via `az login`, the existing session is reused.
+3. If not, a browser window opens for interactive Azure login.
+4. On success, an Azure DevOps token is acquired and cached locally.
 
-To embed your PAT directly in the generated config instead, pass `--pat` to `init`:
+In most cases, authentication is fully automatic — just run `init` and log in once.
+
+### Using a Personal Access Token (not recommended)
+
+If you prefer not to use Azure CLI, you can pass `--pat` to `init`:
 
 ```
 rebuss-pure init --pat your-pat-here
 ```
 
-Generated config without PAT:
+> ⚠️ This is **not the recommended approach**. PATs expire, must be rotated manually, and risk being accidentally committed to source control. Prefer `az login`.
+
+When `--pat` is provided, the command skips Azure CLI login and embeds the token directly in the generated config. Make sure `.vscode/mcp.json` and `.vs/mcp.json` are listed in `.gitignore` if you use this option.
+
+If you prefer to keep secrets out of `mcp.json` entirely, skip `--pat` and configure your PAT via `appsettings.Local.json` instead — see [Storing Secrets Locally](#storing-secrets-locally).
+
+Generated config:
 
 ```json
 {
@@ -146,24 +158,6 @@ Generated config without PAT:
   }
 }
 ```
-
-Generated config with PAT:
-
-```json
-{
-  "servers": {
-    "REBUSS.Pure": {
-      "type": "stdio",
-      "command": "path/to/REBUSS.Pure.exe",
-      "args": ["--repo", "${workspaceFolder}", "--pat", "your-pat-here"]
-    }
-  }
-}
-```
-
-> ⚠️ If you pass `--pat` to `init`, make sure `.vscode/mcp.json` is listed in `.gitignore` — otherwise your PAT ends up in the repository.
-
-If you prefer to keep secrets out of `mcp.json` entirely, skip `--pat` and configure your PAT via `appsettings.Local.json` instead — see [Storing Secrets Locally](#storing-secrets-locally).
 
 > **Why `--repo` in args?**
 > `--repo ${workspaceFolder}` ensures the server always knows which repository to analyze, regardless of the working directory. It takes the **highest priority** and overrides all other configuration sources.
@@ -474,9 +468,9 @@ REBUSS.Pure was designed with the following goals:
 
 ## `init`
 
-Generates a `.vscode/mcp.json` configuration file and copies GitHub Copilot prompt files to `.github/prompts/` in the current repository root.
+Generates MCP server configuration file(s) in the detected IDE directories and copies GitHub Copilot prompt files to `.github/prompts/` in the current repository root.
 
-When no `--pat` is provided, the command attempts Azure CLI authentication (`az login`) so the user can log in once during initialization.
+The command uses **Azure CLI** for authentication — no PAT is needed.
 
 ```
 cd /path/to/your/azure-devops-repo
@@ -489,22 +483,31 @@ or, if installed as a global .NET tool:
 rebuss-pure init
 ```
 
-Optionally pass `--pat` to embed the token directly in the generated file (skips Azure CLI login):
+The `init` command performs the following steps:
+
+1. **Creates MCP configuration file(s)**:
+   - `.vscode/mcp.json` — for VS Code (when a `.vscode` folder or `.code-workspace` file is detected)
+   - `.vs/mcp.json` — for Visual Studio (when a `.vs` folder or `.sln` file is detected)
+   - both files are written when both IDEs are detected, or when neither is detected
+2. **Attempts Azure CLI login** — reuses an existing session or opens a browser for interactive login
+3. **Copies prompt files to `.github/prompts/`**:
+   - `review-pr.prompt.md` — structured PR code review prompt
+   - `self-review.prompt.md` — structured local self-review prompt
+
+If any file already exists, the command **skips it without overwriting** and prints a message.
+
+If Azure CLI is not installed, the command offers to install it automatically.
+
+### Using a Personal Access Token (not recommended)
+
+If you prefer not to use Azure CLI, pass `--pat` to skip the login step and embed the token directly:
 
 ```
 rebuss-pure init --pat your-pat-here
 ```
 
-> ⚠️ If you use `--pat`, add `.vscode/mcp.json` to `.gitignore` before committing.
-
-The `init` command performs the following steps:
-
-1. **Creates `.vscode/mcp.json`** — tells MCP clients to launch the server with `--repo ${workspaceFolder}`
-2. **Copies prompt files to `.github/prompts/`**:
-   - `review-pr.prompt.md` — structured PR code review prompt
-   - `self-review.prompt.md` — structured local self-review prompt
-
-If any file already exists, the command **skips it without overwriting** and prints a message.
+> ⚠️ This is **not the recommended approach**. PATs expire, must be rotated manually, and risk being accidentally committed to source control. Prefer `az login`.
+> If you use `--pat`, add `.vscode/mcp.json` and `.vs/mcp.json` to `.gitignore` before committing.
 
 ---
 
