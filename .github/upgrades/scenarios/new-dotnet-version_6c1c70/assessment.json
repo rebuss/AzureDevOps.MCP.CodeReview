@@ -1,0 +1,3555 @@
+{
+  "settings": {
+    "components": {
+      "code": true,
+      "binaries": false
+    },
+    "targetId": "net10.0",
+    "targetDisplayName": ".NETCoreApp,Version=v10.0"
+  },
+  "analysisStartTime": "2026-03-19T06:38:36.4257363Z",
+  "analysisEndTime": "2026-03-19T06:38:45.1151784Z",
+  "privacyModeHelpUrl": "https://go.microsoft.com/fwlink/?linkid=2270980",
+  "stats": {
+    "summary": {
+      "projects": 2,
+      "issues": 6,
+      "incidents": 127,
+      "effort": 127
+    },
+    "charts": {
+      "severity": {
+        "Mandatory": 3,
+        "Optional": 2,
+        "Potential": 122,
+        "Information": 0
+      },
+      "category": {
+        "NuGet": 11,
+        "Project": 2,
+        "Api": 114
+      }
+    }
+  },
+  "projects": [
+    {
+      "path": "REBUSS.Pure\\REBUSS.Pure.csproj",
+      "startingProject": true,
+      "issues": 6,
+      "storyPoints": 57,
+      "properties": {
+        "appName": "REBUSS.Pure",
+        "projectKind": "DotNetCoreApp",
+        "frameworks": [
+          "net8.0"
+        ],
+        "languages": [
+          "C#"
+        ],
+        "tools": [
+          "MSBuild"
+        ],
+        "isSdkStyle": true,
+        "numberOfFiles": 101,
+        "numberOfCodeFiles": 99,
+        "linesTotal": 7866,
+        "linesOfCode": 7361,
+        "totalApiScanned": 7605,
+        "minLinesOfCodeToChange": 46,
+        "maxLinesOfCodeToChange": 46
+      },
+      "ruleInstances": [
+        {
+          "incidentId": "050c4c45-fd78-4606-b05d-3f3f7174d9d0",
+          "ruleId": "NuGet.0002",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Microsoft.Extensions.Configuration, 9.0.0\n\nRecommendation:\n\nRemove Microsoft.Extensions.Configuration, and replace with new package Microsoft.Extensions.Configuration 10.0.5",
+              "protected": "Microsoft.Extensions.Configuration, 9.0.0\n\nRecommendation:\n\nRemove Microsoft.Extensions.Configuration, and replace with new package Microsoft.Extensions.Configuration 10.0.5"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\REBUSS.Pure.csproj",
+            "snippet": "Microsoft.Extensions.Configuration, 9.0.0\n\nRecommendation:\n\nRemove Microsoft.Extensions.Configuration, and replace with new package Microsoft.Extensions.Configuration 10.0.5",
+            "protectedSnippet": "Microsoft.Extensions.Configuration, 9.0.0\n\nRecommendation:\n\nRemove Microsoft.Extensions.Configuration, and replace with new package Microsoft.Extensions.Configuration 10.0.5",
+            "label": "Microsoft.Extensions.Configuration 9.0.0",
+            "properties": {
+              "PackageId": "Microsoft.Extensions.Configuration",
+              "PackageVersion": "9.0.0",
+              "PackageNewVersion": "10.0.5",
+              "PackageReplacements": null
+            }
+          }
+        },
+        {
+          "incidentId": "ffdadf45-3340-4024-ab99-522183a55b3d",
+          "ruleId": "NuGet.0002",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Microsoft.Extensions.Configuration.Json, 9.0.0\n\nRecommendation:\n\nRemove Microsoft.Extensions.Configuration.Json, and replace with new package Microsoft.Extensions.Configuration.Json 10.0.5",
+              "protected": "Microsoft.Extensions.Configuration.Json, 9.0.0\n\nRecommendation:\n\nRemove Microsoft.Extensions.Configuration.Json, and replace with new package Microsoft.Extensions.Configuration.Json 10.0.5"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\REBUSS.Pure.csproj",
+            "snippet": "Microsoft.Extensions.Configuration.Json, 9.0.0\n\nRecommendation:\n\nRemove Microsoft.Extensions.Configuration.Json, and replace with new package Microsoft.Extensions.Configuration.Json 10.0.5",
+            "protectedSnippet": "Microsoft.Extensions.Configuration.Json, 9.0.0\n\nRecommendation:\n\nRemove Microsoft.Extensions.Configuration.Json, and replace with new package Microsoft.Extensions.Configuration.Json 10.0.5",
+            "label": "Microsoft.Extensions.Configuration.Json 9.0.0",
+            "properties": {
+              "PackageId": "Microsoft.Extensions.Configuration.Json",
+              "PackageVersion": "9.0.0",
+              "PackageNewVersion": "10.0.5",
+              "PackageReplacements": null
+            }
+          }
+        },
+        {
+          "incidentId": "3145c95c-307d-4e24-91da-fcd1bc508a80",
+          "ruleId": "NuGet.0002",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Microsoft.Extensions.Configuration.EnvironmentVariables, 9.0.0\n\nRecommendation:\n\nRemove Microsoft.Extensions.Configuration.EnvironmentVariables, and replace with new package Microsoft.Extensions.Configuration.EnvironmentVariables 10.0.5",
+              "protected": "Microsoft.Extensions.Configuration.EnvironmentVariables, 9.0.0\n\nRecommendation:\n\nRemove Microsoft.Extensions.Configuration.EnvironmentVariables, and replace with new package Microsoft.Extensions.Configuration.EnvironmentVariables 10.0.5"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\REBUSS.Pure.csproj",
+            "snippet": "Microsoft.Extensions.Configuration.EnvironmentVariables, 9.0.0\n\nRecommendation:\n\nRemove Microsoft.Extensions.Configuration.EnvironmentVariables, and replace with new package Microsoft.Extensions.Configuration.EnvironmentVariables 10.0.5",
+            "protectedSnippet": "Microsoft.Extensions.Configuration.EnvironmentVariables, 9.0.0\n\nRecommendation:\n\nRemove Microsoft.Extensions.Configuration.EnvironmentVariables, and replace with new package Microsoft.Extensions.Configuration.EnvironmentVariables 10.0.5",
+            "label": "Microsoft.Extensions.Configuration.EnvironmentVariables 9.0.0",
+            "properties": {
+              "PackageId": "Microsoft.Extensions.Configuration.EnvironmentVariables",
+              "PackageVersion": "9.0.0",
+              "PackageNewVersion": "10.0.5",
+              "PackageReplacements": null
+            }
+          }
+        },
+        {
+          "incidentId": "767912b5-7c86-44b5-95b5-a10b4fedd1a4",
+          "ruleId": "NuGet.0002",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Microsoft.Extensions.DependencyInjection, 9.0.0\n\nRecommendation:\n\nRemove Microsoft.Extensions.DependencyInjection, and replace with new package Microsoft.Extensions.DependencyInjection 10.0.5",
+              "protected": "Microsoft.Extensions.DependencyInjection, 9.0.0\n\nRecommendation:\n\nRemove Microsoft.Extensions.DependencyInjection, and replace with new package Microsoft.Extensions.DependencyInjection 10.0.5"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\REBUSS.Pure.csproj",
+            "snippet": "Microsoft.Extensions.DependencyInjection, 9.0.0\n\nRecommendation:\n\nRemove Microsoft.Extensions.DependencyInjection, and replace with new package Microsoft.Extensions.DependencyInjection 10.0.5",
+            "protectedSnippet": "Microsoft.Extensions.DependencyInjection, 9.0.0\n\nRecommendation:\n\nRemove Microsoft.Extensions.DependencyInjection, and replace with new package Microsoft.Extensions.DependencyInjection 10.0.5",
+            "label": "Microsoft.Extensions.DependencyInjection 9.0.0",
+            "properties": {
+              "PackageId": "Microsoft.Extensions.DependencyInjection",
+              "PackageVersion": "9.0.0",
+              "PackageNewVersion": "10.0.5",
+              "PackageReplacements": null
+            }
+          }
+        },
+        {
+          "incidentId": "f4fedfae-a0ca-40e8-80a0-22cb75592be2",
+          "ruleId": "NuGet.0002",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Microsoft.Extensions.Logging, 9.0.0\n\nRecommendation:\n\nRemove Microsoft.Extensions.Logging, and replace with new package Microsoft.Extensions.Logging 10.0.5",
+              "protected": "Microsoft.Extensions.Logging, 9.0.0\n\nRecommendation:\n\nRemove Microsoft.Extensions.Logging, and replace with new package Microsoft.Extensions.Logging 10.0.5"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\REBUSS.Pure.csproj",
+            "snippet": "Microsoft.Extensions.Logging, 9.0.0\n\nRecommendation:\n\nRemove Microsoft.Extensions.Logging, and replace with new package Microsoft.Extensions.Logging 10.0.5",
+            "protectedSnippet": "Microsoft.Extensions.Logging, 9.0.0\n\nRecommendation:\n\nRemove Microsoft.Extensions.Logging, and replace with new package Microsoft.Extensions.Logging 10.0.5",
+            "label": "Microsoft.Extensions.Logging 9.0.0",
+            "properties": {
+              "PackageId": "Microsoft.Extensions.Logging",
+              "PackageVersion": "9.0.0",
+              "PackageNewVersion": "10.0.5",
+              "PackageReplacements": null
+            }
+          }
+        },
+        {
+          "incidentId": "9867b285-06a4-4bf8-a560-3c80cba574f2",
+          "ruleId": "NuGet.0002",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Microsoft.Extensions.Http, 9.0.0\n\nRecommendation:\n\nRemove Microsoft.Extensions.Http, and replace with new package Microsoft.Extensions.Http 10.0.5",
+              "protected": "Microsoft.Extensions.Http, 9.0.0\n\nRecommendation:\n\nRemove Microsoft.Extensions.Http, and replace with new package Microsoft.Extensions.Http 10.0.5"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\REBUSS.Pure.csproj",
+            "snippet": "Microsoft.Extensions.Http, 9.0.0\n\nRecommendation:\n\nRemove Microsoft.Extensions.Http, and replace with new package Microsoft.Extensions.Http 10.0.5",
+            "protectedSnippet": "Microsoft.Extensions.Http, 9.0.0\n\nRecommendation:\n\nRemove Microsoft.Extensions.Http, and replace with new package Microsoft.Extensions.Http 10.0.5",
+            "label": "Microsoft.Extensions.Http 9.0.0",
+            "properties": {
+              "PackageId": "Microsoft.Extensions.Http",
+              "PackageVersion": "9.0.0",
+              "PackageNewVersion": "10.0.5",
+              "PackageReplacements": null
+            }
+          }
+        },
+        {
+          "incidentId": "eadc0ba8-e941-4a13-ae03-d1be4db4eaf0",
+          "ruleId": "NuGet.0002",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Microsoft.Extensions.Logging.Console, 9.0.0\n\nRecommendation:\n\nRemove Microsoft.Extensions.Logging.Console, and replace with new package Microsoft.Extensions.Logging.Console 10.0.5",
+              "protected": "Microsoft.Extensions.Logging.Console, 9.0.0\n\nRecommendation:\n\nRemove Microsoft.Extensions.Logging.Console, and replace with new package Microsoft.Extensions.Logging.Console 10.0.5"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\REBUSS.Pure.csproj",
+            "snippet": "Microsoft.Extensions.Logging.Console, 9.0.0\n\nRecommendation:\n\nRemove Microsoft.Extensions.Logging.Console, and replace with new package Microsoft.Extensions.Logging.Console 10.0.5",
+            "protectedSnippet": "Microsoft.Extensions.Logging.Console, 9.0.0\n\nRecommendation:\n\nRemove Microsoft.Extensions.Logging.Console, and replace with new package Microsoft.Extensions.Logging.Console 10.0.5",
+            "label": "Microsoft.Extensions.Logging.Console 9.0.0",
+            "properties": {
+              "PackageId": "Microsoft.Extensions.Logging.Console",
+              "PackageVersion": "9.0.0",
+              "PackageNewVersion": "10.0.5",
+              "PackageReplacements": null
+            }
+          }
+        },
+        {
+          "incidentId": "9a5c0600-e4f9-49e1-b19e-d8d9bf3f4b44",
+          "ruleId": "NuGet.0002",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Microsoft.Extensions.Options.ConfigurationExtensions, 9.0.0\n\nRecommendation:\n\nRemove Microsoft.Extensions.Options.ConfigurationExtensions, and replace with new package Microsoft.Extensions.Options.ConfigurationExtensions 10.0.5",
+              "protected": "Microsoft.Extensions.Options.ConfigurationExtensions, 9.0.0\n\nRecommendation:\n\nRemove Microsoft.Extensions.Options.ConfigurationExtensions, and replace with new package Microsoft.Extensions.Options.ConfigurationExtensions 10.0.5"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\REBUSS.Pure.csproj",
+            "snippet": "Microsoft.Extensions.Options.ConfigurationExtensions, 9.0.0\n\nRecommendation:\n\nRemove Microsoft.Extensions.Options.ConfigurationExtensions, and replace with new package Microsoft.Extensions.Options.ConfigurationExtensions 10.0.5",
+            "protectedSnippet": "Microsoft.Extensions.Options.ConfigurationExtensions, 9.0.0\n\nRecommendation:\n\nRemove Microsoft.Extensions.Options.ConfigurationExtensions, and replace with new package Microsoft.Extensions.Options.ConfigurationExtensions 10.0.5",
+            "label": "Microsoft.Extensions.Options.ConfigurationExtensions 9.0.0",
+            "properties": {
+              "PackageId": "Microsoft.Extensions.Options.ConfigurationExtensions",
+              "PackageVersion": "9.0.0",
+              "PackageNewVersion": "10.0.5",
+              "PackageReplacements": null
+            }
+          }
+        },
+        {
+          "incidentId": "da12204d-61df-47f8-b120-0d2275ae18ca",
+          "ruleId": "NuGet.0002",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "System.Text.Json, 9.0.0\n\nRecommendation:\n\nRemove System.Text.Json, and replace with new package System.Text.Json 10.0.5",
+              "protected": "System.Text.Json, 9.0.0\n\nRecommendation:\n\nRemove System.Text.Json, and replace with new package System.Text.Json 10.0.5"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\REBUSS.Pure.csproj",
+            "snippet": "System.Text.Json, 9.0.0\n\nRecommendation:\n\nRemove System.Text.Json, and replace with new package System.Text.Json 10.0.5",
+            "protectedSnippet": "System.Text.Json, 9.0.0\n\nRecommendation:\n\nRemove System.Text.Json, and replace with new package System.Text.Json 10.0.5",
+            "label": "System.Text.Json 9.0.0",
+            "properties": {
+              "PackageId": "System.Text.Json",
+              "PackageVersion": "9.0.0",
+              "PackageNewVersion": "10.0.5",
+              "PackageReplacements": null
+            }
+          }
+        },
+        {
+          "incidentId": "37490981-db4b-4793-ab93-91470183dac8",
+          "ruleId": "NuGet.0005",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Azure.Identity, 1.13.2\n\nRecommendation:\n\nThis version takes a dependency on a deprecated version of MSAL .NET (Microsoft.Identity.Client).\nRemove Azure.Identity, and replace with new package Azure.Identity, 1.19.0",
+              "protected": "Azure.Identity, 1.13.2\n\nRecommendation:\n\nThis version takes a dependency on a deprecated version of MSAL .NET (Microsoft.Identity.Client).\nRemove Azure.Identity, and replace with new package Azure.Identity, 1.19.0"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\REBUSS.Pure.csproj",
+            "snippet": "Azure.Identity, 1.13.2\n\nRecommendation:\n\nThis version takes a dependency on a deprecated version of MSAL .NET (Microsoft.Identity.Client).\nRemove Azure.Identity, and replace with new package Azure.Identity, 1.19.0",
+            "protectedSnippet": "Azure.Identity, 1.13.2\n\nRecommendation:\n\nThis version takes a dependency on a deprecated version of MSAL .NET (Microsoft.Identity.Client).\nRemove Azure.Identity, and replace with new package Azure.Identity, 1.19.0",
+            "label": "Azure.Identity 1.13.2",
+            "properties": {
+              "PackageId": "Azure.Identity",
+              "PackageVersion": "1.13.2",
+              "PackageNewVersion": null,
+              "PackageReplacements": null
+            }
+          }
+        },
+        {
+          "incidentId": "80ceb95f-30f4-4895-9897-22cffa276604",
+          "ruleId": "Project.0002",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Current target framework: net8.0\nRecommended target framework: net10.0",
+              "protected": "Current target framework: net8.0\nRecommended target framework: net10.0"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\REBUSS.Pure.csproj",
+            "snippet": "Current target framework: net8.0\nRecommended target framework: net10.0",
+            "protectedSnippet": "Current target framework: net8.0\nRecommended target framework: net10.0",
+            "properties": {
+              "CurrentTargetFramework": "net8.0",
+              "RecommendedTargetFramework": "net10.0"
+            }
+          }
+        },
+        {
+          "incidentId": "6e317045-fd4b-4ce8-996c-bdbb69467a3e",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "using var doc = System.Text.Json.JsonDocument.Parse(existingJson);",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\Cli\\InitCommand.cs",
+            "snippet": "using var doc = System.Text.Json.JsonDocument.Parse(existingJson);",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 509,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "09fca80a-5d6a-46ff-a08b-8b8dab40d0ab",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "using var doc = System.Text.Json.JsonDocument.Parse(existingJson);",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\Cli\\InitCommand.cs",
+            "snippet": "using var doc = System.Text.Json.JsonDocument.Parse(existingJson);",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 509,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "3a0baf64-1fb4-4ca1-b0f4-57d8dcd4f6c9",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "using var doc = JsonDocument.Parse(json);",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\Services\\Metadata\\AzureDevOpsMetadataProvider.cs",
+            "snippet": "using var doc = JsonDocument.Parse(json);",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 91,
+            "column": 16
+          }
+        },
+        {
+          "incidentId": "0b81890d-61ee-4629-822b-8fa4b8967c6e",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "using var doc = JsonDocument.Parse(json);",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\Services\\Metadata\\AzureDevOpsMetadataProvider.cs",
+            "snippet": "using var doc = JsonDocument.Parse(json);",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 91,
+            "column": 16
+          }
+        },
+        {
+          "incidentId": "11d4acbf-2e62-475b-a516-5f759008fed7",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "using var doc = JsonDocument.Parse(json);",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\Services\\Common\\Parsers\\IterationInfoParser.cs",
+            "snippet": "using var doc = JsonDocument.Parse(json);",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 24,
+            "column": 16
+          }
+        },
+        {
+          "incidentId": "74efc56a-3123-4ae0-803b-ee4839569e3b",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "using var doc = JsonDocument.Parse(json);",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\Services\\Common\\Parsers\\IterationInfoParser.cs",
+            "snippet": "using var doc = JsonDocument.Parse(json);",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 24,
+            "column": 16
+          }
+        },
+        {
+          "incidentId": "8d02fb11-8c23-47be-bb85-784eaf420af5",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "using var doc = JsonDocument.Parse(json);",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\Services\\Common\\Parsers\\PullRequestMetadataParser.cs",
+            "snippet": "using var doc = JsonDocument.Parse(json);",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 41,
+            "column": 16
+          }
+        },
+        {
+          "incidentId": "880a414a-7e06-4564-a397-2f758c276d35",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "using var doc = JsonDocument.Parse(json);",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\Services\\Common\\Parsers\\PullRequestMetadataParser.cs",
+            "snippet": "using var doc = JsonDocument.Parse(json);",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 41,
+            "column": 16
+          }
+        },
+        {
+          "incidentId": "4e9086b2-ef3b-48d2-9f54-be14ed9663ca",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "using var doc = JsonDocument.Parse(json);",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\Services\\Common\\Parsers\\PullRequestMetadataParser.cs",
+            "snippet": "using var doc = JsonDocument.Parse(json);",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 17,
+            "column": 16
+          }
+        },
+        {
+          "incidentId": "d5a3d567-b701-4c13-b781-b311862c553a",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "using var doc = JsonDocument.Parse(json);",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\Services\\Common\\Parsers\\PullRequestMetadataParser.cs",
+            "snippet": "using var doc = JsonDocument.Parse(json);",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 17,
+            "column": 16
+          }
+        },
+        {
+          "incidentId": "8c3d65a5-64b9-4f1b-b834-13e8bdc9b243",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "using var doc = JsonDocument.Parse(json);",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\Services\\Common\\Parsers\\FileChangesParser.cs",
+            "snippet": "using var doc = JsonDocument.Parse(json);",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 18,
+            "column": 16
+          }
+        },
+        {
+          "incidentId": "02a7071d-20bf-4dac-b05e-eb4c45f8f5d8",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "using var doc = JsonDocument.Parse(json);",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\Services\\Common\\Parsers\\FileChangesParser.cs",
+            "snippet": "using var doc = JsonDocument.Parse(json);",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 18,
+            "column": 16
+          }
+        },
+        {
+          "incidentId": "6df4f325-fab6-47dc-9956-f43ab1ab42a0",
+          "ruleId": "Api.0003",
+          "description": "Breaking change - Streaming HTTP responses enabled by default in browser HTTP clients ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var contentType = response.Content.Headers.ContentType?.MediaType;",
+              "protected": "T:System.Net.Http.HttpContent"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\AzureDevOpsIntegration\\Services\\AzureDevOpsApiClient.cs",
+            "snippet": "var contentType = response.Content.Headers.ContentType?.MediaType;",
+            "protectedSnippet": "T:System.Net.Http.HttpContent",
+            "label": "T:System.Net.Http.HttpContent",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/default-http-streaming.md",
+                "isCustom": false
+              }
+            ],
+            "line": 251,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "db43562e-62fe-4ca3-afd7-671bfa60685b",
+          "ruleId": "Api.0003",
+          "description": "Breaking change - Streaming HTTP responses enabled by default in browser HTTP clients ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var body = await response.Content.ReadAsStringAsync();",
+              "protected": "T:System.Net.Http.HttpContent"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\AzureDevOpsIntegration\\Services\\AzureDevOpsApiClient.cs",
+            "snippet": "var body = await response.Content.ReadAsStringAsync();",
+            "protectedSnippet": "T:System.Net.Http.HttpContent",
+            "label": "T:System.Net.Http.HttpContent",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/default-http-streaming.md",
+                "isCustom": false
+              }
+            ],
+            "line": 217,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "45baf8cc-f1bb-4d3e-8555-c2be1597b75d",
+          "ruleId": "Api.0003",
+          "description": "Breaking change - Streaming HTTP responses enabled by default in browser HTTP clients ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var errorContent = await response.Content.ReadAsStringAsync();",
+              "protected": "T:System.Net.Http.HttpContent"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\AzureDevOpsIntegration\\Services\\AzureDevOpsApiClient.cs",
+            "snippet": "var errorContent = await response.Content.ReadAsStringAsync();",
+            "protectedSnippet": "T:System.Net.Http.HttpContent",
+            "label": "T:System.Net.Http.HttpContent",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/default-http-streaming.md",
+                "isCustom": false
+              }
+            ],
+            "line": 206,
+            "column": 16
+          }
+        },
+        {
+          "incidentId": "911b2cbc-f723-40ab-9e7d-7c6db5be1a8b",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var fullUrl = new Uri(_httpClient.BaseAddress!, relativeUrl);",
+              "protected": "T:System.Uri"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\AzureDevOpsIntegration\\Services\\AzureDevOpsApiClient.cs",
+            "snippet": "var fullUrl = new Uri(_httpClient.BaseAddress!, relativeUrl);",
+            "protectedSnippet": "T:System.Uri",
+            "label": "T:System.Uri",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 197,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "b2ca4275-ee04-4eed-a81e-49b57e24186d",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var fullUrl = new Uri(_httpClient.BaseAddress!, relativeUrl);",
+              "protected": "T:System.Uri"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\AzureDevOpsIntegration\\Services\\AzureDevOpsApiClient.cs",
+            "snippet": "var fullUrl = new Uri(_httpClient.BaseAddress!, relativeUrl);",
+            "protectedSnippet": "T:System.Uri",
+            "label": "T:System.Uri",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 197,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "4e508d93-940c-4f44-8452-22aac4bca693",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var fullUrl = new Uri(_httpClient.BaseAddress!, relativeUrl);",
+              "protected": "M:System.Uri.#ctor(System.Uri,System.String)"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\AzureDevOpsIntegration\\Services\\AzureDevOpsApiClient.cs",
+            "snippet": "var fullUrl = new Uri(_httpClient.BaseAddress!, relativeUrl);",
+            "protectedSnippet": "M:System.Uri.#ctor(System.Uri,System.String)",
+            "label": "M:System.Uri.#ctor(System.Uri,System.String)",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 197,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "1374c6c9-89bd-406d-a0fd-6d3fc09208b7",
+          "ruleId": "Api.0003",
+          "description": "Breaking change - Streaming HTTP responses enabled by default in browser HTTP clients ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var content = await response.Content.ReadAsStringAsync();",
+              "protected": "T:System.Net.Http.HttpContent"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\AzureDevOpsIntegration\\Services\\AzureDevOpsApiClient.cs",
+            "snippet": "var content = await response.Content.ReadAsStringAsync();",
+            "protectedSnippet": "T:System.Net.Http.HttpContent",
+            "label": "T:System.Net.Http.HttpContent",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/default-http-streaming.md",
+                "isCustom": false
+              }
+            ],
+            "line": 160,
+            "column": 16
+          }
+        },
+        {
+          "incidentId": "d87b0088-0b34-4fb9-a5d3-9d35eb1e211a",
+          "ruleId": "Api.0003",
+          "description": "Breaking change - Streaming HTTP responses enabled by default in browser HTTP clients ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var error = await response.Content.ReadAsStringAsync();",
+              "protected": "T:System.Net.Http.HttpContent"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\AzureDevOpsIntegration\\Services\\AzureDevOpsApiClient.cs",
+            "snippet": "var error = await response.Content.ReadAsStringAsync();",
+            "protectedSnippet": "T:System.Net.Http.HttpContent",
+            "label": "T:System.Net.Http.HttpContent",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/default-http-streaming.md",
+                "isCustom": false
+              }
+            ],
+            "line": 153,
+            "column": 20
+          }
+        },
+        {
+          "incidentId": "cdcd505a-1358-4ca9-a26b-ed871cd4be0b",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var encodedPath = Uri.EscapeDataString(filePath);",
+              "protected": "T:System.Uri"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\AzureDevOpsIntegration\\Services\\AzureDevOpsApiClient.cs",
+            "snippet": "var encodedPath = Uri.EscapeDataString(filePath);",
+            "protectedSnippet": "T:System.Uri",
+            "label": "T:System.Uri",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 128,
+            "column": 16
+          }
+        },
+        {
+          "incidentId": "f118e8dc-96a6-44a3-821b-1ba10f65e2a0",
+          "ruleId": "Api.0003",
+          "description": "Breaking change - Streaming HTTP responses enabled by default in browser HTTP clients ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var content = await response.Content.ReadAsStringAsync();",
+              "protected": "T:System.Net.Http.HttpContent"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\AzureDevOpsIntegration\\Services\\AzureDevOpsApiClient.cs",
+            "snippet": "var content = await response.Content.ReadAsStringAsync();",
+            "protectedSnippet": "T:System.Net.Http.HttpContent",
+            "label": "T:System.Net.Http.HttpContent",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/default-http-streaming.md",
+                "isCustom": false
+              }
+            ],
+            "line": 108,
+            "column": 16
+          }
+        },
+        {
+          "incidentId": "f026d379-935c-4c08-ae40-a57b971d852d",
+          "ruleId": "Api.0003",
+          "description": "Breaking change - Streaming HTTP responses enabled by default in browser HTTP clients ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var error = await response.Content.ReadAsStringAsync();",
+              "protected": "T:System.Net.Http.HttpContent"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\AzureDevOpsIntegration\\Services\\AzureDevOpsApiClient.cs",
+            "snippet": "var error = await response.Content.ReadAsStringAsync();",
+            "protectedSnippet": "T:System.Net.Http.HttpContent",
+            "label": "T:System.Net.Http.HttpContent",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/default-http-streaming.md",
+                "isCustom": false
+              }
+            ],
+            "line": 101,
+            "column": 20
+          }
+        },
+        {
+          "incidentId": "d3885b99-c555-476a-a719-d330c5f680d7",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var encodedPath = Uri.EscapeDataString(filePath);",
+              "protected": "T:System.Uri"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\AzureDevOpsIntegration\\Services\\AzureDevOpsApiClient.cs",
+            "snippet": "var encodedPath = Uri.EscapeDataString(filePath);",
+            "protectedSnippet": "T:System.Uri",
+            "label": "T:System.Uri",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 77,
+            "column": 16
+          }
+        },
+        {
+          "incidentId": "1336e63d-b811-4f11-9752-99e401af7d50",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "_httpClient.BaseAddress = new Uri($\u0022https://dev.azure.com/{_options.OrganizationName}/\u0022);",
+              "protected": "T:System.Uri"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\AzureDevOpsIntegration\\Services\\AzureDevOpsApiClient.cs",
+            "snippet": "_httpClient.BaseAddress = new Uri($\u0022https://dev.azure.com/{_options.OrganizationName}/\u0022);",
+            "protectedSnippet": "T:System.Uri",
+            "label": "T:System.Uri",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 28,
+            "column": 16
+          }
+        },
+        {
+          "incidentId": "5d0b1538-f657-47a0-9fb8-ede74725261c",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "_httpClient.BaseAddress = new Uri($\u0022https://dev.azure.com/{_options.OrganizationName}/\u0022);",
+              "protected": "M:System.Uri.#ctor(System.String)"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\AzureDevOpsIntegration\\Services\\AzureDevOpsApiClient.cs",
+            "snippet": "_httpClient.BaseAddress = new Uri($\u0022https://dev.azure.com/{_options.OrganizationName}/\u0022);",
+            "protectedSnippet": "M:System.Uri.#ctor(System.String)",
+            "label": "M:System.Uri.#ctor(System.String)",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 28,
+            "column": 16
+          }
+        },
+        {
+          "incidentId": "5f0f9453-b4f4-405e-87dd-8c2626a4c470",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "_httpClient.BaseAddress = new Uri($\u0022https://dev.azure.com/{_options.OrganizationName}/\u0022);",
+              "protected": "T:System.Uri"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\AzureDevOpsIntegration\\Services\\AzureDevOpsApiClient.cs",
+            "snippet": "_httpClient.BaseAddress = new Uri($\u0022https://dev.azure.com/{_options.OrganizationName}/\u0022);",
+            "protectedSnippet": "T:System.Uri",
+            "label": "T:System.Uri",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 28,
+            "column": 16
+          }
+        },
+        {
+          "incidentId": "f616371a-4da8-487e-aa54-dc3551a51b71",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "if (_httpClient.BaseAddress is null \u0026\u0026 !string.IsNullOrWhiteSpace(_options.OrganizationName))\r\n            {\r\n                _httpClient.BaseAddress = new Uri($\u0022https://dev.azure.com/{_options.OrganizationName}/\u0022);\r\n            }",
+              "protected": "T:System.Uri"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\AzureDevOpsIntegration\\Services\\AzureDevOpsApiClient.cs",
+            "snippet": "if (_httpClient.BaseAddress is null \u0026\u0026 !string.IsNullOrWhiteSpace(_options.OrganizationName))\r\n            {\r\n                _httpClient.BaseAddress = new Uri($\u0022https://dev.azure.com/{_options.OrganizationName}/\u0022);\r\n            }",
+            "protectedSnippet": "T:System.Uri",
+            "label": "T:System.Uri",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 26,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "844f9788-25cf-4ee9-a858-6f30a5bf4a53",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "_httpClient.BaseAddress = new Uri($\u0022https://dev.azure.com/{_options.OrganizationName}/\u0022);",
+              "protected": "T:System.Uri"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\AzureDevOpsIntegration\\Services\\AzureDevOpsApiClient.cs",
+            "snippet": "_httpClient.BaseAddress = new Uri($\u0022https://dev.azure.com/{_options.OrganizationName}/\u0022);",
+            "protectedSnippet": "T:System.Uri",
+            "label": "T:System.Uri",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 28,
+            "column": 16
+          }
+        },
+        {
+          "incidentId": "335189d9-54eb-4938-b29e-e14ac439b1e1",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "_httpClient.BaseAddress = new Uri($\u0022https://dev.azure.com/{_options.OrganizationName}/\u0022);",
+              "protected": "M:System.Uri.#ctor(System.String)"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\AzureDevOpsIntegration\\Services\\AzureDevOpsApiClient.cs",
+            "snippet": "_httpClient.BaseAddress = new Uri($\u0022https://dev.azure.com/{_options.OrganizationName}/\u0022);",
+            "protectedSnippet": "M:System.Uri.#ctor(System.String)",
+            "label": "M:System.Uri.#ctor(System.String)",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 28,
+            "column": 16
+          }
+        },
+        {
+          "incidentId": "2a3d7c39-963e-4268-97ba-29bb00812a40",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "_httpClient.BaseAddress = new Uri($\u0022https://dev.azure.com/{_options.OrganizationName}/\u0022);",
+              "protected": "T:System.Uri"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\AzureDevOpsIntegration\\Services\\AzureDevOpsApiClient.cs",
+            "snippet": "_httpClient.BaseAddress = new Uri($\u0022https://dev.azure.com/{_options.OrganizationName}/\u0022);",
+            "protectedSnippet": "T:System.Uri",
+            "label": "T:System.Uri",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 28,
+            "column": 16
+          }
+        },
+        {
+          "incidentId": "c446686f-8a0e-4f40-a352-9ae1cd1326e0",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "if (_httpClient.BaseAddress is null \u0026\u0026 !string.IsNullOrWhiteSpace(_options.OrganizationName))\r\n            {\r\n                _httpClient.BaseAddress = new Uri($\u0022https://dev.azure.com/{_options.OrganizationName}/\u0022);\r\n            }",
+              "protected": "T:System.Uri"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\AzureDevOpsIntegration\\Services\\AzureDevOpsApiClient.cs",
+            "snippet": "if (_httpClient.BaseAddress is null \u0026\u0026 !string.IsNullOrWhiteSpace(_options.OrganizationName))\r\n            {\r\n                _httpClient.BaseAddress = new Uri($\u0022https://dev.azure.com/{_options.OrganizationName}/\u0022);\r\n            }",
+            "protectedSnippet": "T:System.Uri",
+            "label": "T:System.Uri",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 26,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "dc2b9db3-c749-49f6-a5b9-e5040636161c",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "using var doc = JsonDocument.Parse(json);",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\AzureDevOpsIntegration\\Configuration\\AzureCliTokenProvider.cs",
+            "snippet": "using var doc = JsonDocument.Parse(json);",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 57,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "a71ef5a1-c038-4801-8b9a-2a1ad5d48e92",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "using var doc = JsonDocument.Parse(json);",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\AzureDevOpsIntegration\\Configuration\\AzureCliTokenProvider.cs",
+            "snippet": "using var doc = JsonDocument.Parse(json);",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 57,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "34c6a8f9-170e-466e-a52e-007588cdba1e",
+          "ruleId": "Api.0003",
+          "description": "Breaking change - Streaming HTTP responses enabled by default in browser HTTP clients ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "clone.Content.Headers.TryAddWithoutValidation(header.Key, header.Value);",
+              "protected": "T:System.Net.Http.HttpContent"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\AzureDevOpsIntegration\\Configuration\\AuthenticationDelegatingHandler.cs",
+            "snippet": "clone.Content.Headers.TryAddWithoutValidation(header.Key, header.Value);",
+            "protectedSnippet": "T:System.Net.Http.HttpContent",
+            "label": "T:System.Net.Http.HttpContent",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/default-http-streaming.md",
+                "isCustom": false
+              }
+            ],
+            "line": 81,
+            "column": 16
+          }
+        },
+        {
+          "incidentId": "81a26a5b-c69b-4597-849a-5e7b469aada7",
+          "ruleId": "Api.0003",
+          "description": "Breaking change - Streaming HTTP responses enabled by default in browser HTTP clients ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "foreach (var header in original.Content.Headers)\r\n                clone.Content.Headers.TryAddWithoutValidation(header.Key, header.Value);",
+              "protected": "T:System.Net.Http.HttpContent"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\AzureDevOpsIntegration\\Configuration\\AuthenticationDelegatingHandler.cs",
+            "snippet": "foreach (var header in original.Content.Headers)\r\n                clone.Content.Headers.TryAddWithoutValidation(header.Key, header.Value);",
+            "protectedSnippet": "T:System.Net.Http.HttpContent",
+            "label": "T:System.Net.Http.HttpContent",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/default-http-streaming.md",
+                "isCustom": false
+              }
+            ],
+            "line": 80,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "04e23345-52fb-4d32-94f5-8dcc192a1967",
+          "ruleId": "Api.0003",
+          "description": "Breaking change - Streaming HTTP responses enabled by default in browser HTTP clients ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "clone.Content = new ByteArrayContent(content);",
+              "protected": "T:System.Net.Http.HttpContent"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\AzureDevOpsIntegration\\Configuration\\AuthenticationDelegatingHandler.cs",
+            "snippet": "clone.Content = new ByteArrayContent(content);",
+            "protectedSnippet": "T:System.Net.Http.HttpContent",
+            "label": "T:System.Net.Http.HttpContent",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/default-http-streaming.md",
+                "isCustom": false
+              }
+            ],
+            "line": 78,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "5995a2b1-59fa-4ad5-8090-f5b8d11db1df",
+          "ruleId": "Api.0003",
+          "description": "Breaking change - Streaming HTTP responses enabled by default in browser HTTP clients ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var content = await original.Content.ReadAsByteArrayAsync(cancellationToken);",
+              "protected": "T:System.Net.Http.HttpContent"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\AzureDevOpsIntegration\\Configuration\\AuthenticationDelegatingHandler.cs",
+            "snippet": "var content = await original.Content.ReadAsByteArrayAsync(cancellationToken);",
+            "protectedSnippet": "T:System.Net.Http.HttpContent",
+            "label": "T:System.Net.Http.HttpContent",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/default-http-streaming.md",
+                "isCustom": false
+              }
+            ],
+            "line": 77,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "ebd314b1-3ca5-4403-b08d-56746ef0375b",
+          "ruleId": "Api.0003",
+          "description": "Breaking change - Streaming HTTP responses enabled by default in browser HTTP clients ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "if (original.Content is not null)\r\n        {\r\n            var content = await original.Content.ReadAsByteArrayAsync(cancellationToken);\r\n            clone.Content = new ByteArrayContent(content);\r\n\r\n            foreach (var header in original.Content.Headers)\r\n                clone.Content.Headers.TryAddWithoutValidation(header.Key, header.Value);\r\n        }",
+              "protected": "T:System.Net.Http.HttpContent"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\AzureDevOpsIntegration\\Configuration\\AuthenticationDelegatingHandler.cs",
+            "snippet": "if (original.Content is not null)\r\n        {\r\n            var content = await original.Content.ReadAsByteArrayAsync(cancellationToken);\r\n            clone.Content = new ByteArrayContent(content);\r\n\r\n            foreach (var header in original.Content.Headers)\r\n                clone.Content.Headers.TryAddWithoutValidation(header.Key, header.Value);\r\n        }",
+            "protectedSnippet": "T:System.Net.Http.HttpContent",
+            "label": "T:System.Net.Http.HttpContent",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/default-http-streaming.md",
+                "isCustom": false
+              }
+            ],
+            "line": 75,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "829bb5be-2a6d-4827-acae-43a383b0f49b",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var clone = new HttpRequestMessage(original.Method, original.RequestUri);",
+              "protected": "T:System.Uri"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\AzureDevOpsIntegration\\Configuration\\AuthenticationDelegatingHandler.cs",
+            "snippet": "var clone = new HttpRequestMessage(original.Method, original.RequestUri);",
+            "protectedSnippet": "T:System.Uri",
+            "label": "T:System.Uri",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 70,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "ff6fc9ca-d819-4540-9791-12384d17ed06",
+          "ruleId": "Api.0003",
+          "description": "Breaking change - Streaming HTTP responses enabled by default in browser HTTP clients ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var contentType = response.Content.Headers.ContentType?.MediaType;",
+              "protected": "T:System.Net.Http.HttpContent"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\AzureDevOpsIntegration\\Configuration\\AuthenticationDelegatingHandler.cs",
+            "snippet": "var contentType = response.Content.Headers.ContentType?.MediaType;",
+            "protectedSnippet": "T:System.Net.Http.HttpContent",
+            "label": "T:System.Net.Http.HttpContent",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/default-http-streaming.md",
+                "isCustom": false
+              }
+            ],
+            "line": 62,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "a635dbcd-3c90-484e-b482-819fb0344967",
+          "ruleId": "Api.0002",
+          "description": "Breaking change: New TimeSpan.From*() overloads that take integers ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "process.WaitForExit(TimeSpan.FromSeconds(5));",
+              "protected": "M:System.TimeSpan.FromSeconds(System.Double)"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\AzureDevOpsIntegration\\Configuration\\GitRemoteDetector.cs",
+            "snippet": "process.WaitForExit(TimeSpan.FromSeconds(5));",
+            "protectedSnippet": "M:System.TimeSpan.FromSeconds(System.Double)",
+            "label": "M:System.TimeSpan.FromSeconds(System.Double)",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/core-libraries/9.0/timespan-from-overloads.md",
+                "isCustom": false
+              }
+            ],
+            "line": 118,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "0dcdd63d-ab7e-4a22-ba09-3ae12eaeb1e4",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "if (Uri.TryCreate(uri, UriKind.Absolute, out var parsed) \u0026\u0026\r\n                string.Equals(parsed.Scheme, \u0022file\u0022, StringComparison.OrdinalIgnoreCase))\r\n            {\r\n                return parsed.LocalPath;\r\n            }",
+              "protected": "T:System.Uri"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\Mcp\\McpWorkspaceRootProvider.cs",
+            "snippet": "if (Uri.TryCreate(uri, UriKind.Absolute, out var parsed) \u0026\u0026\r\n                string.Equals(parsed.Scheme, \u0022file\u0022, StringComparison.OrdinalIgnoreCase))\r\n            {\r\n                return parsed.LocalPath;\r\n            }",
+            "protectedSnippet": "T:System.Uri",
+            "label": "T:System.Uri",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 162,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "47967bbb-410b-4237-95e3-806976bea941",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "if (Uri.TryCreate(uri, UriKind.Absolute, out var parsed) \u0026\u0026\r\n                string.Equals(parsed.Scheme, \u0022file\u0022, StringComparison.OrdinalIgnoreCase))\r\n            {\r\n                return parsed.LocalPath;\r\n            }",
+              "protected": "M:System.Uri.TryCreate(System.String,System.UriKind,System.Uri@)"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\Mcp\\McpWorkspaceRootProvider.cs",
+            "snippet": "if (Uri.TryCreate(uri, UriKind.Absolute, out var parsed) \u0026\u0026\r\n                string.Equals(parsed.Scheme, \u0022file\u0022, StringComparison.OrdinalIgnoreCase))\r\n            {\r\n                return parsed.LocalPath;\r\n            }",
+            "protectedSnippet": "M:System.Uri.TryCreate(System.String,System.UriKind,System.Uri@)",
+            "label": "M:System.Uri.TryCreate(System.String,System.UriKind,System.Uri@)",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 162,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "ea2cb614-73b5-43b1-95d1-1b6d69c32f04",
+          "ruleId": "Api.0001",
+          "description": "Breaking change: DynamicallyAccessedMembers annotation removed from trim-unsafe configuration APIs ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "services.Configure\u003CAzureDevOpsOptions\u003E(configuration.GetSection(AzureDevOpsOptions.SectionName));",
+              "protected": "M:Microsoft.Extensions.DependencyInjection.OptionsConfigurationServiceCollectionExtensions.Configure\u0060\u00601(Microsoft.Extensions.DependencyInjection.IServiceCollection,Microsoft.Extensions.Configuration.IConfiguration)"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\Program.cs",
+            "snippet": "services.Configure\u003CAzureDevOpsOptions\u003E(configuration.GetSection(AzureDevOpsOptions.SectionName));",
+            "protectedSnippet": "M:Microsoft.Extensions.DependencyInjection.OptionsConfigurationServiceCollectionExtensions.Configure\u0060\u00601(Microsoft.Extensions.DependencyInjection.IServiceCollection,Microsoft.Extensions.Configuration.IConfiguration)",
+            "label": "M:Microsoft.Extensions.DependencyInjection.OptionsConfigurationServiceCollectionExtensions.Configure\u0060\u00601(Microsoft.Extensions.DependencyInjection.IServiceCollection,Microsoft.Extensions.Configuration.IConfiguration)",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/extensions/10.0/dynamically-accessed-members-configuration.md",
+                "isCustom": false
+              }
+            ],
+            "line": 149,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "7a6b2254-c1a9-4a7b-9632-55c00aa62fcb",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: Message no longer duplicated in Console log output ",
+          "projectPath": "REBUSS.Pure\\REBUSS.Pure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "builder.AddConsole(options =\u003E\r\n                {\r\n                    options.LogToStandardErrorThreshold = LogLevel.Trace;\r\n                });",
+              "protected": "M:Microsoft.Extensions.Logging.ConsoleLoggerExtensions.AddConsole(Microsoft.Extensions.Logging.ILoggingBuilder,System.Action{Microsoft.Extensions.Logging.Console.ConsoleLoggerOptions})"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure\\Program.cs",
+            "snippet": "builder.AddConsole(options =\u003E\r\n                {\r\n                    options.LogToStandardErrorThreshold = LogLevel.Trace;\r\n                });",
+            "protectedSnippet": "M:Microsoft.Extensions.Logging.ConsoleLoggerExtensions.AddConsole(Microsoft.Extensions.Logging.ILoggingBuilder,System.Action{Microsoft.Extensions.Logging.Console.ConsoleLoggerOptions})",
+            "label": "M:Microsoft.Extensions.Logging.ConsoleLoggerExtensions.AddConsole(Microsoft.Extensions.Logging.ILoggingBuilder,System.Action{Microsoft.Extensions.Logging.Console.ConsoleLoggerOptions})",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/extensions/10.0/console-json-logging-duplicate-messages.md",
+                "isCustom": false
+              }
+            ],
+            "line": 141,
+            "column": 16
+          }
+        }
+      ],
+      "features": []
+    },
+    {
+      "path": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+      "startingProject": true,
+      "issues": 3,
+      "storyPoints": 70,
+      "properties": {
+        "appName": "REBUSS.Pure.Tests",
+        "projectKind": "DotNetCoreApp",
+        "frameworks": [
+          "net8.0"
+        ],
+        "languages": [
+          "C#"
+        ],
+        "tools": [
+          "MSBuild"
+        ],
+        "isSdkStyle": true,
+        "numberOfFiles": 34,
+        "numberOfCodeFiles": 32,
+        "linesTotal": 8765,
+        "linesOfCode": 6970,
+        "totalApiScanned": 10190,
+        "minLinesOfCodeToChange": 68,
+        "maxLinesOfCodeToChange": 68
+      },
+      "ruleInstances": [
+        {
+          "incidentId": "f3769f0c-f546-4da9-b45a-b8a5f04a59b1",
+          "ruleId": "NuGet.0005",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "xunit, 2.9.3\n\nRecommendation:\n\nThis package will only be updated for security issues. All future feature work has moved onto v3.\n\nGuide for migrating from xUnit.net v2 to v3: https://xunit.net/docs/getting-started/v3/migration\nRemove xunit, and replace with new package xunit, 2.9.3",
+              "protected": "xunit, 2.9.3\n\nRecommendation:\n\nThis package will only be updated for security issues. All future feature work has moved onto v3.\n\nGuide for migrating from xUnit.net v2 to v3: https://xunit.net/docs/getting-started/v3/migration\nRemove xunit, and replace with new package xunit, 2.9.3"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+            "snippet": "xunit, 2.9.3\n\nRecommendation:\n\nThis package will only be updated for security issues. All future feature work has moved onto v3.\n\nGuide for migrating from xUnit.net v2 to v3: https://xunit.net/docs/getting-started/v3/migration\nRemove xunit, and replace with new package xunit, 2.9.3",
+            "protectedSnippet": "xunit, 2.9.3\n\nRecommendation:\n\nThis package will only be updated for security issues. All future feature work has moved onto v3.\n\nGuide for migrating from xUnit.net v2 to v3: https://xunit.net/docs/getting-started/v3/migration\nRemove xunit, and replace with new package xunit, 2.9.3",
+            "label": "xunit 2.9.3",
+            "properties": {
+              "PackageId": "xunit",
+              "PackageVersion": "2.9.3",
+              "PackageNewVersion": null,
+              "PackageReplacements": null
+            }
+          }
+        },
+        {
+          "incidentId": "1c29320e-fefd-45af-bed2-448a3e6fdd24",
+          "ruleId": "Project.0002",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Current target framework: net8.0\nRecommended target framework: net10.0",
+              "protected": "Current target framework: net8.0\nRecommended target framework: net10.0"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+            "snippet": "Current target framework: net8.0\nRecommended target framework: net10.0",
+            "protectedSnippet": "Current target framework: net8.0\nRecommended target framework: net10.0",
+            "properties": {
+              "CurrentTargetFramework": "net8.0",
+              "RecommendedTargetFramework": "net10.0"
+            }
+          }
+        },
+        {
+          "incidentId": "ae78ee45-2a56-4344-9b91-c7eff6784b97",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "provider.SetRoots(new[] { new Uri(repoRoot).AbsoluteUri });",
+              "protected": "T:System.Uri"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Mcp\\McpWorkspaceRootProviderTests.cs",
+            "snippet": "provider.SetRoots(new[] { new Uri(repoRoot).AbsoluteUri });",
+            "protectedSnippet": "T:System.Uri",
+            "label": "T:System.Uri",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 257,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "f0f0572a-6bd0-43e0-bd3c-d7c9491f53c3",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "provider.SetRoots(new[] { new Uri(repoRoot).AbsoluteUri });",
+              "protected": "M:System.Uri.#ctor(System.String)"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Mcp\\McpWorkspaceRootProviderTests.cs",
+            "snippet": "provider.SetRoots(new[] { new Uri(repoRoot).AbsoluteUri });",
+            "protectedSnippet": "M:System.Uri.#ctor(System.String)",
+            "label": "M:System.Uri.#ctor(System.String)",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 257,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "5b675e02-5bb1-44f2-8e4b-bb53c1654534",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "provider.SetRoots(new[] { new Uri(repoRoot).AbsoluteUri });",
+              "protected": "P:System.Uri.AbsoluteUri"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Mcp\\McpWorkspaceRootProviderTests.cs",
+            "snippet": "provider.SetRoots(new[] { new Uri(repoRoot).AbsoluteUri });",
+            "protectedSnippet": "P:System.Uri.AbsoluteUri",
+            "label": "P:System.Uri.AbsoluteUri",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 257,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "808c09c7-8c60-4823-86c4-6bc0672c7d8b",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "provider.SetRoots(new[] { new Uri(repoRoot).AbsoluteUri });",
+              "protected": "T:System.Uri"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Mcp\\McpWorkspaceRootProviderTests.cs",
+            "snippet": "provider.SetRoots(new[] { new Uri(repoRoot).AbsoluteUri });",
+            "protectedSnippet": "T:System.Uri",
+            "label": "T:System.Uri",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 165,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "da0a8237-64c6-4ef5-916d-779aced45547",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "provider.SetRoots(new[] { new Uri(repoRoot).AbsoluteUri });",
+              "protected": "M:System.Uri.#ctor(System.String)"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Mcp\\McpWorkspaceRootProviderTests.cs",
+            "snippet": "provider.SetRoots(new[] { new Uri(repoRoot).AbsoluteUri });",
+            "protectedSnippet": "M:System.Uri.#ctor(System.String)",
+            "label": "M:System.Uri.#ctor(System.String)",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 165,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "8687549c-c947-4f9f-bec7-b31e98fa041e",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "provider.SetRoots(new[] { new Uri(repoRoot).AbsoluteUri });",
+              "protected": "P:System.Uri.AbsoluteUri"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Mcp\\McpWorkspaceRootProviderTests.cs",
+            "snippet": "provider.SetRoots(new[] { new Uri(repoRoot).AbsoluteUri });",
+            "protectedSnippet": "P:System.Uri.AbsoluteUri",
+            "label": "P:System.Uri.AbsoluteUri",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 165,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "b0c73eda-60e7-4745-89a6-08f17beacf12",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "provider.SetRoots(new[] { new Uri(repoRoot).AbsoluteUri });",
+              "protected": "T:System.Uri"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Mcp\\McpWorkspaceRootProviderTests.cs",
+            "snippet": "provider.SetRoots(new[] { new Uri(repoRoot).AbsoluteUri });",
+            "protectedSnippet": "T:System.Uri",
+            "label": "T:System.Uri",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 138,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "d104d064-6f1e-40a3-a41f-59db54493bd8",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "provider.SetRoots(new[] { new Uri(repoRoot).AbsoluteUri });",
+              "protected": "M:System.Uri.#ctor(System.String)"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Mcp\\McpWorkspaceRootProviderTests.cs",
+            "snippet": "provider.SetRoots(new[] { new Uri(repoRoot).AbsoluteUri });",
+            "protectedSnippet": "M:System.Uri.#ctor(System.String)",
+            "label": "M:System.Uri.#ctor(System.String)",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 138,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "95c72c85-850b-4dd3-9d16-c1d096a9a41c",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "provider.SetRoots(new[] { new Uri(repoRoot).AbsoluteUri });",
+              "protected": "P:System.Uri.AbsoluteUri"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Mcp\\McpWorkspaceRootProviderTests.cs",
+            "snippet": "provider.SetRoots(new[] { new Uri(repoRoot).AbsoluteUri });",
+            "protectedSnippet": "P:System.Uri.AbsoluteUri",
+            "label": "P:System.Uri.AbsoluteUri",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 138,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "3b56cdb8-3c0d-4a91-90da-a86702dfc175",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Assert.False(docs[0].RootElement.TryGetProperty(\u0022error\u0022, out _));",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Mcp\\McpServerTests.cs",
+            "snippet": "Assert.False(docs[0].RootElement.TryGetProperty(\u0022error\u0022, out _));",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 314,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "88929d5e-7a3f-4f00-9cd8-f648bc06ba78",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Assert.Equal(\u0022after-notif\u0022, docs[0].RootElement.GetProperty(\u0022id\u0022).GetString());",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Mcp\\McpServerTests.cs",
+            "snippet": "Assert.Equal(\u0022after-notif\u0022, docs[0].RootElement.GetProperty(\u0022id\u0022).GetString());",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 313,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "1724379d-be14-43b6-816f-4f3a5b19418a",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Assert.Single(docs);",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Mcp\\McpServerTests.cs",
+            "snippet": "Assert.Single(docs);",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 312,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "cadd449a-5003-42cf-887e-f023abfe4498",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var doc = JsonDocument.Parse(new StreamReader(output).ReadToEnd().Trim());",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Mcp\\McpServerTests.cs",
+            "snippet": "var doc = JsonDocument.Parse(new StreamReader(output).ReadToEnd().Trim());",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 270,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "9a615ee2-d9a0-433c-9eae-b82a550512da",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var doc = JsonDocument.Parse(new StreamReader(output).ReadToEnd().Trim());",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Mcp\\McpServerTests.cs",
+            "snippet": "var doc = JsonDocument.Parse(new StreamReader(output).ReadToEnd().Trim());",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 270,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "f4300e45-cab3-46e6-9402-6d2eff40ec38",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Assert.Equal(\u0022b\u0022, docs[1].RootElement.GetProperty(\u0022id\u0022).GetString());",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Mcp\\McpServerTests.cs",
+            "snippet": "Assert.Equal(\u0022b\u0022, docs[1].RootElement.GetProperty(\u0022id\u0022).GetString());",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 236,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "bebfb7d1-d7b5-4114-9c77-846d071279dd",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Assert.Equal(\u0022a\u0022, docs[0].RootElement.GetProperty(\u0022id\u0022).GetString());",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Mcp\\McpServerTests.cs",
+            "snippet": "Assert.Equal(\u0022a\u0022, docs[0].RootElement.GetProperty(\u0022id\u0022).GetString());",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 235,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "8b33c29d-27c6-4204-bdd7-8cf15f35e8ca",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Assert.Equal(\u00226\u0022, docs[0].RootElement.GetProperty(\u0022id\u0022).GetString());",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Mcp\\McpServerTests.cs",
+            "snippet": "Assert.Equal(\u00226\u0022, docs[0].RootElement.GetProperty(\u0022id\u0022).GetString());",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 210,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "8ad590ae-b1e3-4838-a5be-1898776a5963",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Assert.Single(docs);",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Mcp\\McpServerTests.cs",
+            "snippet": "Assert.Single(docs);",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 209,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "f1a7b8b7-fd3d-4a46-a181-8bd7742ea6c2",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "return docs[0];",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Mcp\\McpServerTests.cs",
+            "snippet": "return docs[0];",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 62,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "d7358f47-2679-42b2-8e6d-8b06f0bf59b1",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Assert.Single(docs);",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Mcp\\McpServerTests.cs",
+            "snippet": "Assert.Single(docs);",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 61,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "7f17c7d6-7915-49b9-a830-105b67aa60a7",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "return lines.Select(l =\u003E JsonDocument.Parse(l)).ToList();",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Mcp\\McpServerTests.cs",
+            "snippet": "return lines.Select(l =\u003E JsonDocument.Parse(l)).ToList();",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 55,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "7601e1ef-d303-4cf0-97c7-10efda259215",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "return lines.Select(l =\u003E JsonDocument.Parse(l)).ToList();",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Mcp\\McpServerTests.cs",
+            "snippet": "return lines.Select(l =\u003E JsonDocument.Parse(l)).ToList();",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 55,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "17aee463-1323-459c-9b48-3815ac208665",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var toolsDoc = JsonDocument.Parse(lines[1]);",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Integration\\EndToEndTests.cs",
+            "snippet": "var toolsDoc = JsonDocument.Parse(lines[1]);",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 150,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "9d349a1d-3f3d-46df-b7a9-b7101090e3c3",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var toolsDoc = JsonDocument.Parse(lines[1]);",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Integration\\EndToEndTests.cs",
+            "snippet": "var toolsDoc = JsonDocument.Parse(lines[1]);",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 150,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "0e7cd760-9e93-4e89-9b47-4ae225c086d8",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var structured = JsonDocument.Parse(innerJson).RootElement;",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Integration\\EndToEndTests.cs",
+            "snippet": "var structured = JsonDocument.Parse(innerJson).RootElement;",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 97,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "aadfa5b4-6fb1-4388-ba1f-c6f9b7c50f5b",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var structured = JsonDocument.Parse(innerJson).RootElement;",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Integration\\EndToEndTests.cs",
+            "snippet": "var structured = JsonDocument.Parse(innerJson).RootElement;",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 97,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "0f059dcb-4385-4398-a7f2-3b9c18dc6807",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "return JsonDocument.Parse(new StreamReader(output).ReadToEnd().Trim());",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Integration\\EndToEndTests.cs",
+            "snippet": "return JsonDocument.Parse(new StreamReader(output).ReadToEnd().Trim());",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 45,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "68723360-f694-4e3c-83fd-e6f4e6a34b03",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "return JsonDocument.Parse(new StreamReader(output).ReadToEnd().Trim());",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Integration\\EndToEndTests.cs",
+            "snippet": "return JsonDocument.Parse(new StreamReader(output).ReadToEnd().Trim());",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 45,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "45b28db3-4ce1-464b-96b4-44cea74cd52d",
+          "ruleId": "Api.0003",
+          "description": "Breaking change - Streaming HTTP responses enabled by default in browser HTTP clients ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var response = new HttpResponseMessage(HttpStatusCode.OK)\r\n        {\r\n            Content = new StringContent(xmlContent, System.Text.Encoding.UTF8, \u0022application/xml\u0022)\r\n        };",
+              "protected": "T:System.Net.Http.HttpContent"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\AzureDevOpsIntegration\\AzureDevOpsApiClientTests.cs",
+            "snippet": "var response = new HttpResponseMessage(HttpStatusCode.OK)\r\n        {\r\n            Content = new StringContent(xmlContent, System.Text.Encoding.UTF8, \u0022application/xml\u0022)\r\n        };",
+            "protectedSnippet": "T:System.Net.Http.HttpContent",
+            "label": "T:System.Net.Http.HttpContent",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/default-http-streaming.md",
+                "isCustom": false
+              }
+            ],
+            "line": 324,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "59b07efa-e4ba-48f0-b06b-bdc0356b2bd8",
+          "ruleId": "Api.0003",
+          "description": "Breaking change - Streaming HTTP responses enabled by default in browser HTTP clients ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var response = new HttpResponseMessage(HttpStatusCode.OK)\r\n        {\r\n            Content = new StringContent(\u0022{\\\u0022key\\\u0022:\\\u0022value\\\u0022}\u0022, System.Text.Encoding.UTF8, \u0022application/json\u0022)\r\n        };",
+              "protected": "T:System.Net.Http.HttpContent"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\AzureDevOpsIntegration\\AzureDevOpsApiClientTests.cs",
+            "snippet": "var response = new HttpResponseMessage(HttpStatusCode.OK)\r\n        {\r\n            Content = new StringContent(\u0022{\\\u0022key\\\u0022:\\\u0022value\\\u0022}\u0022, System.Text.Encoding.UTF8, \u0022application/json\u0022)\r\n        };",
+            "protectedSnippet": "T:System.Net.Http.HttpContent",
+            "label": "T:System.Net.Http.HttpContent",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/default-http-streaming.md",
+                "isCustom": false
+              }
+            ],
+            "line": 312,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "63cd8ba6-2a46-4996-8376-ae1aefdeba88",
+          "ruleId": "Api.0003",
+          "description": "Breaking change - Streaming HTTP responses enabled by default in browser HTTP clients ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var response = new HttpResponseMessage(HttpStatusCode.OK)\r\n        {\r\n            Content = new StringContent(\u0022\u003C!DOCTYPE html\u003E\u0022, System.Text.Encoding.UTF8, \u0022application/octet-stream\u0022)\r\n        };",
+              "protected": "T:System.Net.Http.HttpContent"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\AzureDevOpsIntegration\\AzureDevOpsApiClientTests.cs",
+            "snippet": "var response = new HttpResponseMessage(HttpStatusCode.OK)\r\n        {\r\n            Content = new StringContent(\u0022\u003C!DOCTYPE html\u003E\u0022, System.Text.Encoding.UTF8, \u0022application/octet-stream\u0022)\r\n        };",
+            "protectedSnippet": "T:System.Net.Http.HttpContent",
+            "label": "T:System.Net.Http.HttpContent",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/default-http-streaming.md",
+                "isCustom": false
+              }
+            ],
+            "line": 301,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "cb25d96f-46a5-4d70-b310-8031fee81749",
+          "ruleId": "Api.0003",
+          "description": "Breaking change - Streaming HTTP responses enabled by default in browser HTTP clients ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var response = new HttpResponseMessage(HttpStatusCode.OK)\r\n        {\r\n            Content = new StringContent(\u0022\u003Chtml\u003E\u0022, System.Text.Encoding.UTF8, \u0022text/html\u0022)\r\n        };",
+              "protected": "T:System.Net.Http.HttpContent"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\AzureDevOpsIntegration\\AzureDevOpsApiClientTests.cs",
+            "snippet": "var response = new HttpResponseMessage(HttpStatusCode.OK)\r\n        {\r\n            Content = new StringContent(\u0022\u003Chtml\u003E\u0022, System.Text.Encoding.UTF8, \u0022text/html\u0022)\r\n        };",
+            "protectedSnippet": "T:System.Net.Http.HttpContent",
+            "label": "T:System.Net.Http.HttpContent",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/default-http-streaming.md",
+                "isCustom": false
+              }
+            ],
+            "line": 290,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "dcdce16b-5f71-4794-90c8-a5821159bcd0",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var changesUrl = handler.LastRequestUri!.ToString();",
+              "protected": "T:System.Uri"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\AzureDevOpsIntegration\\AzureDevOpsApiClientTests.cs",
+            "snippet": "var changesUrl = handler.LastRequestUri!.ToString();",
+            "protectedSnippet": "T:System.Uri",
+            "label": "T:System.Uri",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 235,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "1eb97a6c-b4bd-430c-a782-27bb4d64bb0e",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var iterationsUrl = handler.LastRequestUri!.ToString();",
+              "protected": "T:System.Uri"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\AzureDevOpsIntegration\\AzureDevOpsApiClientTests.cs",
+            "snippet": "var iterationsUrl = handler.LastRequestUri!.ToString();",
+            "protectedSnippet": "T:System.Uri",
+            "label": "T:System.Uri",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 232,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "e9386be1-fa8b-452d-8b96-7357440c5b20",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var detailsUrl = handler.LastRequestUri!.ToString();",
+              "protected": "T:System.Uri"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\AzureDevOpsIntegration\\AzureDevOpsApiClientTests.cs",
+            "snippet": "var detailsUrl = handler.LastRequestUri!.ToString();",
+            "protectedSnippet": "T:System.Uri",
+            "label": "T:System.Uri",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 229,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "d5ba204e-3ddb-496b-aeba-13705c7f90bc",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var url = handler.LastRequestUri!.OriginalString;",
+              "protected": "T:System.Uri"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\AzureDevOpsIntegration\\AzureDevOpsApiClientTests.cs",
+            "snippet": "var url = handler.LastRequestUri!.OriginalString;",
+            "protectedSnippet": "T:System.Uri",
+            "label": "T:System.Uri",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 197,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "6c8bdc7d-3380-44a9-a172-13d2f541e202",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var url = handler.LastRequestUri!.OriginalString;",
+              "protected": "T:System.Uri"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\AzureDevOpsIntegration\\AzureDevOpsApiClientTests.cs",
+            "snippet": "var url = handler.LastRequestUri!.OriginalString;",
+            "protectedSnippet": "T:System.Uri",
+            "label": "T:System.Uri",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 183,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "54726814-9286-4099-aeca-18a59175727c",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var url = handler.LastRequestUri!.OriginalString;",
+              "protected": "T:System.Uri"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\AzureDevOpsIntegration\\AzureDevOpsApiClientTests.cs",
+            "snippet": "var url = handler.LastRequestUri!.OriginalString;",
+            "protectedSnippet": "T:System.Uri",
+            "label": "T:System.Uri",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 169,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "a5b1ba24-5146-4504-a02e-d2aec196005e",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var url = handler.LastRequestUri!.OriginalString;",
+              "protected": "T:System.Uri"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\AzureDevOpsIntegration\\AzureDevOpsApiClientTests.cs",
+            "snippet": "var url = handler.LastRequestUri!.OriginalString;",
+            "protectedSnippet": "T:System.Uri",
+            "label": "T:System.Uri",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 145,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "37180bde-1dd3-409d-80cf-6b31101efbad",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var url = handler.LastRequestUri!.OriginalString;",
+              "protected": "T:System.Uri"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\AzureDevOpsIntegration\\AzureDevOpsApiClientTests.cs",
+            "snippet": "var url = handler.LastRequestUri!.OriginalString;",
+            "protectedSnippet": "T:System.Uri",
+            "label": "T:System.Uri",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 129,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "38639016-8ced-4055-a2c3-02e0a46345c7",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Assert.Contains(\u0022/pullRequests/10/iterations/2/changes?api-version=7.0\u0022,\r\n            handler.LastRequestUri!.ToString());",
+              "protected": "T:System.Uri"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\AzureDevOpsIntegration\\AzureDevOpsApiClientTests.cs",
+            "snippet": "Assert.Contains(\u0022/pullRequests/10/iterations/2/changes?api-version=7.0\u0022,\r\n            handler.LastRequestUri!.ToString());",
+            "protectedSnippet": "T:System.Uri",
+            "label": "T:System.Uri",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 81,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "89aa70b5-cecf-48d1-afa4-f7868ce69689",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Assert.Contains(\u0022/pullRequests/10/iterations?api-version=7.0\u0022, handler.LastRequestUri!.ToString());",
+              "protected": "T:System.Uri"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\AzureDevOpsIntegration\\AzureDevOpsApiClientTests.cs",
+            "snippet": "Assert.Contains(\u0022/pullRequests/10/iterations?api-version=7.0\u0022, handler.LastRequestUri!.ToString());",
+            "protectedSnippet": "T:System.Uri",
+            "label": "T:System.Uri",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 68,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "d9605b6f-f78b-479b-9e22-bd2d8c7c8382",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Assert.Contains(\u0022/pullRequests/42?api-version=7.0\u0022, handler.LastRequestUri!.ToString());",
+              "protected": "T:System.Uri"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\AzureDevOpsIntegration\\AzureDevOpsApiClientTests.cs",
+            "snippet": "Assert.Contains(\u0022/pullRequests/42?api-version=7.0\u0022, handler.LastRequestUri!.ToString());",
+            "protectedSnippet": "T:System.Uri",
+            "label": "T:System.Uri",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 43,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "ac5116b0-198f-4526-a14e-e40393786a02",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var httpClient = new HttpClient(handler)\r\n        {\r\n            BaseAddress = new Uri($\u0022https://dev.azure.com/{_options.OrganizationName}/\u0022)\r\n        };",
+              "protected": "T:System.Uri"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\AzureDevOpsIntegration\\AzureDevOpsApiClientTests.cs",
+            "snippet": "var httpClient = new HttpClient(handler)\r\n        {\r\n            BaseAddress = new Uri($\u0022https://dev.azure.com/{_options.OrganizationName}/\u0022)\r\n        };",
+            "protectedSnippet": "T:System.Uri",
+            "label": "T:System.Uri",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 20,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "7685fc1a-797a-445f-832a-3b308fa9367c",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var httpClient = new HttpClient(handler)\r\n        {\r\n            BaseAddress = new Uri($\u0022https://dev.azure.com/{_options.OrganizationName}/\u0022)\r\n        };",
+              "protected": "M:System.Uri.#ctor(System.String)"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\AzureDevOpsIntegration\\AzureDevOpsApiClientTests.cs",
+            "snippet": "var httpClient = new HttpClient(handler)\r\n        {\r\n            BaseAddress = new Uri($\u0022https://dev.azure.com/{_options.OrganizationName}/\u0022)\r\n        };",
+            "protectedSnippet": "M:System.Uri.#ctor(System.String)",
+            "label": "M:System.Uri.#ctor(System.String)",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 20,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "94458a7c-7b79-412d-b584-d6247744bed3",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var httpClient = new HttpClient(handler)\r\n        {\r\n            BaseAddress = new Uri($\u0022https://dev.azure.com/{_options.OrganizationName}/\u0022)\r\n        };",
+              "protected": "T:System.Uri"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\AzureDevOpsIntegration\\AzureDevOpsApiClientTests.cs",
+            "snippet": "var httpClient = new HttpClient(handler)\r\n        {\r\n            BaseAddress = new Uri($\u0022https://dev.azure.com/{_options.OrganizationName}/\u0022)\r\n        };",
+            "protectedSnippet": "T:System.Uri",
+            "label": "T:System.Uri",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 20,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "369f3eac-2302-48b4-9126-0945eeaa859b",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var doc = JsonDocument.Parse(result.Content[0].Text);",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Tools\\GetLocalChangesFilesToolHandlerTests.cs",
+            "snippet": "var doc = JsonDocument.Parse(result.Content[0].Text);",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 122,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "6cc366c6-32d1-4326-8364-b4d5e71a16f3",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var doc = JsonDocument.Parse(result.Content[0].Text);",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Tools\\GetLocalChangesFilesToolHandlerTests.cs",
+            "snippet": "var doc = JsonDocument.Parse(result.Content[0].Text);",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 122,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "e7f6fe69-f934-4176-aa31-efb1523c26c2",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var doc = JsonDocument.Parse(result.Content[0].Text);",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Tools\\GetLocalChangesFilesToolHandlerTests.cs",
+            "snippet": "var doc = JsonDocument.Parse(result.Content[0].Text);",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 51,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "74e54208-6d56-4535-8bcf-602bae4b0194",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var doc = JsonDocument.Parse(result.Content[0].Text);",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Tools\\GetLocalChangesFilesToolHandlerTests.cs",
+            "snippet": "var doc = JsonDocument.Parse(result.Content[0].Text);",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 51,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "0d554254-545b-4740-8776-3effb6e87a29",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var doc = JsonDocument.Parse(result.Content[0].Text);",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Tools\\GetLocalFileDiffToolHandlerTests.cs",
+            "snippet": "var doc = JsonDocument.Parse(result.Content[0].Text);",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 62,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "3300c277-98f8-4413-b550-de09f1833766",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var doc = JsonDocument.Parse(result.Content[0].Text);",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Tools\\GetLocalFileDiffToolHandlerTests.cs",
+            "snippet": "var doc = JsonDocument.Parse(result.Content[0].Text);",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 62,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "5c12315e-c22f-4cf6-94f1-8187109c6363",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var doc = JsonDocument.Parse(result.Content[0].Text);",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Tools\\GetPullRequestFilesToolHandlerTests.cs",
+            "snippet": "var doc = JsonDocument.Parse(result.Content[0].Text);",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 95,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "da9f0999-9d48-4dcd-84d8-dd3fe5a8b73d",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var doc = JsonDocument.Parse(result.Content[0].Text);",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Tools\\GetPullRequestFilesToolHandlerTests.cs",
+            "snippet": "var doc = JsonDocument.Parse(result.Content[0].Text);",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 95,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "1a03e0ac-d02d-46e0-8447-710ceb982613",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var doc = JsonDocument.Parse(result.Content[0].Text);",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Tools\\GetPullRequestFilesToolHandlerTests.cs",
+            "snippet": "var doc = JsonDocument.Parse(result.Content[0].Text);",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 74,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "081e0f97-61a2-4550-94e9-2561453a2b7b",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var doc = JsonDocument.Parse(result.Content[0].Text);",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Tools\\GetPullRequestFilesToolHandlerTests.cs",
+            "snippet": "var doc = JsonDocument.Parse(result.Content[0].Text);",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 74,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "33aa6252-d90c-4b56-88ec-1e9947e93ffc",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var doc = JsonDocument.Parse(result.Content[0].Text);",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Tools\\GetPullRequestFilesToolHandlerTests.cs",
+            "snippet": "var doc = JsonDocument.Parse(result.Content[0].Text);",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 60,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "fab48f95-0cf8-44d5-8d9d-0686ee065c0f",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var doc = JsonDocument.Parse(result.Content[0].Text);",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Tools\\GetPullRequestFilesToolHandlerTests.cs",
+            "snippet": "var doc = JsonDocument.Parse(result.Content[0].Text);",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 60,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "04836738-1780-46cf-811a-b0ee5845b3d9",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var doc = JsonDocument.Parse(result.Content[0].Text);",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Tools\\GetPullRequestDiffToolHandlerTests.cs",
+            "snippet": "var doc = JsonDocument.Parse(result.Content[0].Text);",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 95,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "a7240af3-6846-4dd0-be79-e3efecd230de",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var doc = JsonDocument.Parse(result.Content[0].Text);",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Tools\\GetPullRequestDiffToolHandlerTests.cs",
+            "snippet": "var doc = JsonDocument.Parse(result.Content[0].Text);",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 95,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "a41ec79d-a118-4b86-bc18-11a2c6c9286c",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var doc = JsonDocument.Parse(text);",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Tools\\GetPullRequestDiffToolHandlerTests.cs",
+            "snippet": "var doc = JsonDocument.Parse(text);",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 67,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "b58fec71-131d-4221-97ce-e22a3188c5dd",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var doc = JsonDocument.Parse(text);",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Tools\\GetPullRequestDiffToolHandlerTests.cs",
+            "snippet": "var doc = JsonDocument.Parse(text);",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 67,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "58d4b945-5216-410a-8971-b152676dbb7b",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var doc = JsonDocument.Parse(result.Content[0].Text);",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Tools\\GetFileContentAtRefToolHandlerTests.cs",
+            "snippet": "var doc = JsonDocument.Parse(result.Content[0].Text);",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 74,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "7e53da2b-b455-4d4f-91c8-50eb6f379a1e",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var doc = JsonDocument.Parse(result.Content[0].Text);",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Tools\\GetFileContentAtRefToolHandlerTests.cs",
+            "snippet": "var doc = JsonDocument.Parse(result.Content[0].Text);",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 74,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "3508e240-417f-41d6-afe1-a8be98cd094b",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var doc = JsonDocument.Parse(result.Content[0].Text);",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Tools\\GetFileContentAtRefToolHandlerTests.cs",
+            "snippet": "var doc = JsonDocument.Parse(result.Content[0].Text);",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 45,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "db44b8e9-e0b1-446c-bcb8-a4dbd2b2f7da",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var doc = JsonDocument.Parse(result.Content[0].Text);",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Tools\\GetFileContentAtRefToolHandlerTests.cs",
+            "snippet": "var doc = JsonDocument.Parse(result.Content[0].Text);",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 45,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "2c5c0774-b7c6-4b18-bba2-ccbc27aa9de9",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var doc = JsonDocument.Parse(text);",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Tools\\GetFileDiffToolHandlerTests.cs",
+            "snippet": "var doc = JsonDocument.Parse(text);",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 68,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "f39f45cc-4788-47ba-b13e-d93a50969a2c",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "REBUSS.Pure.Tests\\REBUSS.Pure.Tests.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var doc = JsonDocument.Parse(text);",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "REBUSS.Pure.Tests\\Tools\\GetFileDiffToolHandlerTests.cs",
+            "snippet": "var doc = JsonDocument.Parse(text);",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 68,
+            "column": 8
+          }
+        }
+      ],
+      "features": []
+    }
+  ],
+  "rules": {
+    "NuGet.0002": {
+      "id": "NuGet.0002",
+      "isFeature": false,
+      "description": "NuGet package upgrade is recommended for selected target framework.\n\nStandard .NET packages are recommended to have versions matching version of .NET that project targets.\n\nSome other packages also are known to work better for selected target frameworks.",
+      "label": "NuGet package upgrade is recommended",
+      "severity": "Potential",
+      "effort": 1,
+      "links": [
+        {
+          "url": "https://go.microsoft.com/fwlink/?linkid=2262530",
+          "isCustom": false
+        }
+      ]
+    },
+    "NuGet.0005": {
+      "id": "NuGet.0005",
+      "isFeature": false,
+      "description": "NuGet package is deprecated.\n\nGo to its documentation and if there is a guidance for replacement of functionality provided by this package.",
+      "label": "NuGet package is deprecated",
+      "severity": "Optional",
+      "effort": 1,
+      "links": [
+        {
+          "url": "https://go.microsoft.com/fwlink/?linkid=2262531",
+          "isCustom": false
+        }
+      ]
+    },
+    "Project.0002": {
+      "id": "Project.0002",
+      "isFeature": false,
+      "description": "Project\u0027s target framework(s) needs to be changed to the new target framework that you selected for this upgrade.\n\nDuring upgrade target framework will be adjusted to corresponding platform when applicable. In some cases project would result in multiple target frameworks after the upgrade if it was using features that now have their own platforms in modern .NET frameworks (windows, iOS, Android etc).",
+      "label": "Project\u0027s target framework(s) needs to be changed",
+      "severity": "Mandatory",
+      "effort": 1,
+      "links": [
+        {
+          "title": "Overview of porting from .NET Framework to .NET",
+          "url": "https://go.microsoft.com/fwlink/?linkid=2265227",
+          "isCustom": false
+        },
+        {
+          "title": ".NET project SDKs",
+          "url": "https://go.microsoft.com/fwlink/?linkid=2265226",
+          "isCustom": false
+        }
+      ]
+    },
+    "Api.0003": {
+      "id": "Api.0003",
+      "isFeature": false,
+      "description": "API has a behavioral change in selected .NET version: code and binaries may behave differently at runtime without needing recompilation, but the new behavior might be undesirable and require updates.",
+      "label": "Behavioral change in selected .NET version",
+      "severity": "Potential",
+      "effort": 1
+    },
+    "Api.0002": {
+      "id": "Api.0002",
+      "isFeature": false,
+      "description": "API is source incompatible for selected .NET version: requires code changes to compile successfully when targeting a new version, such as removing obsolete APIs or changing method signatures.",
+      "label": "Source incompatible for selected .NET version",
+      "severity": "Potential",
+      "effort": 1,
+      "links": [
+        {
+          "title": "Breaking changes in .NET",
+          "url": "https://go.microsoft.com/fwlink/?linkid=2262679",
+          "isCustom": false
+        }
+      ]
+    },
+    "Api.0001": {
+      "id": "Api.0001",
+      "isFeature": false,
+      "description": "API is binary incompatible for selected .NET version: affects existing binaries, often requiring recompilation, because the API has changed in a way that prevents older binaries from loading or executing.",
+      "label": "Binary incompatible for selected .NET version",
+      "severity": "Mandatory",
+      "effort": 1,
+      "links": [
+        {
+          "title": "Breaking changes in .NET",
+          "url": "https://go.microsoft.com/fwlink/?linkid=2262679",
+          "isCustom": false
+        }
+      ]
+    }
+  }
+}
