@@ -1,8 +1,22 @@
 # Pull Request Code Review
 
+You are invoked with a message that starts with the pull request number, followed by a space and the rest of the prompt content.
+
+Example invocation:
+`123 #review-pr.md`
+
+**Interpretation rule (mandatory):**
+- Treat the **first contiguous sequence of digits at the very beginning of the message (before the first space)** as:
+  - `prNumber`
+  - the pull request number to use in all MCP tool calls.
+
+If the message does not start with such a number, ask the user to provide a valid pull request number and stop.
+
+---
+
 Perform a professional code review of the pull request.
 
-Pull request number: {{input}}
+Pull request number: the leading integer at the start of this message (`prNumber`).
 
 Use MCP server: `REBUSS.Pure`.
 
@@ -113,7 +127,7 @@ Do not retrieve full content for every file by default.
 
 Call:
 
-get_pr_metadata(prNumber)
+`get_pr_metadata(prNumber)`
 
 Use the result to determine:
 
@@ -130,7 +144,7 @@ Use the result to determine:
 
 Call:
 
-get_pr_files(prNumber)
+`get_pr_files(prNumber)`
 
 Use this to:
 
@@ -168,168 +182,3 @@ Example skipped file in the structured response:
   "deletions": 0,
   "hunks": []
 }
-```
-
-## Skip categories
-
-| Category | skipReason | When it applies |
-|---|---|---|
-| File deletions | `file deleted` | File was removed. No content is fetched. |
-| File renames | `file renamed` | Pure rename. Content diff would be misleading. |
-| Binary files | `binary file` | Detected by extension (`.dll`, `.png`, `.zip`, `.pdf`, etc.). |
-| Generated files | `generated file` | Detected by path (`/obj/`, `/bin/`, `.g.cs`, `.designer.cs`, lock files, etc.). |
-| Full-file rewrites | `full file rewrite` | Both versions exist (≥10 lines each) but every line changed — indicates formatting rewrite or tooling output. |
-
-## How to handle skipped diffs
-
-- **Do not** try to analyze the diff content of a skipped file.
-- **Acknowledge** the skip in the review notes (e.g. "File `/lib/tool.dll` skipped: binary file").
-- For deleted files, note the deletion but do not request full content.
-- For renamed files, note the rename.
-- For binary and generated files, skip entirely unless there is a specific concern.
-- For full-file rewrites, consider requesting full file content via `get_file_content_at_ref` only if the file appears to be important source code.
-
----
-
-# Review Strategy
-
-Choose the strategy depending on PR size.
-
----
-
-## Small PR
-
-If the PR contains only a few files and limited changes:
-
-- call `get_pr_diff(prNumber)` to retrieve all changes in a single call
-- only retrieve full file content when necessary
-
----
-
-## Medium PR
-
-If the PR contains a moderate number of files:
-
-- prioritize high-value files first
-- review file-by-file using `get_file_diff`
-- retrieve full file content only when the patch lacks context
-- use tests only as supporting evidence
-
----
-
-## Large PR
-
-If the PR is large:
-
-- do NOT load the entire PR into context
-- review iteratively file-by-file
-- start with high-priority files
-- retrieve only the diff for each file
-- retrieve full file content only when necessary
-- focus on high-risk logic changes first
-
-If the PR is extremely large, explain that the review focuses on the most critical files.
-
----
-
-# Full File Retrieval Rules
-
-When using `get_file_content_at_ref`:
-
-1. Prefer `head.sha` to inspect the current implementation.
-2. Use `base.sha` only if comparing previous behavior is necessary.
-3. Never retrieve full file content for all files automatically.
-4. Avoid retrieving full content for:
-   - documentation
-   - generated files
-   - binary files
-   - trivial changes
-
----
-
-# What To Inspect
-
-When analyzing each change look for:
-
-- incorrect assumptions
-- null reference risks
-- race conditions
-- deadlocks or synchronization issues
-- incorrect async usage
-- hidden behavior changes
-- missing validation
-- unhandled exceptions
-- duplicated logic
-- performance regressions
-- insufficient tests
-
-When reviewing tests:
-
-- check if new logic is covered
-- verify that tests actually validate behavior
-- do not assume correctness based on test presence alone
-
----
-
-# Output Format
-
-Return the review using the following structure.
-
-## Verdict
-
-Short summary of the overall quality and risk level of the PR.
-
----
-
-## Critical Issues
-
-Issues that may cause bugs, crashes, security problems, or serious regressions.
-
-For each issue include:
-
-- file path
-- severity
-- problem description
-- why it matters
-- suggested fix
-
----
-
-## Important Improvements
-
-Significant improvements related to maintainability, validation, robustness, or performance.
-
-Include:
-
-- file path
-- issue description
-- reason
-- suggested improvement
-
----
-
-## Minor Suggestions
-
-Optional improvements that are helpful but not critical.
-
----
-
-## Review Notes
-
-Briefly mention:
-
-- which files were reviewed in detail
-- whether full file content was required
-- whether review scope was limited due to PR size
-- which files had their diffs skipped by the server and why (use the `skipReason` value)
-
----
-
-# Behavior Rules
-
-- Be precise and concrete.
-- Do not invent missing context.
-- If something is uncertain, label it as a potential risk.
-- Prefer fewer high-quality findings over many weak comments.
-- Avoid flooding the review with trivial remarks.
-- Optimize for minimal context usage.
