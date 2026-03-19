@@ -50,7 +50,7 @@ public class GitRemoteDetectorTests
     public void ParseRemoteUrl_ReturnsNull_ForGitHubUrl()
     {
         var result = GitRemoteDetector.ParseRemoteUrl(
-            "https://github.com/rebuss/REBUSS.Pure");
+            "https://github.com/rebuss/AzureDevOps.MCP.CodeReview");
 
         Assert.Null(result);
     }

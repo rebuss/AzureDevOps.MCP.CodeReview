@@ -30,8 +30,8 @@ public class InitCommand : ICliCommand
 
     private static readonly string[] PromptFileNames =
     {
-        "review-pr.prompt.md",
-        "self-review.prompt.md"
+        "review-pr.md",
+        "self-review.md"
     };
 
     private readonly TextWriter _output;

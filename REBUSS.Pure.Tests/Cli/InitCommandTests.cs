@@ -612,8 +612,8 @@ public class InitCommandTests
 
             Assert.Equal(0, exitCode);
 
-            var reviewPrPath = Path.Combine(tempDir, ".github", "prompts", "review-pr.prompt.md");
-            var selfReviewPath = Path.Combine(tempDir, ".github", "prompts", "self-review.prompt.md");
+            var reviewPrPath = Path.Combine(tempDir, ".github", "prompts", "review-pr.md");
+            var selfReviewPath = Path.Combine(tempDir, ".github", "prompts", "self-review.md");
 
             Assert.True(File.Exists(reviewPrPath), $"Expected prompt file at {reviewPrPath}");
             Assert.True(File.Exists(selfReviewPath), $"Expected prompt file at {selfReviewPath}");
@@ -641,7 +641,7 @@ public class InitCommandTests
         Directory.CreateDirectory(promptsDir);
 
         var existingContent = "# My custom review prompt";
-        await File.WriteAllTextAsync(Path.Combine(promptsDir, "review-pr.prompt.md"), existingContent);
+        await File.WriteAllTextAsync(Path.Combine(promptsDir, "review-pr.md"), existingContent);
 
         try
         {
@@ -652,10 +652,10 @@ public class InitCommandTests
 
             Assert.Equal(0, exitCode);
 
-            var reviewPrContent = await File.ReadAllTextAsync(Path.Combine(promptsDir, "review-pr.prompt.md"));
+            var reviewPrContent = await File.ReadAllTextAsync(Path.Combine(promptsDir, "review-pr.md"));
             Assert.Equal(existingContent, reviewPrContent);
 
-            var selfReviewPath = Path.Combine(promptsDir, "self-review.prompt.md");
+            var selfReviewPath = Path.Combine(promptsDir, "self-review.md");
             Assert.True(File.Exists(selfReviewPath));
 
             Assert.Contains("already exists, skipping", output.ToString());
@@ -706,9 +706,9 @@ public class InitCommandTests
 
             Assert.Equal(0, exitCode);
 
-            var reviewPrPath = Path.Combine(tempDir, ".github", "prompts", "review-pr.prompt.md");
+            var reviewPrPath = Path.Combine(tempDir, ".github", "prompts", "review-pr.md");
             Assert.True(File.Exists(reviewPrPath));
-            Assert.False(File.Exists(Path.Combine(subDir, ".github", "prompts", "review-pr.prompt.md")));
+            Assert.False(File.Exists(Path.Combine(subDir, ".github", "prompts", "review-pr.md")));
         }
         finally
         {

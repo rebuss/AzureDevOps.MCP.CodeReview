@@ -16,8 +16,8 @@
     <Authors>Michał Korbecki</Authors>
     <Description>Lightweight MCP server for AI-assisted pull request analysis in Azure DevOps repositories.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageProjectUrl>https://github.com/rebuss/REBUSS.Pure</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/rebuss/REBUSS.Pure</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/rebuss/AzureDevOps.MCP.CodeReview</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/rebuss/AzureDevOps.MCP.CodeReview</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
   </PropertyGroup>
 
@@ -34,8 +34,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="Cli\Prompts\review-pr.prompt.md" />
-    <EmbeddedResource Include="Cli\Prompts\self-review.prompt.md" />
+    <EmbeddedResource Include="Cli\Prompts\review-pr.md" />
+    <EmbeddedResource Include="Cli\Prompts\self-review.md" />
   </ItemGroup>
 
   <ItemGroup>

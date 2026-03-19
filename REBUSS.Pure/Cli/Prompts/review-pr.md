@@ -1,8 +1,22 @@
 # Pull Request Code Review
 
+You are invoked with a message that starts with the pull request number, followed by a space and the rest of the prompt content.
+
+Example invocation:
+`123 #review-pr.md`
+
+**Interpretation rule (mandatory):**
+- Treat the **first contiguous sequence of digits at the very beginning of the message (before the first space)** as:
+  - `prNumber`
+  - the pull request number to use in all MCP tool calls.
+
+If the message does not start with such a number, ask the user to provide a valid pull request number and stop.
+
+---
+
 Perform a professional code review of the pull request.
 
-Pull request number: {{input}}
+Pull request number: the leading integer at the start of this message (`prNumber`).
 
 Use MCP server: `REBUSS.Pure`.
 
@@ -71,7 +85,7 @@ The response is a structured JSON object containing per-file hunks. Each file in
 
 Some files may have their diff **automatically skipped** by the server (see *Skipped Diffs* below). Their `hunks` array will be empty and a `skipReason` field will explain why.
 
-Do not use for large PRs — prefer `get_file_diff` to keep context small.
+Do not use for large PRs â€” prefer `get_file_diff` to keep context small.
 
 ---
 
@@ -85,7 +99,7 @@ Purpose:
 
 The response is a structured JSON object containing the file's `path`, `changeType`, `additions`, `deletions`, and a `hunks` array. Each hunk contains `oldStart`, `oldCount`, `newStart`, `newCount`, and ordered `lines` with an `op` field (`+`, `-`, ` `) and `text`.
 
-If the file belongs to a skip category (deleted, renamed, binary, generated, or full-file rewrite), the response contains a `skipReason` value and an empty `hunks` array. In that case, do not attempt to analyze the diff content — acknowledge the skip reason and move on.
+If the file belongs to a skip category (deleted, renamed, binary, generated, or full-file rewrite), the response contains a `skipReason` value and an empty `hunks` array. In that case, do not attempt to analyze the diff content â€” acknowledge the skip reason and move on.
 
 Always prefer this before retrieving full file content.
 
@@ -109,11 +123,11 @@ Do not retrieve full content for every file by default.
 
 # Mandatory Review Workflow
 
-## Step 1 — Load metadata
+## Step 1 â€” Load metadata
 
 Call:
 
-get_pr_metadata(prNumber)
+`get_pr_metadata(prNumber)`
 
 Use the result to determine:
 
@@ -126,11 +140,11 @@ Use the result to determine:
 
 ---
 
-## Step 2 — Retrieve changed files
+## Step 2 â€” Retrieve changed files
 
 Call:
 
-get_pr_files(prNumber)
+`get_pr_files(prNumber)`
 
 Use this to:
 
@@ -146,7 +160,7 @@ Preferred review order:
 3. test files
 4. documentation
 
-Do not request diffs for files that are clearly binary or generated — the server will skip them automatically, but avoiding unnecessary calls saves time.
+Do not request diffs for files that are clearly binary or generated â€” the server will skip them automatically, but avoiding unnecessary calls saves time.
 
 ---
 
@@ -178,7 +192,7 @@ Example skipped file in the structured response:
 | File renames | `file renamed` | Pure rename. Content diff would be misleading. |
 | Binary files | `binary file` | Detected by extension (`.dll`, `.png`, `.zip`, `.pdf`, etc.). |
 | Generated files | `generated file` | Detected by path (`/obj/`, `/bin/`, `.g.cs`, `.designer.cs`, lock files, etc.). |
-| Full-file rewrites | `full file rewrite` | Both versions exist (?10 lines each) but every line changed — indicates formatting rewrite or tooling output. |
+| Full-file rewrites | `full file rewrite` | Both versions exist (â‰¥10 lines each) but every line changed â€” indicates formatting rewrite or tooling output. |
 
 ## How to handle skipped diffs
 
