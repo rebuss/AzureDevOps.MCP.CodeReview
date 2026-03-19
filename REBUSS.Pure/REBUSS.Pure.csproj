@@ -11,7 +11,7 @@
     <!-- .NET Tool packaging -->
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>rebuss-pure</ToolCommandName>
-    <PackageId>REBUSS.Pure</PackageId>
+    <PackageId>AzureDevOps.MCP.CodeReview</PackageId>
     <Version>0.1.0</Version>
     <Authors>Michał Korbecki</Authors>
     <Description>Lightweight MCP server for AI-assisted pull request analysis in Azure DevOps repositories.</Description>
@@ -19,6 +19,9 @@
     <PackageProjectUrl>https://github.com/rebuss/AzureDevOps.MCP.CodeReview</PackageProjectUrl>
     <RepositoryUrl>https://github.com/rebuss/AzureDevOps.MCP.CodeReview</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>mcp;azure-devops;pull-request;code-review;copilot;dotnet-tool</PackageTags>
+    <RollForward>Major</RollForward>
   </PropertyGroup>
 
   <ItemGroup>
@@ -57,12 +60,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="appsettings.json">
+    <Content Include="appsettings.json" Pack="true" PackagePath="tools/net10.0/any/">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="appsettings.Local.json" Condition="Exists('appsettings.Local.json')">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
+    </Content>
+    <None Include="..\README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
 </Project>
