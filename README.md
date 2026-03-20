@@ -124,10 +124,11 @@ If any of these files already exist, they are **not overwritten** — the comman
 
 When you run `init`:
 
-1. If Azure CLI is not installed, the command offers to install it automatically.
-2. If you are already logged in via `az login`, the existing session is reused.
-3. If not, a browser window opens for interactive Azure login.
-4. On success, an Azure DevOps token is acquired and cached locally.
+1. MCP configuration files and prompt files are created first.
+2. If Azure CLI is not installed, the command offers to install it automatically.
+3. If you are already logged in via `az login`, the existing session is reused.
+4. If not, a browser window opens for interactive Azure login (using `--allow-no-subscriptions` — no active Azure subscription is required).
+5. On success, an Azure DevOps token is acquired and cached locally.
 
 In most cases, authentication is fully automatic — just run `init` and log in once.
 
@@ -478,10 +479,12 @@ The `init` command performs the following steps:
    - `.vscode/mcp.json` — for VS Code (when a `.vscode` folder or `.code-workspace` file is detected)
    - `.vs/mcp.json` — for Visual Studio (when a `.vs` folder or `.sln` file is detected)
    - both files are written when both IDEs are detected, or when neither is detected
-2. **Attempts Azure CLI login** — reuses an existing session or opens a browser for interactive login
-3. **Copies prompt files to `.github/prompts/`**:
+2. **Copies prompt files to `.github/prompts/`**:
    - `review-pr.prompt.md` — structured PR code review prompt
    - `self-review.prompt.md` — structured local self-review prompt
+3. **Attempts Azure CLI login** — reuses an existing session or opens a browser for interactive login (uses `--allow-no-subscriptions` so no active Azure subscription is required)
+
+Configuration files and prompts are written **before** the Azure CLI login step, so they are always created even if the login is cancelled or fails.
 
 If any file already exists, the command **skips it without overwriting** and prints a message.
 

@@ -81,12 +81,9 @@ public class InitCommand : ICliCommand
             return 1;
         }
 
-        // If no PAT was provided, try Azure CLI authentication
-        if (string.IsNullOrWhiteSpace(_pat))
-        {
-            await TryAzureCliLoginAsync(cancellationToken);
-        }
-
+        // Create MCP config files and copy prompts FIRST — before any potentially
+        // interactive or long-running Azure CLI steps. This ensures files are written
+        // even if the user cancels during az install or az login.
         var targets = ResolveConfigTargets(gitRoot);
 
         var normalizedExePath = _executablePath.Replace("\\", "\\\\");
@@ -113,6 +110,12 @@ public class InitCommand : ICliCommand
         }
 
         await CopyPromptFilesAsync(gitRoot, cancellationToken);
+
+        // Authenticate via Azure CLI after configs and prompts are already on disk
+        if (string.IsNullOrWhiteSpace(_pat))
+        {
+            await TryAzureCliLoginAsync(cancellationToken);
+        }
 
         await _output.WriteLineAsync();
         await _output.WriteLineAsync("The MCP server will be launched with --repo pointing to your workspace.");
@@ -360,11 +363,11 @@ public class InitCommand : ICliCommand
     {
         if (_processRunner is not null)
         {
-            var result = await _processRunner("login", cancellationToken);
+            var result = await _processRunner("login --allow-no-subscriptions", cancellationToken);
             return result.ExitCode;
         }
 
-        var (fileName, args) = AzureCliProcessHelper.GetProcessStartArgs("login");
+        var (fileName, args) = AzureCliProcessHelper.GetProcessStartArgs("login --allow-no-subscriptions");
         return await RunInteractiveProcessAsync(fileName, args, cancellationToken);
     }
 

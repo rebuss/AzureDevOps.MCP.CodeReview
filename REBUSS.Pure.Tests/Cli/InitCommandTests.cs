@@ -1032,5 +1032,88 @@ public class InitCommandTests
             Directory.Delete(tempDir, recursive: true);
         }
     }
+
+    [Fact]
+    public async Task ExecuteAsync_UsesAllowNoSubscriptions_WhenRunningAzLogin()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(Path.Combine(tempDir, ".git"));
+
+        var capturedLoginArgs = string.Empty;
+        var expiresOn = DateTime.UtcNow.AddHours(1);
+        var tokenJson = $"{{\"accessToken\":\"new-token\",\"expiresOn\":\"{expiresOn:O}\"}}";
+        var callCount = 0;
+        Func<string, CancellationToken, Task<(int, string, string)>> processRunner = (args, _) =>
+        {
+            callCount++;
+            if (args == "--version")
+                return Task.FromResult((0, "azure-cli 2.60.0", ""));
+            if (args.Contains("get-access-token") && callCount <= 2)
+                return Task.FromResult((-1, "", "not logged in"));
+            if (args.Contains("login"))
+            {
+                capturedLoginArgs = args;
+                return Task.FromResult((0, "", ""));
+            }
+            if (args.Contains("get-access-token"))
+                return Task.FromResult((0, tokenJson, ""));
+            return Task.FromResult((-1, "", "unexpected"));
+        };
+
+        try
+        {
+            var output = new StringWriter();
+            var command = CreateCommand(output, tempDir, "rebuss-pure.exe", null, processRunner);
+
+            await command.ExecuteAsync();
+
+            Assert.Contains("--allow-no-subscriptions", capturedLoginArgs);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_CreatesConfigAndPrompts_BeforeAzLogin()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(Path.Combine(tempDir, ".git"));
+
+        var configExistedDuringLogin = false;
+        var promptsExistedDuringLogin = false;
+        Func<string, CancellationToken, Task<(int, string, string)>> processRunner = (args, _) =>
+        {
+            if (args == "--version")
+                return Task.FromResult((0, "azure-cli 2.60.0", ""));
+            if (args.Contains("get-access-token"))
+            {
+                configExistedDuringLogin = File.Exists(Path.Combine(tempDir, ".vscode", "mcp.json"))
+                    || File.Exists(Path.Combine(tempDir, ".vs", "mcp.json"));
+                promptsExistedDuringLogin = Directory.Exists(Path.Combine(tempDir, ".github", "prompts"));
+                return Task.FromResult((-1, "", "not logged in"));
+            }
+            if (args.Contains("login"))
+                return Task.FromResult((-1, "", "login failed"));
+            return Task.FromResult((-1, "", "unexpected"));
+        };
+
+        try
+        {
+            var output = new StringWriter();
+            var command = CreateCommand(output, tempDir, "rebuss-pure.exe", null, processRunner);
+
+            var exitCode = await command.ExecuteAsync();
+
+            Assert.Equal(0, exitCode);
+            Assert.True(configExistedDuringLogin, "MCP config should be written before az login is attempted");
+            Assert.True(promptsExistedDuringLogin, "Prompt files should be copied before az login is attempted");
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
 }
 
