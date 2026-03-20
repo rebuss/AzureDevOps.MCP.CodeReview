@@ -382,8 +382,15 @@ public class InitCommand : ICliCommand
             return result.ExitCode;
         }
 
+        // Disable the interactive tenant/subscription selector introduced in Azure CLI 2.61+.
+        // The env var scopes the override to this child process only — no permanent config change.
+        var envOverrides = new Dictionary<string, string>
+        {
+            ["AZURE_CORE_LOGIN_EXPERIENCE_V2"] = "off"
+        };
+
         var (fileName, args) = AzureCliProcessHelper.GetProcessStartArgs("login --allow-no-subscriptions", _azCliPathOverride);
-        return await RunInteractiveProcessAsync(fileName, args, cancellationToken);
+        return await RunInteractiveProcessAsync(fileName, args, cancellationToken, envOverrides);
     }
 
     internal static async Task<(int ExitCode, string StdOut, string StdErr)> RunProcessAsync(
@@ -426,7 +433,8 @@ public class InitCommand : ICliCommand
     /// Returns only the exit code (no captured output).
     /// </summary>
     internal static async Task<int> RunInteractiveProcessAsync(
-        string fileName, string arguments, CancellationToken cancellationToken)
+        string fileName, string arguments, CancellationToken cancellationToken,
+        IDictionary<string, string>? environmentOverrides = null)
     {
         try
         {
@@ -439,6 +447,12 @@ public class InitCommand : ICliCommand
                 RedirectStandardError = false,
                 RedirectStandardInput = false
             };
+
+            if (environmentOverrides is not null)
+            {
+                foreach (var (key, value) in environmentOverrides)
+                    psi.Environment[key] = value;
+            }
 
             using var process = Process.Start(psi);
             if (process is null)
