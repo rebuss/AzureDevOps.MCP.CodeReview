@@ -40,6 +40,7 @@ public class InitCommand : ICliCommand
     private readonly string _executablePath;
     private readonly string? _pat;
     private readonly Func<string, CancellationToken, Task<(int ExitCode, string StdOut, string StdErr)>>? _processRunner;
+    private string? _azCliPathOverride;
 
     public string Name => "init";
 
@@ -238,9 +239,21 @@ public class InitCommand : ICliCommand
         await _output.WriteLineAsync("Azure CLI installed successfully.");
         await _output.WriteLineAsync();
 
-        // Verify installation
+        // Verify installation — PATH may not be refreshed in the current process after winget.
+        // If the standard PATH lookup fails, probe known installation directories directly.
         if (!await IsAzCliInstalledAsync(cancellationToken))
         {
+            if (_processRunner is null)
+            {
+                var foundPath = AzureCliProcessHelper.TryFindAzCliOnWindows();
+                if (foundPath is not null)
+                {
+                    _azCliPathOverride = foundPath;
+                    await _output.WriteLineAsync($"Azure CLI found at: {foundPath}");
+                    return true;
+                }
+            }
+
             await _output.WriteLineAsync("Azure CLI was installed but could not be found.");
             await _output.WriteLineAsync("You may need to restart your terminal and run 'rebuss-pure init' again.");
             await _output.WriteLineAsync();
@@ -267,7 +280,9 @@ public class InitCommand : ICliCommand
                 System.Runtime.InteropServices.OSPlatform.Windows))
         {
             return await RunInteractiveProcessAsync(
-                "winget", "install -e --id Microsoft.AzureCLI", cancellationToken);
+                "winget",
+                "install -e --id Microsoft.AzureCLI --accept-source-agreements --accept-package-agreements",
+                cancellationToken);
         }
 
         return await RunInteractiveProcessAsync(
@@ -351,12 +366,12 @@ public class InitCommand : ICliCommand
         if (_processRunner is not null)
             return await _processRunner(arguments, cancellationToken);
 
-        var (fileName, args) = AzureCliProcessHelper.GetProcessStartArgs(arguments);
+        var (fileName, args) = AzureCliProcessHelper.GetProcessStartArgs(arguments, _azCliPathOverride);
         return await RunProcessAsync(fileName, args, cancellationToken);
     }
 
     /// <summary>
-    /// Runs <c>az login</c> interactively — the process inherits the parent console
+    /// Runs <c>az login</c> interactively
     /// so it can open a browser and display progress to the user.
     /// </summary>
     private async Task<int> RunAzLoginInteractiveAsync(CancellationToken cancellationToken)
@@ -367,7 +382,7 @@ public class InitCommand : ICliCommand
             return result.ExitCode;
         }
 
-        var (fileName, args) = AzureCliProcessHelper.GetProcessStartArgs("login --allow-no-subscriptions");
+        var (fileName, args) = AzureCliProcessHelper.GetProcessStartArgs("login --allow-no-subscriptions", _azCliPathOverride);
         return await RunInteractiveProcessAsync(fileName, args, cancellationToken);
     }
 

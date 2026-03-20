@@ -21,11 +21,35 @@ internal static class AzureCliProcessHelper
     /// <c>"account get-access-token --resource ... --output json"</c>).</param>
     /// <returns>A tuple of (<c>FileName</c>, <c>Arguments</c>) suitable for
     /// <see cref="System.Diagnostics.ProcessStartInfo"/>.</returns>
-    internal static (string FileName, string Arguments) GetProcessStartArgs(string azArguments)
+    internal static (string FileName, string Arguments) GetProcessStartArgs(string azArguments, string? azPath = null)
     {
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            return ("cmd.exe", $"/c az {azArguments}");
+        {
+            var azCmd = azPath is not null ? $"\"{azPath}\"" : "az";
+            return ("cmd.exe", $"/c {azCmd} {azArguments}");
+        }
 
-        return ("az", azArguments);
+        return (azPath ?? "az", azArguments);
+    }
+
+    /// <summary>
+    /// Probes known Azure CLI installation directories on Windows and returns the full
+    /// path to <c>az.cmd</c> if found, or <c>null</c> on other platforms or when not found.
+    /// Useful after a fresh install where the current process PATH has not been refreshed.
+    /// </summary>
+    internal static string? TryFindAzCliOnWindows()
+    {
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            return null;
+
+        var candidates = new[]
+        {
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                "Microsoft SDKs", "Azure", "CLI2", "wbin", "az.cmd"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+                "Microsoft SDKs", "Azure", "CLI2", "wbin", "az.cmd"),
+        };
+
+        return Array.Find(candidates, File.Exists);
     }
 }
