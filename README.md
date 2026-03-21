@@ -1,42 +1,47 @@
-﻿# 🚀 REBUSS.Pure – Token-Efficient AI Code Review for Azure DevOps
+# 🚀 REBUSS.Pure – AI Code Review That Focuses Only on What Matters
 
-**Stop sending entire repositories to AI.**  
-Use only what matters: **diff + changed files from your Pull Request.**
+**Stop sending irrelevant code to AI.**  
+Send only the *right context* — and understand Pull Requests faster.
 
 ---
 
 ## 💡 What is this?
 
-`REBUSS.Pure` is a lightweight MCP server that enables AI agents (GitHub Copilot, ChatGPT, Claude):
+`REBUSS.Pure` is a lightweight MCP server that enables AI agents (GitHub Copilot, ChatGPT, Claude) to perform **high-signal code reviews** by providing only the context that actually matters.
 
-- 🔍 analyze **Azure DevOps Pull Requests**
-- 📄 access **only changed files**
-- 🧠 perform **code review & self-review**
-- ⚡ use **minimal tokens (no full repo scan)**
+Instead of overwhelming the model with your entire repository, REBUSS.Pure:
+
+- 🔍 analyzes **Azure DevOps Pull Requests**
+- 📄 provides **only relevant code changes**
+- 🧠 enables **focused code review & self-review**
+- ⚡ delivers **minimal, high-signal context**
 
 ---
 
 ## 🎯 Why this exists
 
-Typical AI workflows:
+Most AI workflows today:
 
-- ❌ load entire repo
-- ❌ waste tokens
-- ❌ produce noisy results
+- ❌ send too much code
+- ❌ drown the model in noise
+- ❌ produce generic, low-quality feedback
 
-This tool:
+REBUSS.Pure changes the approach:
 
-- ✅ works on **diff only**
-- ✅ loads files **on demand**
-- ✅ enables **incremental AI reasoning**
+- ✅ sends **only relevant context**
+- ✅ reduces noise, not just tokens
+- ✅ helps AI focus on **what actually matters**
 
-👉 designed for **real-world large repositories**
+👉 built for **real-world code review**, not demos
 
 ---
 
 ## 🧠 Core idea
 
-Instead of sending everything to the model:
+AI doesn’t need more code.  
+It needs the *right* code.
+
+Instead of:
 
 ```
 ❌ full repo → LLM
@@ -45,7 +50,7 @@ Instead of sending everything to the model:
 You get:
 
 ```
-LLM → MCP → only needed data
+LLM → MCP → high-signal context only
 ```
 
 ---
@@ -53,10 +58,10 @@ LLM → MCP → only needed data
 ## ✨ Key Features
 
 - 🔹 Azure DevOps Pull Request integration
-- 🔹 Diff-based AI context (token efficient)
+- 🔹 High-signal, diff-based AI context
 - 🔹 Local self-review (no network required)
 - 🔹 No repo cloning needed
-- 🔹 Incremental data access
+- 🔹 Incremental, on-demand data access
 - 🔹 Ready-to-use review prompts
 - 🔹 Works with any MCP-compatible agent
 - 🔹 Authentication via Azure CLI or PAT
@@ -71,12 +76,12 @@ LLM → MCP → only needed data
 REBUSS.Pure runs as a **local process** on your workstation. It does not upload, store, or relay your code to any external service. The MCP server acts as a controlled gateway between your AI agent and the data it actually needs:
 
 - **Local processing only** — the server runs on `localhost`; no outbound code transmission occurs.
-- **Minimal data exposure** — the AI model receives only **diffs and metadata**, never the full repository.
+- **Minimal data exposure** — the AI model receives only **relevant context**, not the full repository.
 - **Azure DevOps stays yours** — when fetching PR data, requests go directly to **your organization's** Azure DevOps APIs using **your credentials**. No intermediary services are involved.
 - **Offline self-review** — local review (`#self-review`) operates entirely without network access. Git operations run against your local repository; nothing is sent anywhere.
 - **No telemetry, no tracking** — the server collects zero usage data and phones home to nobody.
 
-> **In short:** REBUSS.Pure gives AI agents *read-only, scoped access* to exactly the context they need — and nothing more. Your intellectual property stays where it belongs.
+> **In short:** REBUSS.Pure gives AI agents *precise, scoped access* to exactly the context they need — and nothing more.
 
 ---
 
@@ -84,10 +89,11 @@ REBUSS.Pure runs as a **local process** on your workstation. It does not upload,
 
 | Feature | REBUSS.Pure | Typical approach |
 |---------|-------------|------------------|
+| Context quality | High-signal | Noisy |
 | Context size | Minimal | Huge |
-| Token usage | Low | High |
+| Token usage | Efficient | Wasteful |
 | Setup | 1 command | Complex |
-| Signal quality | High | Noisy |
+| Review quality | Focused | Generic |
 | Data privacy | Code stays local | Full repo sent to AI |
 
 ---
@@ -151,5 +157,3 @@ Where `123` is the Azure DevOps Pull Request ID.
 ```
 
 Works **offline** — no Azure DevOps connection required.
-
----
