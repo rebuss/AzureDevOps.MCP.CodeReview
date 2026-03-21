@@ -11,7 +11,7 @@ Send only the *right context* — and understand Pull Requests faster.
 
 Instead of overwhelming the model with your entire repository, REBUSS.Pure:
 
-- 🔍 analyzes **Azure DevOps Pull Requests**
+- 🔍 analyzes **Azure DevOps and GitHub Pull Requests**
 - 📄 provides **only relevant code changes**
 - 🧠 enables **focused code review & self-review**
 - ⚡ delivers **minimal, high-signal context**
@@ -57,15 +57,16 @@ LLM → MCP → high-signal context only
 
 ## ✨ Key Features
 
-- 🔹 Azure DevOps Pull Request integration
+- 🔹 Azure DevOps and GitHub Pull Request integration
 - 🔹 High-signal, diff-based AI context
 - 🔹 Local self-review (no network required)
 - 🔹 No repo cloning needed
 - 🔹 Incremental, on-demand data access
 - 🔹 Ready-to-use review prompts
 - 🔹 Works with any MCP-compatible agent
-- 🔹 Authentication via Azure CLI or PAT
+- 🔹 Authentication via Azure CLI, PAT, or GitHub token
 - 🔹 Auto-detects VS Code and Visual Studio
+- 🔹 Auto-detects provider from Git remote URL
 
 ---
 
@@ -78,6 +79,7 @@ REBUSS.Pure runs as a **local process** on your workstation. It does not upload,
 - **Local processing only** — the server runs on `localhost`; no outbound code transmission occurs.
 - **Minimal data exposure** — the AI model receives only **relevant context**, not the full repository.
 - **Azure DevOps stays yours** — when fetching PR data, requests go directly to **your organization's** Azure DevOps APIs using **your credentials**. No intermediary services are involved.
+- **GitHub stays yours** — GitHub API requests go directly to `api.github.com` using **your personal access token**. No intermediary services are involved.
 - **Offline self-review** — local review (`#self-review`) operates entirely without network access. Git operations run against your local repository; nothing is sent anywhere.
 - **No telemetry, no tracking** — the server collects zero usage data and phones home to nobody.
 
@@ -134,7 +136,7 @@ This will:
 - ✔ detect your IDE (VS Code → `.vscode/mcp.json`, Visual Studio → `.vs/mcp.json`)
 - ✔ generate MCP server configuration
 - ✔ copy review prompts to `.github/prompts/`
-- ✔ authenticate via Azure CLI (opens browser for login)
+- ✔ authenticate via Azure CLI (opens browser for login) or accept a GitHub PAT
 
 ---
 
@@ -146,7 +148,7 @@ In Copilot / AI chat:
 123 #review-pr
 ```
 
-Where `123` is the Azure DevOps Pull Request ID.
+Where `123` is the Azure DevOps or GitHub Pull Request number.
 
 ---
 

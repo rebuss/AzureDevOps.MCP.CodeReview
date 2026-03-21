@@ -6,6 +6,8 @@ using REBUSS.Pure.AzureDevOps.Configuration;
 using REBUSS.Pure.Cli;
 using REBUSS.Pure.Core;
 using REBUSS.Pure.Core.Shared;
+using REBUSS.Pure.GitHub;
+using REBUSS.Pure.GitHub.Configuration;
 using REBUSS.Pure.Logging;
 using REBUSS.Pure.Mcp;
 using REBUSS.Pure.Mcp.Handlers;
@@ -111,8 +113,15 @@ namespace REBUSS.Pure
         {
             var overrides = new Dictionary<string, string?>();
 
+            if (!string.IsNullOrWhiteSpace(parseResult.Provider))
+                overrides["Provider"] = parseResult.Provider;
+
+            // Azure DevOps CLI overrides
             if (!string.IsNullOrWhiteSpace(parseResult.Pat))
+            {
                 overrides[$"{AzureDevOpsOptions.SectionName}:{nameof(AzureDevOpsOptions.PersonalAccessToken)}"] = parseResult.Pat;
+                overrides[$"{GitHubOptions.SectionName}:{nameof(GitHubOptions.PersonalAccessToken)}"] = parseResult.Pat;
+            }
 
             if (!string.IsNullOrWhiteSpace(parseResult.Organization))
                 overrides[$"{AzureDevOpsOptions.SectionName}:{nameof(AzureDevOpsOptions.OrganizationName)}"] = parseResult.Organization;
@@ -121,7 +130,14 @@ namespace REBUSS.Pure
                 overrides[$"{AzureDevOpsOptions.SectionName}:{nameof(AzureDevOpsOptions.ProjectName)}"] = parseResult.Project;
 
             if (!string.IsNullOrWhiteSpace(parseResult.Repository))
+            {
                 overrides[$"{AzureDevOpsOptions.SectionName}:{nameof(AzureDevOpsOptions.RepositoryName)}"] = parseResult.Repository;
+                overrides[$"{GitHubOptions.SectionName}:{nameof(GitHubOptions.RepositoryName)}"] = parseResult.Repository;
+            }
+
+            // GitHub CLI overrides
+            if (!string.IsNullOrWhiteSpace(parseResult.Owner))
+                overrides[$"{GitHubOptions.SectionName}:{nameof(GitHubOptions.Owner)}"] = parseResult.Owner;
 
             return overrides;
         }
@@ -149,8 +165,18 @@ namespace REBUSS.Pure
             services.AddSingleton<IStructuredDiffBuilder, StructuredDiffBuilder>();
             services.AddSingleton<IFileClassifier, FileClassifier>();
 
-            // Azure DevOps provider: options, auth, HTTP client, parsers, providers, IScmClient facade
-            services.AddAzureDevOpsProvider(configuration);
+            // Provider selection: explicit config > auto-detection from git remote
+            var provider = DetectProvider(configuration);
+            switch (provider)
+            {
+                case "GitHub":
+                    services.AddGitHubProvider(configuration);
+                    break;
+                case "AzureDevOps":
+                default:
+                    services.AddAzureDevOpsProvider(configuration);
+                    break;
+            }
 
             services.AddSingleton<IMcpToolHandler, GetPullRequestDiffToolHandler>();
             services.AddSingleton<IMcpToolHandler, GetFileDiffToolHandler>();
@@ -179,6 +205,72 @@ namespace REBUSS.Pure
                 sp.GetRequiredService<IEnumerable<IMcpMethodHandler>>(),
                 sp.GetRequiredService<IJsonRpcTransport>(),
                 sp.GetRequiredService<IJsonRpcSerializer>()));
+        }
+
+        /// <summary>
+        /// Determines the SCM provider to use based on configuration, then git remote auto-detection.
+        /// Priority: explicit "Provider" key > GitHub config section populated > AzureDevOps config section populated > git remote URL > default (AzureDevOps).
+        /// </summary>
+        internal static string DetectProvider(IConfiguration configuration)
+        {
+            // 1. Explicit provider setting
+            var explicit_ = configuration.GetValue<string>("Provider");
+            if (!string.IsNullOrWhiteSpace(explicit_))
+                return explicit_;
+
+            // 2. Check if GitHub section has owner configured
+            var githubOwner = configuration[$"{GitHubOptions.SectionName}:{nameof(GitHubOptions.Owner)}"];
+            if (!string.IsNullOrWhiteSpace(githubOwner))
+                return "GitHub";
+
+            // 3. Check if AzureDevOps section has organization configured
+            var adoOrg = configuration[$"{AzureDevOpsOptions.SectionName}:{nameof(AzureDevOpsOptions.OrganizationName)}"];
+            if (!string.IsNullOrWhiteSpace(adoOrg))
+                return "AzureDevOps";
+
+            // 4. Auto-detect from git remote URL
+            var remoteUrl = GetGitRemoteUrl();
+            if (remoteUrl is not null)
+            {
+                if (remoteUrl.Contains("github.com", StringComparison.OrdinalIgnoreCase))
+                    return "GitHub";
+
+                if (remoteUrl.Contains("dev.azure.com", StringComparison.OrdinalIgnoreCase) ||
+                    remoteUrl.Contains("visualstudio.com", StringComparison.OrdinalIgnoreCase))
+                    return "AzureDevOps";
+            }
+
+            // 5. Default
+            return "AzureDevOps";
+        }
+
+        private static string? GetGitRemoteUrl()
+        {
+            try
+            {
+                using var process = new System.Diagnostics.Process
+                {
+                    StartInfo = new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = "git",
+                        Arguments = "remote get-url origin",
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    }
+                };
+
+                process.Start();
+                var output = process.StandardOutput.ReadToEnd();
+                process.WaitForExit(TimeSpan.FromSeconds(5));
+
+                return process.ExitCode == 0 ? output.Trim() : null;
+            }
+            catch
+            {
+                return null;
+            }
         }
     }
 }

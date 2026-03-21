@@ -3,7 +3,7 @@ namespace REBUSS.Pure.Cli;
 /// <summary>
 /// Parses command-line arguments to determine the application run mode
 /// and extract options like <c>--repo</c>, <c>--pat</c>, <c>--org</c>,
-/// <c>--project</c>, and <c>--repository</c>.
+/// <c>--project</c>, <c>--repository</c>, <c>--provider</c>, and <c>--owner</c>.
 /// </summary>
 public class CliArgumentParser
 {
@@ -26,6 +26,8 @@ public class CliArgumentParser
         string? organization = null;
         string? project = null;
         string? repository = null;
+        string? provider = null;
+        string? owner = null;
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -54,9 +56,19 @@ public class CliArgumentParser
                 repository = args[i + 1];
                 i++;
             }
+            else if (string.Equals(args[i], "--provider", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
+            {
+                provider = args[i + 1];
+                i++;
+            }
+            else if (string.Equals(args[i], "--owner", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
+            {
+                owner = args[i + 1];
+                i++;
+            }
         }
 
-        return CliParseResult.ServerMode(repoPath, pat, organization, project, repository);
+        return CliParseResult.ServerMode(repoPath, pat, organization, project, repository, provider, owner);
     }
 }
 
@@ -101,12 +113,25 @@ public sealed class CliParseResult
     /// </summary>
     public string? Repository { get; private init; }
 
+    /// <summary>
+    /// The SCM provider name provided via <c>--provider</c> (e.g. "AzureDevOps", "GitHub").
+    /// <c>null</c> if not specified (auto-detected from git remote).
+    /// </summary>
+    public string? Provider { get; private init; }
+
+    /// <summary>
+    /// The GitHub repository owner provided via <c>--owner</c>. <c>null</c> if not specified.
+    /// </summary>
+    public string? Owner { get; private init; }
+
     public static CliParseResult ServerMode(
         string? repoPath = null,
         string? pat = null,
         string? organization = null,
         string? project = null,
-        string? repository = null) => new()
+        string? repository = null,
+        string? provider = null,
+        string? owner = null) => new()
     {
         IsServerMode = true,
         CommandName = null,
@@ -114,7 +139,9 @@ public sealed class CliParseResult
         Pat = pat,
         Organization = organization,
         Project = project,
-        Repository = repository
+        Repository = repository,
+        Provider = provider,
+        Owner = owner
     };
 
     public static CliParseResult CliMode(string commandName) => new()
