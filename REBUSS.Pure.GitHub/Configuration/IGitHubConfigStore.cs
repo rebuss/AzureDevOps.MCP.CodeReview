@@ -24,4 +24,6 @@ public sealed class GitHubCachedConfig
 {
     public string? Owner { get; set; }
     public string? RepositoryName { get; set; }
+    public string? AccessToken { get; set; }
+    public DateTime? TokenExpiresOn { get; set; }
 }

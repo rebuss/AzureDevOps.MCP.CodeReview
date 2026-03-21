@@ -9,3 +9,9 @@ REBUSS.Pure.Core/obj/
 REBUSS.Pure.AzureDevOps/bin/
 REBUSS.Pure.GitHub/obj/
 REBUSS.Pure.GitHub/bin/
+REBUSS.Pure.AzureDevOps.Tests/bin/
+REBUSS.Pure.AzureDevOps.Tests/obj/
+REBUSS.Pure.Core.Tests/bin/
+REBUSS.Pure.Core.Tests/obj/
+REBUSS.Pure.GitHub.Tests/bin/
+REBUSS.Pure.GitHub.Tests/obj/
