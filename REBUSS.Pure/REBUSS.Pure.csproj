@@ -12,7 +12,7 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>rebuss-pure</ToolCommandName>
     <PackageId>CodeReview.MCP</PackageId>
-    <Version>0.2.0</Version>
+    <Version>0.4.0</Version>
     <Authors>Michał Korbecki</Authors>
     <Description>Lightweight MCP server for AI-assisted pull request analysis. Supports Azure DevOps and GitHub.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -25,18 +25,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="Services\Classification\**" />
-    <Compile Remove="Services\Models\**" />
-    <Compile Remove="Services\Parsers\**" />
-    <EmbeddedResource Remove="Services\Classification\**" />
-    <EmbeddedResource Remove="Services\Models\**" />
-    <EmbeddedResource Remove="Services\Parsers\**" />
-    <None Remove="Services\Classification\**" />
-    <None Remove="Services\Models\**" />
-    <None Remove="Services\Parsers\**" />
-  </ItemGroup>
-
-  <ItemGroup>
     <EmbeddedResource Include="Cli\Prompts\review-pr.md" />
     <EmbeddedResource Include="Cli\Prompts\self-review.md" />
   </ItemGroup>
@@ -46,16 +34,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Azure.Identity" Version="1.19.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.5" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.5" />
     <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.5" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.5" />
-    <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="10.4.0" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.5" />
-    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.5" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.5" />
-    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.5" />
     <PackageReference Include="System.Text.Json" Version="10.0.5" />
   </ItemGroup>
 
@@ -64,6 +48,11 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <None Include="..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\REBUSS.Pure.Core\REBUSS.Pure.Core.csproj" />
+    <ProjectReference Include="..\REBUSS.Pure.AzureDevOps\REBUSS.Pure.AzureDevOps.csproj" />
   </ItemGroup>
 
 </Project>

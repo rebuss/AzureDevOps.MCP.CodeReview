@@ -1,21 +1,15 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
-using REBUSS.Pure.AzureDevOpsIntegration.Configuration;
-using REBUSS.Pure.AzureDevOpsIntegration.Services;
+using REBUSS.Pure.AzureDevOps;
+using REBUSS.Pure.AzureDevOps.Configuration;
 using REBUSS.Pure.Cli;
+using REBUSS.Pure.Core;
+using REBUSS.Pure.Core.Shared;
 using REBUSS.Pure.Logging;
 using REBUSS.Pure.Mcp;
 using REBUSS.Pure.Mcp.Handlers;
-using REBUSS.Pure.Services.Common;
-using REBUSS.Pure.Services.Common.Parsers;
-using REBUSS.Pure.Services.Content;
-using REBUSS.Pure.Services.Diff;
-using REBUSS.Pure.Services.FileList;
-using REBUSS.Pure.Services.FileList.Classification;
 using REBUSS.Pure.Services.LocalReview;
-using REBUSS.Pure.Services.Metadata;
 using REBUSS.Pure.Tools;
 
 namespace REBUSS.Pure
@@ -147,37 +141,17 @@ namespace REBUSS.Pure
                 builder.SetMinimumLevel(LogLevel.Debug);
             });
 
-            services.Configure<AzureDevOpsOptions>(configuration.GetSection(AzureDevOpsOptions.SectionName));
-            services.AddSingleton<IValidateOptions<AzureDevOpsOptions>, AzureDevOpsOptionsValidator>();
-
             // Workspace root provider: resolves repository path from CLI --repo, MCP roots, or localRepoPath
             services.AddSingleton<IWorkspaceRootProvider, McpWorkspaceRootProvider>();
 
-            // Configuration resolution: merges explicit config, cached, and auto-detected values
-            // via IPostConfigureOptions — runs automatically on first IOptions<AzureDevOpsOptions>.Value access
-            services.AddSingleton<IGitRemoteDetector, GitRemoteDetector>();
-            services.AddSingleton<ILocalConfigStore, LocalConfigStore>();
-            services.AddSingleton<IPostConfigureOptions<AzureDevOpsOptions>, ConfigurationResolver>();
-
-            // Authentication provider (chained: PAT → cached token → Azure CLI → error)
-            services.AddSingleton<IAzureCliTokenProvider, AzureCliTokenProvider>();
-            services.AddSingleton<IAuthenticationProvider, ChainedAuthenticationProvider>();
-            services.AddTransient<AuthenticationDelegatingHandler>();
-
-            services.AddHttpClient<IAzureDevOpsApiClient, AzureDevOpsApiClient>()
-            .AddHttpMessageHandler<AuthenticationDelegatingHandler>()
-            .AddStandardResilienceHandler();
-
-            services.AddSingleton<IPullRequestMetadataParser, PullRequestMetadataParser>();
-            services.AddSingleton<IIterationInfoParser, IterationInfoParser>();
-            services.AddSingleton<IFileChangesParser, FileChangesParser>();
+            // Shared services (provider-agnostic)
             services.AddSingleton<IDiffAlgorithm, LcsDiffAlgorithm>();
             services.AddSingleton<IStructuredDiffBuilder, StructuredDiffBuilder>();
-            services.AddSingleton<IPullRequestDiffProvider, AzureDevOpsDiffProvider>();
-            services.AddSingleton<IPullRequestMetadataProvider, AzureDevOpsMetadataProvider>();
             services.AddSingleton<IFileClassifier, FileClassifier>();
-            services.AddSingleton<IPullRequestFilesProvider, AzureDevOpsFilesProvider>();
-            services.AddSingleton<IFileContentProvider, AzureDevOpsFileContentProvider>();
+
+            // Azure DevOps provider: options, auth, HTTP client, parsers, providers, IScmClient facade
+            services.AddAzureDevOpsProvider(configuration);
+
             services.AddSingleton<IMcpToolHandler, GetPullRequestDiffToolHandler>();
             services.AddSingleton<IMcpToolHandler, GetFileDiffToolHandler>();
             services.AddSingleton<IMcpToolHandler, GetPullRequestMetadataToolHandler>();

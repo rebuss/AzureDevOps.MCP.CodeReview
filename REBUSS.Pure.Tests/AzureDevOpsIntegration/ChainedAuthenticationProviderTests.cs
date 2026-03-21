@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
-using REBUSS.Pure.AzureDevOpsIntegration.Configuration;
+using REBUSS.Pure.AzureDevOps.Configuration;
 
 namespace REBUSS.Pure.Tests.AzureDevOpsIntegration;
 

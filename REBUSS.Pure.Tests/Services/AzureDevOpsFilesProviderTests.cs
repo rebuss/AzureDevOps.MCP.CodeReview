@@ -1,16 +1,23 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
-using REBUSS.Pure.Services.Common.Models;
-using REBUSS.Pure.Services.Diff;
-using REBUSS.Pure.Services.FileList;
-using REBUSS.Pure.Services.FileList.Classification;
-using REBUSS.Pure.Services.FileList.Models;
+using REBUSS.Pure.AzureDevOps.Api;
+using REBUSS.Pure.Core.Models;
+using REBUSS.Pure.Core.Shared;
+using REBUSS.Pure.AzureDevOps.Parsers;
+using REBUSS.Pure.AzureDevOps.Providers;
 
 namespace REBUSS.Pure.Tests.Services;
 
 public class AzureDevOpsFilesProviderTests
 {
-    private readonly IPullRequestDiffProvider _diffProvider = Substitute.For<IPullRequestDiffProvider>();
+    private readonly AzureDevOpsDiffProvider _diffProvider = Substitute.For<AzureDevOpsDiffProvider>(
+        Substitute.For<IAzureDevOpsApiClient>(),
+        Substitute.For<IPullRequestMetadataParser>(),
+        Substitute.For<IIterationInfoParser>(),
+        Substitute.For<IFileChangesParser>(),
+        Substitute.For<IStructuredDiffBuilder>(),
+        Substitute.For<IFileClassifier>(),
+        NullLogger<AzureDevOpsDiffProvider>.Instance);
     private readonly AzureDevOpsFilesProvider _provider;
 
     public AzureDevOpsFilesProviderTests()

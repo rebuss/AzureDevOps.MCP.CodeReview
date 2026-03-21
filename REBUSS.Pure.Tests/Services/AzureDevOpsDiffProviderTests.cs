@@ -2,12 +2,12 @@ using System.Net;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
-using REBUSS.Pure.AzureDevOpsIntegration.Services;
-using REBUSS.Pure.Services.Common;
-using REBUSS.Pure.Services.Common.Models;
-using REBUSS.Pure.Services.Common.Parsers;
-using REBUSS.Pure.Services.Diff;
-using REBUSS.Pure.Services.FileList.Classification;
+using REBUSS.Pure.AzureDevOps.Api;
+using REBUSS.Pure.Core.Exceptions;
+using REBUSS.Pure.Core.Models;
+using REBUSS.Pure.Core.Shared;
+using REBUSS.Pure.AzureDevOps.Parsers;
+using REBUSS.Pure.AzureDevOps.Providers;
 
 namespace REBUSS.Pure.Tests.Services;
 

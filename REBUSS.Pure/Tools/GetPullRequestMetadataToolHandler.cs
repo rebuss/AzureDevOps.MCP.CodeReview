@@ -1,12 +1,10 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
-using REBUSS.Pure.AzureDevOpsIntegration.Configuration;
+using REBUSS.Pure.Core;
+using REBUSS.Pure.Core.Exceptions;
+using REBUSS.Pure.Core.Models;
 using REBUSS.Pure.Mcp;
 using REBUSS.Pure.Mcp.Models;
-using REBUSS.Pure.Services.Common;
-using REBUSS.Pure.Services.Common.Models;
-using REBUSS.Pure.Services.Metadata;
 using REBUSS.Pure.Tools.Models;
 using System.Text.Json;
 
@@ -19,8 +17,7 @@ namespace REBUSS.Pure.Tools
     /// </summary>
     public class GetPullRequestMetadataToolHandler : IMcpToolHandler
     {
-        private readonly IPullRequestMetadataProvider _metadataProvider;
-        private readonly AzureDevOpsOptions _options;
+        private readonly IPullRequestDataProvider _metadataProvider;
         private readonly ILogger<GetPullRequestMetadataToolHandler> _logger;
 
         private const int MaxDescriptionLength = 800;
@@ -35,19 +32,17 @@ namespace REBUSS.Pure.Tools
         public string ToolName => "get_pr_metadata";
 
         public GetPullRequestMetadataToolHandler(
-            IPullRequestMetadataProvider metadataProvider,
-            IOptions<AzureDevOpsOptions> options,
+            IPullRequestDataProvider metadataProvider,
             ILogger<GetPullRequestMetadataToolHandler> logger)
         {
             _metadataProvider = metadataProvider;
-            _options = options.Value;
             _logger = logger;
         }
 
         public McpTool GetToolDefinition() => new()
         {
             Name = ToolName,
-            Description = "Retrieves metadata for a specific Pull Request from Azure DevOps. " +
+            Description = "Retrieves metadata for a specific Pull Request. " +
                           "Returns a JSON object with PR details including title, author, state, " +
                           "branches, stats, commit SHAs, and description.",
             InputSchema = new ToolInputSchema
@@ -142,8 +137,8 @@ namespace REBUSS.Pure.Tools
                 Description = BuildDescriptionInfo(metadata.Description),
                 Source = new SourceInfo
                 {
-                    Repository = $"{_options.OrganizationName}/{_options.ProjectName}/{_options.RepositoryName}",
-                    Url = $"https://dev.azure.com/{_options.OrganizationName}/{_options.ProjectName}/_git/{_options.RepositoryName}/pullrequest/{prNumber}"
+                    Repository = metadata.RepositoryFullName,
+                    Url = metadata.WebUrl
                 }
             };
         }

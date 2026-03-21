@@ -1,5 +1,4 @@
-using REBUSS.Pure.Services.Common.Models;
-using REBUSS.Pure.Services.FileList.Models;
+using REBUSS.Pure.Core.Models;
 
 namespace REBUSS.Pure.Services.LocalReview
 {

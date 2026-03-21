@@ -1,8 +1,8 @@
 using System.Net;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using REBUSS.Pure.AzureDevOpsIntegration.Configuration;
-using REBUSS.Pure.AzureDevOpsIntegration.Services;
+using REBUSS.Pure.AzureDevOps.Configuration;
+using REBUSS.Pure.AzureDevOps.Api;
 
 namespace REBUSS.Pure.Tests.AzureDevOpsIntegration;
 

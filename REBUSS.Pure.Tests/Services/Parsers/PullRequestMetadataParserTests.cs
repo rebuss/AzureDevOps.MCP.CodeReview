@@ -1,5 +1,5 @@
 using Microsoft.Extensions.Logging.Abstractions;
-using REBUSS.Pure.Services.Common.Parsers;
+using REBUSS.Pure.AzureDevOps.Parsers;
 
 namespace REBUSS.Pure.Tests.Services.Parsers;
 

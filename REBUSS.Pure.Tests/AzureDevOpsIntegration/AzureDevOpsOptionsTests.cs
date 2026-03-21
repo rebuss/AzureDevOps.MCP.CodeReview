@@ -1,4 +1,4 @@
-using REBUSS.Pure.AzureDevOpsIntegration.Configuration;
+using REBUSS.Pure.AzureDevOps.Configuration;
 using Microsoft.Extensions.Options;
 
 namespace REBUSS.Pure.Tests.AzureDevOpsIntegration;

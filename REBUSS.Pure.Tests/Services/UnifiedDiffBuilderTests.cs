@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
-using REBUSS.Pure.Services.Common;
-using REBUSS.Pure.Services.Common.Models;
+using REBUSS.Pure.Core.Models;
+using REBUSS.Pure.Core.Shared;
 
 namespace REBUSS.Pure.Tests.Services;
 

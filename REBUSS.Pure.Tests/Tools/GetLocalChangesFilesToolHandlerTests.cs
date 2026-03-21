@@ -2,8 +2,8 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
+using REBUSS.Pure.Core.Models;
 using REBUSS.Pure.Services.LocalReview;
-using REBUSS.Pure.Services.FileList.Models;
 using REBUSS.Pure.Tools;
 
 namespace REBUSS.Pure.Tests.Tools;

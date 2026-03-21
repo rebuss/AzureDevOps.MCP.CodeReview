@@ -1,6 +1,6 @@
 using System.Diagnostics;
 using System.Reflection;
-using REBUSS.Pure.AzureDevOpsIntegration.Configuration;
+using REBUSS.Pure.AzureDevOps.Configuration;
 
 namespace REBUSS.Pure.Cli;
 

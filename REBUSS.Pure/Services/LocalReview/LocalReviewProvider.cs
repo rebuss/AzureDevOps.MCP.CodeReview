@@ -1,10 +1,8 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
-using REBUSS.Pure.Mcp;
-using REBUSS.Pure.Services.Common;
-using REBUSS.Pure.Services.Common.Models;
-using REBUSS.Pure.Services.FileList.Classification;
-using REBUSS.Pure.Services.FileList.Models;
+using REBUSS.Pure.Core;
+using REBUSS.Pure.Core.Models;
+using REBUSS.Pure.Core.Shared;
 
 namespace REBUSS.Pure.Services.LocalReview
 {

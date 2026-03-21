@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
+using REBUSS.Pure.Core;
 using REBUSS.Pure.Mcp;
 using REBUSS.Pure.Mcp.Handlers;
 using REBUSS.Pure.Mcp.Models;

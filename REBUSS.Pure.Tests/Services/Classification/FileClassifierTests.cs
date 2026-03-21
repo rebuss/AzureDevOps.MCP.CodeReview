@@ -1,4 +1,5 @@
-using REBUSS.Pure.Services.FileList.Classification;
+using REBUSS.Pure.Core.Models;
+using REBUSS.Pure.Core.Shared;
 
 namespace REBUSS.Pure.Tests.Services.Classification;
 
