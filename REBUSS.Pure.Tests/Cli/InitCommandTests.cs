@@ -17,10 +17,10 @@ public class InitCommandTests
     private static InitCommand CreateCommand(
         TextWriter output, string workingDirectory, string executablePath, string? pat = null,
         Func<string, CancellationToken, Task<(int ExitCode, string StdOut, string StdErr)>>? processRunner = null,
-        TextReader? input = null)
+        TextReader? input = null, string? detectedProvider = null)
     {
         return new InitCommand(output, input ?? new StringReader("n"), workingDirectory, executablePath, pat,
-            processRunner ?? AzCliNotInstalled);
+            detectedProvider ?? "AzureDevOps", processRunner ?? AzCliNotInstalled);
     }
     // -------------------------------------------------------------------------
     // Error cases
@@ -1109,6 +1109,271 @@ public class InitCommandTests
             Assert.Equal(0, exitCode);
             Assert.True(configExistedDuringLogin, "MCP config should be written before az login is attempted");
             Assert.True(promptsExistedDuringLogin, "Prompt files should be copied before az login is attempted");
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // GitHub CLI login during init
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task ExecuteAsync_UsesGitHubFlow_WhenProviderIsGitHub()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(Path.Combine(tempDir, ".git"));
+
+        Func<string, CancellationToken, Task<(int, string, string)>> processRunner = (args, _) =>
+        {
+            if (args == "--version")
+                return Task.FromResult((0, "gh version 2.50.0", ""));
+            if (args == "auth token")
+                return Task.FromResult((0, "ghp_existing-token", ""));
+            return Task.FromResult((-1, "", "unexpected"));
+        };
+
+        try
+        {
+            var output = new StringWriter();
+            var command = CreateCommand(output, tempDir, "rebuss-pure.exe",
+                processRunner: processRunner, detectedProvider: "GitHub");
+
+            var exitCode = await command.ExecuteAsync();
+
+            Assert.Equal(0, exitCode);
+            Assert.Contains("GitHub CLI: Using existing login session", output.ToString());
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_RunsGhAuthLogin_WhenNoExistingGitHubSession()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(Path.Combine(tempDir, ".git"));
+
+        var callCount = 0;
+        Func<string, CancellationToken, Task<(int, string, string)>> processRunner = (args, _) =>
+        {
+            callCount++;
+            if (args == "--version")
+                return Task.FromResult((0, "gh version 2.50.0", ""));
+            if (args == "auth token" && callCount <= 2)
+                return Task.FromResult((-1, "", "not logged in"));
+            if (args == "auth login --web")
+                return Task.FromResult((0, "", ""));
+            if (args == "auth token")
+                return Task.FromResult((0, "ghp_new-token", ""));
+            return Task.FromResult((-1, "", "unexpected"));
+        };
+
+        try
+        {
+            var output = new StringWriter();
+            var command = CreateCommand(output, tempDir, "rebuss-pure.exe",
+                processRunner: processRunner, detectedProvider: "GitHub");
+
+            var exitCode = await command.ExecuteAsync();
+
+            Assert.Equal(0, exitCode);
+            var outputText = output.ToString();
+            Assert.Contains("GitHub CLI login successful", outputText);
+            Assert.Contains("GitHub token acquired and cached", outputText);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ShowsGitHubAuthBanner_WhenGhCliNotInstalled()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(Path.Combine(tempDir, ".git"));
+
+        try
+        {
+            var output = new StringWriter();
+            var input = new StringReader("n");
+            var ghNotInstalled = new Func<string, CancellationToken, Task<(int, string, string)>>(
+                (_, _) => Task.FromResult((-1, "", "gh: command not found")));
+            var command = CreateCommand(output, tempDir, "rebuss-pure.exe",
+                processRunner: ghNotInstalled, input: input, detectedProvider: "GitHub");
+
+            var exitCode = await command.ExecuteAsync();
+
+            Assert.Equal(0, exitCode);
+            var outputText = output.ToString();
+            Assert.Contains("GitHub CLI is not installed", outputText);
+            Assert.Contains("AUTHENTICATION NOT CONFIGURED", outputText);
+            Assert.True(File.Exists(Path.Combine(tempDir, ".vscode", "mcp.json")));
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_InstallsGhCli_WhenUserConfirms()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(Path.Combine(tempDir, ".git"));
+
+        var callLog = new List<string>();
+        var ghInstalled = false;
+
+        Func<string, CancellationToken, Task<(int, string, string)>> processRunner = (args, _) =>
+        {
+            callLog.Add(args);
+            if (args == "--version" && !ghInstalled)
+                return Task.FromResult((-1, "", "not found"));
+            if (args == "install-gh-cli")
+            {
+                ghInstalled = true;
+                return Task.FromResult((0, "", ""));
+            }
+            if (args == "--version" && ghInstalled)
+                return Task.FromResult((0, "gh version 2.50.0", ""));
+            if (args == "auth token" && callLog.Count(a => a == "auth token") <= 1)
+                return Task.FromResult((-1, "", "not logged in"));
+            if (args == "auth login --web")
+                return Task.FromResult((0, "", ""));
+            if (args == "auth token")
+                return Task.FromResult((0, "ghp_new-token", ""));
+            return Task.FromResult((-1, "", "unexpected"));
+        };
+
+        try
+        {
+            var output = new StringWriter();
+            var input = new StringReader("y");
+            var command = CreateCommand(output, tempDir, "rebuss-pure.exe",
+                processRunner: processRunner, input: input, detectedProvider: "GitHub");
+
+            var exitCode = await command.ExecuteAsync();
+
+            Assert.Equal(0, exitCode);
+            var outputText = output.ToString();
+            Assert.Contains("Installing GitHub CLI", outputText);
+            Assert.Contains("GitHub CLI installed successfully", outputText);
+            Assert.Contains("GitHub CLI login successful", outputText);
+            Assert.Contains("install-gh-cli", callLog);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_SkipsGhLogin_WhenPatProvided_GitHubProvider()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(Path.Combine(tempDir, ".git"));
+
+        var processRunnerCalled = false;
+        Func<string, CancellationToken, Task<(int, string, string)>> processRunner = (_, _) =>
+        {
+            processRunnerCalled = true;
+            return Task.FromResult((0, "", ""));
+        };
+
+        try
+        {
+            var output = new StringWriter();
+            var command = CreateCommand(output, tempDir, "rebuss-pure.exe", "ghp_my-pat",
+                processRunner, detectedProvider: "GitHub");
+
+            var exitCode = await command.ExecuteAsync();
+
+            Assert.Equal(0, exitCode);
+            Assert.False(processRunnerCalled);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ShowsGitHubManualInstallHint_WhenInstallFails()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(Path.Combine(tempDir, ".git"));
+
+        Func<string, CancellationToken, Task<(int, string, string)>> processRunner = (args, _) =>
+        {
+            if (args == "--version")
+                return Task.FromResult((-1, "", "not found"));
+            if (args == "install-gh-cli")
+                return Task.FromResult((-1, "", "winget not found"));
+            return Task.FromResult((-1, "", "unexpected"));
+        };
+
+        try
+        {
+            var output = new StringWriter();
+            var input = new StringReader("y");
+            var command = CreateCommand(output, tempDir, "rebuss-pure.exe",
+                processRunner: processRunner, input: input, detectedProvider: "GitHub");
+
+            var exitCode = await command.ExecuteAsync();
+
+            Assert.Equal(0, exitCode);
+            var outputText = output.ToString();
+            Assert.Contains("installation failed", outputText);
+            Assert.Contains("https://cli.github.com/", outputText);
+            Assert.Contains("AUTHENTICATION NOT CONFIGURED", outputText);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_CreatesConfigAndPrompts_BeforeGhLogin()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(Path.Combine(tempDir, ".git"));
+
+        var configExistedDuringLogin = false;
+        var promptsExistedDuringLogin = false;
+        Func<string, CancellationToken, Task<(int, string, string)>> processRunner = (args, _) =>
+        {
+            if (args == "--version")
+                return Task.FromResult((0, "gh version 2.50.0", ""));
+            if (args == "auth token")
+            {
+                configExistedDuringLogin = File.Exists(Path.Combine(tempDir, ".vscode", "mcp.json"))
+                    || File.Exists(Path.Combine(tempDir, ".vs", "mcp.json"));
+                promptsExistedDuringLogin = Directory.Exists(Path.Combine(tempDir, ".github", "prompts"));
+                return Task.FromResult((-1, "", "not logged in"));
+            }
+            if (args == "auth login --web")
+                return Task.FromResult((-1, "", "login failed"));
+            return Task.FromResult((-1, "", "unexpected"));
+        };
+
+        try
+        {
+            var output = new StringWriter();
+            var command = CreateCommand(output, tempDir, "rebuss-pure.exe", null,
+                processRunner, detectedProvider: "GitHub");
+
+            var exitCode = await command.ExecuteAsync();
+
+            Assert.Equal(0, exitCode);
+            Assert.True(configExistedDuringLogin, "MCP config should be written before gh login is attempted");
+            Assert.True(promptsExistedDuringLogin, "Prompt files should be copied before gh login is attempted");
         }
         finally
         {

@@ -64,7 +64,7 @@ LLM → MCP → high-signal context only
 - 🔹 Incremental, on-demand data access
 - 🔹 Ready-to-use review prompts
 - 🔹 Works with any MCP-compatible agent
-- 🔹 Authentication via Azure CLI, PAT, or GitHub token
+- 🔹 Authentication via Azure CLI, GitHub CLI (`gh auth`), or PAT
 - 🔹 Auto-detects VS Code and Visual Studio
 - 🔹 Auto-detects provider from Git remote URL
 

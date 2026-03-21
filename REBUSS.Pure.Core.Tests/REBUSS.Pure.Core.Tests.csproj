@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -16,7 +16,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\REBUSS.Pure\REBUSS.Pure.csproj" />
     <ProjectReference Include="..\REBUSS.Pure.Core\REBUSS.Pure.Core.csproj" />
   </ItemGroup>
 

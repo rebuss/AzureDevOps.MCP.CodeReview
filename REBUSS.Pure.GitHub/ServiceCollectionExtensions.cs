@@ -29,7 +29,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IGitHubConfigStore, GitHubConfigStore>();
         services.AddSingleton<IPostConfigureOptions<GitHubOptions>, GitHubConfigurationResolver>();
 
-        // Authentication handler (Bearer PAT + required GitHub headers)
+        // Authentication provider (chained: PAT → cached token → GitHub CLI → error)
+        services.AddSingleton<IGitHubCliTokenProvider, GitHubCliTokenProvider>();
+        services.AddSingleton<IGitHubAuthenticationProvider, GitHubChainedAuthenticationProvider>();
         services.AddTransient<GitHubAuthenticationHandler>();
 
         // Typed HTTP client with auth handler + resilience
