@@ -202,6 +202,8 @@ Full codebase context is included below (file-role map, dependency graph, DI reg
 | File | Role |
 |---|---|
 | `README.md` | Project documentation |
+| `install.ps1` | PowerShell installer: downloads latest `.nupkg` from GitHub Releases (`rebuss/CodeReview.MCP`), installs as global tool (`CodeReview.MCP`) |
+| `install.sh` | Bash installer: same workflow as `install.ps1` for Linux/macOS |
 | `.github\prompts\review-pr.md` | GitHub Copilot prompt for Azure DevOps PR review |
 | `.github\prompts\self-review.md` | GitHub Copilot prompt for local self-review (no Azure DevOps required) |
 
@@ -456,7 +458,7 @@ services.AddSingleton<McpServer>(...);
 | **Implicit usings** | `enable` |
 | **Test framework** | xUnit 2.9.3 |
 | **Mocking library** | NSubstitute 5.3.0 |
-| **JSON library** | System.Text.Json 9.0.0 |
+| **JSON library** | System.Text.Json 10.0.5 |
 | **JSON naming policy** | `camelCase` via `JsonNamingPolicy.CamelCase` in tool handlers; explicit `[JsonPropertyName]` on all DTO properties |
 | **JSON null handling** | `JsonIgnoreCondition.WhenWritingNull` |
 | **Internal access** | `InternalsVisibleTo("REBUSS.Pure.Tests")` |

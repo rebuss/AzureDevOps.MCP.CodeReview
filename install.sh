@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="rebuss/REBUSS.Pure"
-TOOL_ID="REBUSS.Pure"
+REPO="rebuss/CodeReview.MCP"
+TOOL_ID="CodeReview.MCP"
 CMD="rebuss-pure"
 
 echo "Fetching latest release from GitHub..."

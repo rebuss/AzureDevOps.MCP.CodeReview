@@ -3,13 +3,13 @@
     Installs REBUSS.Pure as a global .NET tool from the latest GitHub Release.
 
 .EXAMPLE
-    irm https://raw.githubusercontent.com/rebuss/REBUSS.Pure/master/install.ps1 | iex
+    irm https://raw.githubusercontent.com/rebuss/CodeReview.MCP/master/install.ps1 | iex
 #>
 
 $ErrorActionPreference = "Stop"
 
-$repo    = "rebuss/REBUSS.Pure"
-$toolId  = "REBUSS.Pure"
+$repo    = "rebuss/CodeReview.MCP"
+$toolId  = "CodeReview.MCP"
 $cmd     = "rebuss-pure"
 
 Write-Host "Fetching latest release from GitHub..." -ForegroundColor Cyan
