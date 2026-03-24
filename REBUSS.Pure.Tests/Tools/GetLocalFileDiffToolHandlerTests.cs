@@ -215,14 +215,14 @@ public class GetLocalFileDiffToolHandlerTests
     public void GetToolDefinition_RequiresPath()
     {
         var def = _handler.GetToolDefinition();
-        Assert.Contains("path", def.InputSchema.Required);
+        Assert.Contains("path", def.InputSchema.Required!);
     }
 
     [Fact]
     public void GetToolDefinition_ScopeIsOptional()
     {
         var def = _handler.GetToolDefinition();
-        Assert.DoesNotContain("scope", def.InputSchema.Required);
+        Assert.DoesNotContain("scope", def.InputSchema.Required!);
         Assert.True(def.InputSchema.Properties.ContainsKey("scope"));
     }
 

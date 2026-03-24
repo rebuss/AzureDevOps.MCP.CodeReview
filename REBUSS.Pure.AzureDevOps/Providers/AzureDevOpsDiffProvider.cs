@@ -58,8 +58,8 @@ namespace REBUSS.Pure.AzureDevOps.Providers
                 _logger.LogInformation(
                     "PR #{PrNumber}: {FileCount} file(s) changed, building diffs (base={BaseCommit}, target={TargetCommit})",
                     prNumber, files.Count,
-                    baseCommit?.Length > 7 ? baseCommit[..7] : baseCommit,
-                    targetCommit?.Length > 7 ? targetCommit[..7] : targetCommit);
+                    baseCommit.Length > 7 ? baseCommit[..7] : baseCommit,
+                    targetCommit.Length > 7 ? targetCommit[..7] : targetCommit);
 
                 await BuildFileDiffsAsync(files, baseCommit, targetCommit, cancellationToken);
 

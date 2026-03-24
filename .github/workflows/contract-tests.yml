@@ -10,6 +10,9 @@ on:
       - 'REBUSS.Pure.GitHub/**'
       - 'REBUSS.Pure.SmokeTests/**'
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   contract-tests:
     runs-on: ubuntu-latest
@@ -34,7 +37,7 @@ jobs:
           dotnet-version: '10.0.x'
 
       - name: Build
-        run: dotnet build --configuration Release
+        run: dotnet build REBUSS.Pure.SmokeTests --configuration Release
 
       - name: Run Protocol Tests (no secrets needed)
         run: >

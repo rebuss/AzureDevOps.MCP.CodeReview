@@ -388,7 +388,7 @@ public class InitCommandTests
             var content = await File.ReadAllTextAsync(Path.Combine(tempDir, ".vscode", "mcp.json"));
             Assert.Contains("rebuss-pure-v2", content);
             // No duplicate REBUSS.Pure keys
-            Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(content, "\"REBUSS\\.Pure\"").Count);
+            Assert.Single(System.Text.RegularExpressions.Regex.Matches(content, "\"REBUSS\\.Pure\""));
         }
         finally
         {

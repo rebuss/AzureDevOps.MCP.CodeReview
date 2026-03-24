@@ -54,8 +54,8 @@ public class GitHubDiffProvider
             _logger.LogInformation(
                 "PR #{PrNumber}: {FileCount} file(s) changed, building diffs (base={BaseCommit}, head={HeadCommit})",
                 prNumber, files.Count,
-                baseCommit?.Length > 7 ? baseCommit[..7] : baseCommit,
-                headCommit?.Length > 7 ? headCommit[..7] : headCommit);
+                baseCommit.Length > 7 ? baseCommit[..7] : baseCommit,
+                headCommit.Length > 7 ? headCommit[..7] : headCommit);
 
             await BuildFileDiffsAsync(files, baseCommit, headCommit, cancellationToken);
 

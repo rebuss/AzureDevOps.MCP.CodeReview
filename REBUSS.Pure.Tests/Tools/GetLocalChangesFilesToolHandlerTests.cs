@@ -182,6 +182,6 @@ public class GetLocalChangesFilesToolHandlerTests
     public void GetToolDefinition_ScopeIsNotRequired()
     {
         var def = _handler.GetToolDefinition();
-        Assert.DoesNotContain("scope", def.InputSchema.Required);
+        Assert.DoesNotContain("scope", def.InputSchema.Required!);
     }
 }
