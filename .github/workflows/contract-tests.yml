@@ -8,11 +8,22 @@ on:
       - 'REBUSS.Pure.Core/**'
       - 'REBUSS.Pure.AzureDevOps/**'
       - 'REBUSS.Pure.GitHub/**'
+      - 'REBUSS.Pure.SmokeTests/**'
 
 jobs:
   contract-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      REBUSS_ADO_PAT: ${{ secrets.REBUSS_ADO_PAT }}
+      REBUSS_ADO_ORG: ${{ secrets.REBUSS_ADO_ORG }}
+      REBUSS_ADO_PROJECT: ${{ secrets.REBUSS_ADO_PROJECT }}
+      REBUSS_ADO_REPO: ${{ secrets.REBUSS_ADO_REPO }}
+      REBUSS_ADO_PR_NUMBER: ${{ secrets.REBUSS_ADO_PR_NUMBER }}
+      REBUSS_GH_PAT: ${{ secrets.REBUSS_GH_PAT }}
+      REBUSS_GH_OWNER: ${{ secrets.REBUSS_GH_OWNER }}
+      REBUSS_GH_REPO: ${{ secrets.REBUSS_GH_REPO }}
+      REBUSS_GH_PR_NUMBER: ${{ secrets.REBUSS_GH_PR_NUMBER }}
 
     steps:
       - uses: actions/checkout@v4
@@ -35,12 +46,6 @@ jobs:
 
       - name: Run Azure DevOps Contract Tests
         if: env.REBUSS_ADO_PAT != ''
-        env:
-          REBUSS_ADO_PAT: ${{ secrets.REBUSS_ADO_PAT }}
-          REBUSS_ADO_ORG: ${{ secrets.REBUSS_ADO_ORG }}
-          REBUSS_ADO_PROJECT: ${{ secrets.REBUSS_ADO_PROJECT }}
-          REBUSS_ADO_REPO: ${{ secrets.REBUSS_ADO_REPO }}
-          REBUSS_ADO_PR_NUMBER: ${{ secrets.REBUSS_ADO_PR_NUMBER }}
         run: >
           dotnet test REBUSS.Pure.SmokeTests
           --configuration Release
@@ -50,11 +55,6 @@ jobs:
 
       - name: Run GitHub Contract Tests
         if: env.REBUSS_GH_PAT != ''
-        env:
-          REBUSS_GH_PAT: ${{ secrets.REBUSS_GH_PAT }}
-          REBUSS_GH_OWNER: ${{ secrets.REBUSS_GH_OWNER }}
-          REBUSS_GH_REPO: ${{ secrets.REBUSS_GH_REPO }}
-          REBUSS_GH_PR_NUMBER: ${{ secrets.REBUSS_GH_PR_NUMBER }}
         run: >
           dotnet test REBUSS.Pure.SmokeTests
           --configuration Release

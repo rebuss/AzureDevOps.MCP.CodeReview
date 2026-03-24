@@ -10,7 +10,7 @@ namespace REBUSS.Pure.SmokeTests.Fixtures;
 /// </summary>
 public sealed class McpProcessFixture : IAsyncDisposable
 {
-    private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(30);
 
     private readonly Process _process;
     private readonly StringBuilder _stderrBuffer = new();

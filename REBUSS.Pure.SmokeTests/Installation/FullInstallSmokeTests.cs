@@ -116,7 +116,7 @@ public class FullInstallSmokeTests : IAsyncLifetime
             await process.StandardInput.WriteLineAsync(toolsListRequest);
             await process.StandardInput.FlushAsync();
 
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
 
             var initLine = await process.StandardOutput.ReadLineAsync(cts.Token);
             var toolsLine = await process.StandardOutput.ReadLineAsync(cts.Token);

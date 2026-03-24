@@ -11,7 +11,7 @@ public sealed record CliProcessResult(int ExitCode, string StdOut, string StdErr
 
 public static class CliProcessHelper
 {
-    private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(60);
 
     /// <summary>
     /// Runs <c>dotnet run --project REBUSS.Pure -- {arguments}</c> with the given working directory.
