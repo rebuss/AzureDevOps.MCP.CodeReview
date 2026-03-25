@@ -31,7 +31,7 @@ public class AzureDevOpsInitSmokeTests
 
         Assert.True(repo.FileExists(Path.Combine(".github", "prompts", "review-pr.md")));
         Assert.True(repo.FileExists(Path.Combine(".github", "prompts", "self-review.md")));
-        Assert.True(repo.FileExists(Path.Combine(".github", "prompts", "create-pr.md")));
+        Assert.False(repo.FileExists(Path.Combine(".github", "prompts", "create-pr.md")));
     }
 
     [Fact]

@@ -259,7 +259,7 @@ Full codebase context is included below (file-role map, dependency graph, DI reg
 | `REBUSS.Pure\Cli\InitCommand.cs` | `init` command: generates MCP config files, copies prompt files, delegates authentication to `ICliAuthFlow` via `CreateAuthFlow()` (selects `GitHubCliAuthFlow` or `AzureDevOpsCliAuthFlow` based on `DetectProviderFromGitRemote()` or explicit `--provider`) |
 | `REBUSS.Pure\Cli\Prompts\review-pr.md` | Embedded resource: PR review prompt template |
 | `REBUSS.Pure\Cli\Prompts\self-review.md` | Embedded resource: self-review prompt template |
-| `REBUSS.Pure\Cli\Prompts\create-pr.md` | Embedded resource: create-PR prompt template (copied to `.github/prompts/` by `init`; invoked as `#create-pr` or `123 #create-pr` in Copilot Chat) |
+| `REBUSS.Pure\Cli\Prompts\create-pr.md` | Embedded resource: create-PR prompt template (not yet deployed by `init`; reserved for future `#create-pr` command) |
 
 ### Logging
 
@@ -282,7 +282,7 @@ Full codebase context is included below (file-role map, dependency graph, DI reg
 | `install.sh` | Bash installer: same workflow as `install.ps1` for Linux/macOS |
 | `.github\prompts\review-pr.md` | GitHub Copilot prompt for Azure DevOps PR review |
 | `.github\prompts\self-review.md` | GitHub Copilot prompt for local self-review (no Azure DevOps required) |
-| `.github\prompts\create-pr.md` | GitHub Copilot prompt for creating a pull request (`#create-pr` / `123 #create-pr`); uses `get_local_files`, `get_local_file_diff` MCP tools and `git`/`gh`/`az` CLI |
+| `.github\prompts\create-pr.md` | *(Not deployed by `init` — reserved for future release)* GitHub Copilot prompt for creating a pull request; uses `get_local_files`, `get_local_file_diff` MCP tools and `git`/`gh`/`az` CLI |
 
 ---
 
