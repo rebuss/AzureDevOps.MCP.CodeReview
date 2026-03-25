@@ -95,11 +95,27 @@ public static class CliProcessHelper
     }
 
     /// <summary>
-    /// Builds a restricted PATH that includes only <c>dotnet</c> and <c>git</c> directories,
-    /// effectively hiding <c>gh</c>, <c>az</c>, and other CLI tools.
+    /// Builds environment overrides that hide <c>gh</c>, <c>az</c>, and other CLI tools,
+    /// keeping only <c>dotnet</c> and <c>git</c> accessible.
     /// Use this for tests that must exercise the "CLI not installed" auth flow.
+    /// <para>
+    /// On Windows, PATH directories are filtered to include only those containing
+    /// <c>dotnet</c>, <c>git</c>, or <c>system32</c>.
+    /// On Linux/macOS, tools like <c>gh</c> and <c>az</c> share <c>/usr/bin</c> with
+    /// <c>git</c>, so PATH filtering alone cannot hide them. Instead, a temporary
+    /// directory with shadow scripts (that always exit with code 1) is prepended to
+    /// PATH, shadowing the real <c>gh</c>/<c>az</c> binaries.
+    /// </para>
     /// </summary>
     public static Dictionary<string, string> BuildRestrictedPathEnv()
+    {
+        if (OperatingSystem.IsWindows())
+            return BuildRestrictedPathEnvWindows();
+
+        return BuildRestrictedPathEnvUnix();
+    }
+
+    private static Dictionary<string, string> BuildRestrictedPathEnvWindows()
     {
         var pathSeparator = Path.PathSeparator;
         var currentPath = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
@@ -109,12 +125,37 @@ public static class CliProcessHelper
         {
             var lower = d.ToLowerInvariant();
             return lower.Contains("dotnet") || lower.Contains("git") ||
-                   lower.Contains("system32") || lower.Contains("usr");
+                   lower.Contains("system32");
         });
 
         return new Dictionary<string, string>
         {
             ["PATH"] = string.Join(pathSeparator, allowed)
+        };
+    }
+
+    private static Dictionary<string, string> BuildRestrictedPathEnvUnix()
+    {
+        var shadowBin = Path.Combine(
+            Path.GetTempPath(),
+            "rebuss-smoke-shadow-" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(shadowBin);
+
+        foreach (var tool in new[] { "gh", "az" })
+        {
+            var scriptPath = Path.Combine(shadowBin, tool);
+            File.WriteAllText(scriptPath, "#!/bin/sh\nexit 1\n");
+            File.SetUnixFileMode(scriptPath,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+                UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+                UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+        }
+
+        var currentPath = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+
+        return new Dictionary<string, string>
+        {
+            ["PATH"] = shadowBin + Path.PathSeparator + currentPath
         };
     }
 }

@@ -61,7 +61,8 @@ public class FullInstallSmokeTests : IAsyncLifetime
         var initResult = await RunProcessAsync(toolExe, "init --pat smoke-test-token",
             workingDirectory: repo.RootPath, stdin: "n\n");
 
-        Assert.Equal(0, initResult.ExitCode);
+        Assert.True(initResult.ExitCode == 0,
+            $"init failed (exit {initResult.ExitCode}). stdout: {initResult.StdOut}\nstderr: {initResult.StdErr}");
         Assert.True(repo.FileExists(Path.Combine(".vscode", "mcp.json")));
         Assert.True(repo.FileExists(Path.Combine(".github", "prompts", "review-pr.md")));
 
@@ -199,8 +200,12 @@ public class FullInstallSmokeTests : IAsyncLifetime
         }
         catch (OperationCanceledException)
         {
+            // Capture partial output before killing for diagnostics
+            var partialOut = stdoutTask.IsCompleted ? await stdoutTask : string.Empty;
+            var partialErr = stderrTask.IsCompleted ? await stderrTask : string.Empty;
             process.Kill(entireProcessTree: true);
-            return new CliProcessResult(-1, string.Empty, "Process timed out.");
+            return new CliProcessResult(-1, partialOut,
+                $"Process timed out. stderr: {partialErr}");
         }
 
         return new CliProcessResult(process.ExitCode, await stdoutTask, await stderrTask);
