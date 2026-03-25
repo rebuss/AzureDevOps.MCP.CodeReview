@@ -11,6 +11,12 @@ namespace REBUSS.Pure.SmokeTests.Installation;
 [Trait("Category", "SlowSmoke")]
 public class FullInstallSmokeTests : IAsyncLifetime
 {
+#if DEBUG
+    private const string BuildConfiguration = "Debug";
+#else
+    private const string BuildConfiguration = "Release";
+#endif
+
     private string _nupkgDir = null!;
     private string _toolsDir = null!;
     private bool _toolInstalled;
@@ -24,8 +30,10 @@ public class FullInstallSmokeTests : IAsyncLifetime
 
         var projectDir = ResolveProjectDirectory();
 
-        // Pack the tool
-        var packResult = await RunDotnetAsync($"pack \"{projectDir}\" -c Release -o \"{_nupkgDir}\"");
+        // Pack the tool — use --no-build to avoid MSBuild contention with other
+        // parallel smoke tests and to prevent background compiler server processes
+        // (VBCSCompiler) from holding inherited pipe handles open.
+        var packResult = await RunDotnetAsync($"pack \"{projectDir}\" -c {BuildConfiguration} --no-build -o \"{_nupkgDir}\"");
         Assert.Equal(0, packResult.ExitCode);
 
         // Install as a local tool in an isolated tool-path (avoids polluting global tools)
@@ -59,7 +67,8 @@ public class FullInstallSmokeTests : IAsyncLifetime
         using var repo = TempGitRepoFixture.Create("https://github.com/smoke-test/repo.git");
 
         var initResult = await RunProcessAsync(toolExe, "init --pat smoke-test-token",
-            workingDirectory: repo.RootPath, stdin: "n\n");
+            workingDirectory: repo.RootPath, stdin: "n\n",
+            timeout: TimeSpan.FromSeconds(60));
 
         Assert.True(initResult.ExitCode == 0,
             $"init failed (exit {initResult.ExitCode}). stdout: {initResult.StdOut}\nstderr: {initResult.StdErr}");
@@ -113,16 +122,21 @@ public class FullInstallSmokeTests : IAsyncLifetime
                 method = "tools/list"
             });
 
-            await process.StandardInput.WriteLineAsync(initRequest);
-            await process.StandardInput.WriteLineAsync(toolsListRequest);
-            await process.StandardInput.FlushAsync();
+            try
+            {
+                await process.StandardInput.WriteLineAsync(initRequest);
+                await process.StandardInput.WriteLineAsync(toolsListRequest);
+                await process.StandardInput.FlushAsync();
+            }
+            catch (IOException) { }
 
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
 
             var initLine = await process.StandardOutput.ReadLineAsync(cts.Token);
             var toolsLine = await process.StandardOutput.ReadLineAsync(cts.Token);
 
-            process.StandardInput.Close();
+            try { process.StandardInput.Close(); }
+            catch (IOException) { }
             await process.WaitForExitAsync(cts.Token);
 
             var initOk = false;
@@ -164,8 +178,11 @@ public class FullInstallSmokeTests : IAsyncLifetime
 
     private static async Task<CliProcessResult> RunProcessAsync(
         string fileName, string arguments,
-        string? workingDirectory = null, string? stdin = null)
+        string? workingDirectory = null, string? stdin = null,
+        TimeSpan? timeout = null)
     {
+        var effectiveTimeout = timeout ?? TimeSpan.FromMinutes(3);
+
         var psi = new System.Diagnostics.ProcessStartInfo
         {
             FileName = fileName,
@@ -184,12 +201,22 @@ public class FullInstallSmokeTests : IAsyncLifetime
 
         if (stdin is not null)
         {
-            await process.StandardInput.WriteAsync(stdin);
-            await process.StandardInput.FlushAsync();
+            try
+            {
+                await process.StandardInput.WriteAsync(stdin);
+                await process.StandardInput.FlushAsync();
+            }
+            catch (IOException)
+            {
+                // Process may have exited before consuming stdin — this is expected
+                // for commands that finish without reading interactive input.
+            }
         }
-        process.StandardInput.Close();
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+        try { process.StandardInput.Close(); }
+        catch (IOException) { }
+
+        using var cts = new CancellationTokenSource(effectiveTimeout);
 
         var stdoutTask = process.StandardOutput.ReadToEndAsync(cts.Token);
         var stderrTask = process.StandardError.ReadToEndAsync(cts.Token);
@@ -200,15 +227,29 @@ public class FullInstallSmokeTests : IAsyncLifetime
         }
         catch (OperationCanceledException)
         {
-            // Capture partial output before killing for diagnostics
+            process.Kill(entireProcessTree: true);
             var partialOut = stdoutTask.IsCompleted ? await stdoutTask : string.Empty;
             var partialErr = stderrTask.IsCompleted ? await stderrTask : string.Empty;
-            process.Kill(entireProcessTree: true);
             return new CliProcessResult(-1, partialOut,
-                $"Process timed out. stderr: {partialErr}");
+                $"Process timed out after {effectiveTimeout.TotalSeconds}s. stderr: {partialErr}");
         }
 
-        return new CliProcessResult(process.ExitCode, await stdoutTask, await stderrTask);
+        string stdout, stderr;
+        try
+        {
+            stdout = await stdoutTask;
+            stderr = await stderrTask;
+        }
+        catch (OperationCanceledException)
+        {
+            // The timeout expired while draining pipes after the process exited.
+            // This can happen when child processes inherit and hold pipe handles open.
+            try { process.Kill(entireProcessTree: true); } catch { }
+            stdout = string.Empty;
+            stderr = string.Empty;
+        }
+
+        return new CliProcessResult(process.ExitCode, stdout, stderr);
     }
 
     private static string ResolveProjectDirectory()
