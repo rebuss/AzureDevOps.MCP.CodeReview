@@ -216,24 +216,37 @@ public class FullInstallSmokeTests : IAsyncLifetime
         try { process.StandardInput.Close(); }
         catch (IOException) { }
 
-        using var cts = new CancellationTokenSource(effectiveTimeout);
+        // Start pipe reads immediately to prevent the process from blocking
+        // when output exceeds the OS pipe buffer size.
+        // Use a SEPARATE CTS for pipe reads — not tied to the process exit timeout.
+        // Sharing a single CTS causes ReadToEndAsync to cancel simultaneously with
+        // WaitForExitAsync, making partial output unrecoverable in the timeout handler.
+        using var pipeCts = new CancellationTokenSource();
+        var stdoutTask = process.StandardOutput.ReadToEndAsync(pipeCts.Token);
+        var stderrTask = process.StandardError.ReadToEndAsync(pipeCts.Token);
 
-        var stdoutTask = process.StandardOutput.ReadToEndAsync(cts.Token);
-        var stderrTask = process.StandardError.ReadToEndAsync(cts.Token);
+        // WaitForExitAsync in .NET 7+ also waits for redirected-pipe EOF,
+        // which can hang when child processes (tool shims, dotnet runtime)
+        // inherit and hold pipe handles open.
+        // Use WaitForExit(TimeSpan) to wait for the process exit signal only.
+        var exited = await Task.Run(() => process.WaitForExit(effectiveTimeout));
 
-        try
-        {
-            await process.WaitForExitAsync(cts.Token);
-        }
-        catch (OperationCanceledException)
+        if (!exited)
         {
             process.Kill(entireProcessTree: true);
-            var partialOut = stdoutTask.IsCompleted ? await stdoutTask : string.Empty;
-            var partialErr = stderrTask.IsCompleted ? await stderrTask : string.Empty;
+            // Give pipes a short grace period to drain after killing
+            pipeCts.CancelAfter(TimeSpan.FromSeconds(3));
+            string partialOut, partialErr;
+            try { partialOut = await stdoutTask; } catch { partialOut = string.Empty; }
+            try { partialErr = await stderrTask; } catch { partialErr = string.Empty; }
+
             return new CliProcessResult(-1, partialOut,
                 $"Process timed out after {effectiveTimeout.TotalSeconds}s. stderr: {partialErr}");
         }
 
+        // Process exited — drain pipes with a grace period.
+        // If child processes keep handles open, reads will hang until cancelled.
+        pipeCts.CancelAfter(TimeSpan.FromSeconds(5));
         string stdout, stderr;
         try
         {
@@ -242,8 +255,6 @@ public class FullInstallSmokeTests : IAsyncLifetime
         }
         catch (OperationCanceledException)
         {
-            // The timeout expired while draining pipes after the process exited.
-            // This can happen when child processes inherit and hold pipe handles open.
             try { process.Kill(entireProcessTree: true); } catch { }
             stdout = string.Empty;
             stderr = string.Empty;

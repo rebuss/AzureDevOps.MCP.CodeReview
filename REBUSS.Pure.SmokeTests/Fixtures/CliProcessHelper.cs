@@ -73,21 +73,28 @@ public static class CliProcessHelper
         try { process.StandardInput.Close(); }
         catch (IOException) { }
 
-        using var cts = new CancellationTokenSource(effectiveTimeout);
+        // Start pipe reads immediately to prevent the process from blocking
+        // when output exceeds the OS pipe buffer size.
+        // Use a SEPARATE CTS for pipe reads — not tied to the process exit timeout.
+        using var pipeCts = new CancellationTokenSource();
+        var stdoutTask = process.StandardOutput.ReadToEndAsync(pipeCts.Token);
+        var stderrTask = process.StandardError.ReadToEndAsync(pipeCts.Token);
 
-        var stdoutTask = process.StandardOutput.ReadToEndAsync(cts.Token);
-        var stderrTask = process.StandardError.ReadToEndAsync(cts.Token);
+        // WaitForExitAsync in .NET 7+ also waits for redirected-pipe EOF,
+        // which can hang when child processes inherit and hold pipe handles.
+        // Use WaitForExit(TimeSpan) to wait for the process exit signal only.
+        var exited = await Task.Run(() => process.WaitForExit(effectiveTimeout));
 
-        try
-        {
-            await process.WaitForExitAsync(cts.Token);
-        }
-        catch (OperationCanceledException)
+        if (!exited)
         {
             process.Kill(entireProcessTree: true);
+            pipeCts.Cancel();
             return new CliProcessResult(-1, string.Empty, "Process timed out.");
         }
 
+        // Process exited — drain pipes with a grace period.
+        // If child processes keep handles open, reads will hang until cancelled.
+        pipeCts.CancelAfter(TimeSpan.FromSeconds(5));
         string stdout, stderr;
         try
         {
@@ -96,8 +103,6 @@ public static class CliProcessHelper
         }
         catch (OperationCanceledException)
         {
-            // The timeout expired while draining pipes after the process exited.
-            // This can happen when child processes inherit and hold pipe handles open.
             try { process.Kill(entireProcessTree: true); } catch { }
             stdout = string.Empty;
             stderr = string.Empty;
