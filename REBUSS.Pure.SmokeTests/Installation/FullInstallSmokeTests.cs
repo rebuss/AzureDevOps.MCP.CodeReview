@@ -66,9 +66,15 @@ public class FullInstallSmokeTests : IAsyncLifetime
         // Run init in a temp git repo
         using var repo = TempGitRepoFixture.Create("https://github.com/smoke-test/repo.git");
 
+        // Restrict PATH so that az/gh CLI tools are shadowed by exit-1 scripts.
+        // On CI runners (Ubuntu), az CLI is pre-installed. If the tool shim doesn't
+        // forward --pat correctly, the init command enters an interactive az-login
+        // flow that blocks indefinitely. Shadowing az/gh ensures the "Install CLI?"
+        // prompt appears instead, which the stdin "n\n" answer declines immediately.
         var initResult = await RunProcessAsync(toolExe, "init --pat smoke-test-token",
             workingDirectory: repo.RootPath, stdin: "n\n",
-            timeout: TimeSpan.FromSeconds(60));
+            timeout: TimeSpan.FromSeconds(60),
+            environmentOverrides: CliProcessHelper.BuildRestrictedPathEnv());
 
         Assert.True(initResult.ExitCode == 0,
             $"init failed (exit {initResult.ExitCode}). stdout: {initResult.StdOut}\nstderr: {initResult.StdErr}");
@@ -179,7 +185,8 @@ public class FullInstallSmokeTests : IAsyncLifetime
     private static async Task<CliProcessResult> RunProcessAsync(
         string fileName, string arguments,
         string? workingDirectory = null, string? stdin = null,
-        TimeSpan? timeout = null)
+        TimeSpan? timeout = null,
+        Dictionary<string, string>? environmentOverrides = null)
     {
         var effectiveTimeout = timeout ?? TimeSpan.FromMinutes(3);
 
@@ -196,6 +203,12 @@ public class FullInstallSmokeTests : IAsyncLifetime
 
         if (workingDirectory is not null)
             psi.WorkingDirectory = workingDirectory;
+
+        if (environmentOverrides is not null)
+        {
+            foreach (var (key, value) in environmentOverrides)
+                psi.Environment[key] = value;
+        }
 
         using var process = System.Diagnostics.Process.Start(psi)!;
 
