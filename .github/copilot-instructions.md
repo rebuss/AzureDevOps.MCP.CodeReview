@@ -1,5 +1,88 @@
+## Project reference docs — when to read which file
+
+Before exploring the codebase from scratch, consult the reference files below.
+Each file answers a specific class of questions. **Read only what the task requires** — do not read all files for every task.
+
+| File | Read when you need to… | What you will find |
+|---|---|---|
+| `.github/CodebaseUnderstanding.md` | **Locate a file**, understand project structure, find which class owns a responsibility, check DI registrations, see what tests exist | Complete file-role inventory, model dependency graph, DI registration table, test-file map. This is the **index** — start here to find where things are. |
+| `.github/ProjectConventions.md` | **Follow a convention**, check naming rules, verify the correct pattern for JSON serialization, testing, DI, or error handling | Architecture overview, data-flow diagrams, coding conventions table, testing conventions table, quick-reference extension checklists (§5). This is the **cheat sheet**. |
+| `.github/Architecture.md` | **Understand how a subsystem works internally** — MCP protocol loop, provider architecture, auth chain, config resolution, analysis pipeline | Deep-dive mechanics: request lifecycle, serialization pipeline, provider selection, token caching, `IPostConfigureOptions` lazy resolution, orchestrator sequencing. Read this when debugging or modifying internals, **not** for routine feature work. |
+| `.github/Contracts.md` | **Work with tool input/output JSON** — add a field to a DTO, add a new tool, fix a contract test, understand what the consuming AI agent sees | Exact JSON examples for all 7 tools, input parameter tables, output field tables with types and nullability, error format, serialization pipeline, shared DTO reference, enum/constant value catalog. |
+| `.github/ExtensionRecipes.md` | **Implement a new feature type** — new MCP tool, new domain model, new analyzer, new CLI command, new SCM provider, new config option | Step-by-step recipes with C# code templates (`{Name}` placeholders), validation checklists, and common pitfalls. 9 recipes covering all extensible components. |
+
+### Decision guide
+
+```
+Task: "Add a new MCP tool"
+  1. ExtensionRecipes.md §1  → step-by-step recipe with code templates
+  2. Contracts.md §3         → study an existing tool's contract as reference
+  3. CodebaseUnderstanding.md → find exact file paths for DI registration, test location
+  4. ProjectConventions.md §3-4 → verify serialization and testing conventions
+
+Task: "Fix a bug in the diff provider"
+  1. CodebaseUnderstanding.md → locate the provider file, its tests, its dependencies
+  2. ProjectConventions.md §2 → understand data flow through the provider
+  3. Architecture.md §2       → if the bug involves provider internals/facade pattern
+
+Task: "Change JSON output of an existing tool"
+  1. Contracts.md §3+§4       → current contract (fields, types, nullability)
+  2. ExtensionRecipes.md §3   → recipe for modifying JSON output (which test layers to update)
+  3. CodebaseUnderstanding.md → find DTO file, handler file, all 3 test layers
+
+Task: "Understand how authentication works"
+  1. Architecture.md §3       → auth chain, token caching, DelegatingHandler retry
+  2. ProjectConventions.md §6 → config priority table, auth quick reference
+
+Task: "General code change / bug fix"
+  1. CodebaseUnderstanding.md → locate files involved
+  2. ProjectConventions.md    → verify conventions
+  (Architecture.md, Contracts.md, ExtensionRecipes.md usually not needed)
+```
+
+### Rules
+- **Do not skip the reference docs.** If a task involves creating or modifying code, check at least `CodebaseUnderstanding.md` (for file locations) and `ProjectConventions.md` (for conventions) before writing code.
+- **Do not read files you don't need.** `Architecture.md` is for internals — skip it for routine feature work. `ExtensionRecipes.md` is for new feature types — skip it for bug fixes.
+- **Trust the reference docs over assumptions.** If a file path, convention, or contract is documented in these files, use it. Do not guess.
+
+---
+
+## Reference docs maintenance
+
 ### Codebase Understanding Updates
-After applying all code changes and before finishing your response, update `CodebaseUnderstanding.md` to reflect every modification you made: add or remove files in the file-role map, update the model dependency graph, adjust DI registrations, revise conventions when needed, and replace the current file contents for every modified in-scope file. The structure and format of the document must remain unchanged.
+After applying all code changes and before finishing your response, update 
+`.github/CodebaseUnderstanding.md` to reflect every modification you made: 
+add or remove files in the file-role map, update the model dependency graph, 
+adjust DI registrations, and replace the current file contents for every 
+modified in-scope file.
+
+### Project Conventions Updates
+Update `.github/ProjectConventions.md` **only if** the change introduces a new 
+architectural pattern, convention, or extension point not yet documented.
+
+### Architecture Updates
+Update `.github/Architecture.md` **only if** the change modifies internal mechanics 
+of the MCP protocol layer (server loop, JSON-RPC dispatch, transport), provider 
+architecture (facade pattern, interface forwarding, provider selection), 
+authentication/configuration resolution (auth chain, token caching, 
+`IPostConfigureOptions` pattern, workspace root resolution), or the analysis 
+pipeline (orchestrator, inter-analyzer data sharing). Do **not** update for routine 
+feature additions, new tools, new analyzers, or prompt changes.
+
+### Contract Updates
+Update `.github/Contracts.md` whenever a tool's input schema, output JSON shape, 
+error format, or serialization behavior changes. This includes: adding, removing, 
+or renaming fields in tool output DTOs (`Tools/Models/`); adding a new MCP tool; 
+changing parameter types or required/optional status in `GetToolDefinition()`; 
+and modifying enum/constant values (state, changeType, op, reviewPriority, scope). 
+Do **not** update for internal refactoring that preserves the wire format.
+
+### Extension Recipes Updates
+Update `.github/ExtensionRecipes.md` **only if** an extension pattern itself changes — 
+e.g. a new required step is added to the "add MCP tool" recipe, the DI registration 
+pattern changes, a new type of extensible component is introduced, or test 
+scaffolding conventions change. Do **not** update when merely implementing a feature 
+using an existing recipe.
 
 ### Update README
 After applying changes to the project, update the `README.md` and `DeveloperGuide.md` files **only if** the modifications provide meaningful value to the documentation.  

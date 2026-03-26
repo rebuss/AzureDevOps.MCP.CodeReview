@@ -283,6 +283,14 @@ Full codebase context is included below (file-role map, dependency graph, DI reg
 | `.github\prompts\review-pr.md` | GitHub Copilot prompt for Azure DevOps PR review |
 | `.github\prompts\self-review.md` | GitHub Copilot prompt for local self-review (no Azure DevOps required) |
 | `.github\prompts\create-pr.md` | *(Not deployed by `init` — reserved for future release)* GitHub Copilot prompt for creating a pull request; uses `get_local_files`, `get_local_file_diff` MCP tools and `git`/`gh`/`az` CLI |
+| `.github\prompts\create-project-conventions.prompt.md` | Meta-prompt: instructs agent how to create/regenerate `ProjectConventions.md` from codebase analysis |
+| `.github\prompts\create-architecture.prompt.md` | Meta-prompt: instructs agent how to create/regenerate `Architecture.md` — deep-dive into MCP protocol, provider internals, auth/config, design rationale |
+| `.github\prompts\create-extension-recipes.prompt.md` | Meta-prompt: instructs agent how to create/regenerate `ExtensionRecipes.md` — detailed cookbook with code templates, validation checklists, pitfalls |
+| `.github\prompts\create-contracts.prompt.md` | Meta-prompt: instructs agent how to create/regenerate `Contracts.md` — complete MCP tool contract reference with input schemas, output JSON examples, error formats, serialization pipeline |
+| `.github\ProjectConventions.md` | Stable architecture & conventions reference for coding agents (complements `CodebaseUnderstanding.md`); extension recipes, data flow, coding/testing conventions |
+| `.github\Architecture.md` | Deep-dive architecture reference: MCP protocol, provider internals, auth/config mechanics, analysis pipeline, design rationale |
+| `.github\ExtensionRecipes.md` | Detailed extension cookbook: code templates, reference implementations, validation checklists, common pitfalls for each extension pattern |
+| `.github\Contracts.md` | Complete MCP tool contract reference: input schemas, output JSON examples, error formats, serialization pipeline, shared DTOs, enum values |
 
 ---
 
