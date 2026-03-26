@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using REBUSS.Pure.Core;
 using REBUSS.Pure.Mcp.Models;
 using System.Text.Json;
 

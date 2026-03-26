@@ -17,10 +17,10 @@ public class InitCommandTests
     private static InitCommand CreateCommand(
         TextWriter output, string workingDirectory, string executablePath, string? pat = null,
         Func<string, CancellationToken, Task<(int ExitCode, string StdOut, string StdErr)>>? processRunner = null,
-        TextReader? input = null)
+        TextReader? input = null, string? detectedProvider = null)
     {
         return new InitCommand(output, input ?? new StringReader("n"), workingDirectory, executablePath, pat,
-            processRunner ?? AzCliNotInstalled);
+            detectedProvider ?? "AzureDevOps", processRunner ?? AzCliNotInstalled);
     }
     // -------------------------------------------------------------------------
     // Error cases
@@ -388,7 +388,7 @@ public class InitCommandTests
             var content = await File.ReadAllTextAsync(Path.Combine(tempDir, ".vscode", "mcp.json"));
             Assert.Contains("rebuss-pure-v2", content);
             // No duplicate REBUSS.Pure keys
-            Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(content, "\"REBUSS\\.Pure\"").Count);
+            Assert.Single(System.Text.RegularExpressions.Regex.Matches(content, "\"REBUSS\\.Pure\""));
         }
         finally
         {
@@ -614,9 +614,11 @@ public class InitCommandTests
 
             var reviewPrPath = Path.Combine(tempDir, ".github", "prompts", "review-pr.md");
             var selfReviewPath = Path.Combine(tempDir, ".github", "prompts", "self-review.md");
+            var createPrPath = Path.Combine(tempDir, ".github", "prompts", "create-pr.md");
 
             Assert.True(File.Exists(reviewPrPath), $"Expected prompt file at {reviewPrPath}");
             Assert.True(File.Exists(selfReviewPath), $"Expected prompt file at {selfReviewPath}");
+            Assert.False(File.Exists(createPrPath), "create-pr.md should not be deployed yet");
 
             var reviewPrContent = await File.ReadAllTextAsync(reviewPrPath);
             Assert.Contains("Pull Request Code Review", reviewPrContent);
@@ -633,7 +635,45 @@ public class InitCommandTests
     }
 
     [Fact]
-    public async Task ExecuteAsync_SkipsPromptFiles_WhenAlreadyExist()
+    public async Task ExecuteAsync_CopiesInstructionFiles_ToGitHubInstructionsDirectory()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(Path.Combine(tempDir, ".git"));
+
+        try
+        {
+            var output = new StringWriter();
+            var command = CreateCommand(output, tempDir, "rebuss-pure.exe");
+
+            var exitCode = await command.ExecuteAsync();
+
+            Assert.Equal(0, exitCode);
+
+            var reviewPrInstr = Path.Combine(tempDir, ".github", "instructions", "review-pr.instructions.md");
+            var selfReviewInstr = Path.Combine(tempDir, ".github", "instructions", "self-review.instructions.md");
+            var createPrInstr = Path.Combine(tempDir, ".github", "instructions", "create-pr.instructions.md");
+
+            Assert.True(File.Exists(reviewPrInstr), $"Expected instruction file at {reviewPrInstr}");
+            Assert.True(File.Exists(selfReviewInstr), $"Expected instruction file at {selfReviewInstr}");
+            Assert.False(File.Exists(createPrInstr), "create-pr.instructions.md should not be deployed yet");
+
+            var reviewPrContent = await File.ReadAllTextAsync(reviewPrInstr);
+            Assert.Contains("Pull Request Code Review", reviewPrContent);
+
+            var selfReviewContent = await File.ReadAllTextAsync(selfReviewInstr);
+            Assert.Contains("Self-Review", selfReviewContent);
+
+            var outputText = output.ToString();
+            Assert.Contains("instruction file(s)", outputText);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_OverwritesPromptFiles_WhenAlreadyExist()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         var promptsDir = Path.Combine(tempDir, ".github", "prompts");
@@ -652,13 +692,13 @@ public class InitCommandTests
 
             Assert.Equal(0, exitCode);
 
+            // Existing prompt file should be overwritten with embedded content
             var reviewPrContent = await File.ReadAllTextAsync(Path.Combine(promptsDir, "review-pr.md"));
-            Assert.Equal(existingContent, reviewPrContent);
+            Assert.NotEqual(existingContent, reviewPrContent);
+            Assert.Contains("Pull Request Code Review", reviewPrContent);
 
             var selfReviewPath = Path.Combine(promptsDir, "self-review.md");
             Assert.True(File.Exists(selfReviewPath));
-
-            Assert.Contains("already exists, skipping", output.ToString());
         }
         finally
         {
@@ -667,7 +707,43 @@ public class InitCommandTests
     }
 
     [Fact]
-    public async Task ExecuteAsync_OutputMentionsPromptCopy()
+    public async Task ExecuteAsync_OverwritesInstructionFiles_WhenAlreadyExist()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        var instructionsDir = Path.Combine(tempDir, ".github", "instructions");
+        Directory.CreateDirectory(Path.Combine(tempDir, ".git"));
+        Directory.CreateDirectory(instructionsDir);
+
+        var existingContent = "# My custom instruction";
+        await File.WriteAllTextAsync(Path.Combine(instructionsDir, "review-pr.instructions.md"), existingContent);
+
+        try
+        {
+            var output = new StringWriter();
+            var command = CreateCommand(output, tempDir, "rebuss-pure.exe");
+
+            var exitCode = await command.ExecuteAsync();
+
+            Assert.Equal(0, exitCode);
+
+            // Existing instruction file should be overwritten with embedded content
+            var reviewPrContent = await File.ReadAllTextAsync(
+                Path.Combine(instructionsDir, "review-pr.instructions.md"));
+            Assert.NotEqual(existingContent, reviewPrContent);
+            Assert.Contains("Pull Request Code Review", reviewPrContent);
+
+            // Other instruction file should also be created
+            var selfReviewInstr = Path.Combine(instructionsDir, "self-review.instructions.md");
+            Assert.True(File.Exists(selfReviewInstr));
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_OutputMentionsPromptAndInstructionCopy()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(Path.Combine(tempDir, ".git"));
@@ -682,6 +758,7 @@ public class InitCommandTests
             var outputText = output.ToString();
             Assert.Contains("Copied", outputText);
             Assert.Contains("prompt file(s)", outputText);
+            Assert.Contains("instruction file(s)", outputText);
         }
         finally
         {
@@ -709,11 +786,29 @@ public class InitCommandTests
             var reviewPrPath = Path.Combine(tempDir, ".github", "prompts", "review-pr.md");
             Assert.True(File.Exists(reviewPrPath));
             Assert.False(File.Exists(Path.Combine(subDir, ".github", "prompts", "review-pr.md")));
+
+            var reviewPrInstr = Path.Combine(tempDir, ".github", "instructions", "review-pr.instructions.md");
+            Assert.True(File.Exists(reviewPrInstr));
+            Assert.False(File.Exists(Path.Combine(subDir, ".github", "instructions", "review-pr.instructions.md")));
         }
         finally
         {
             Directory.Delete(tempDir, recursive: true);
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // ToInstructionsFileName
+    // -------------------------------------------------------------------------
+
+    [Theory]
+    [InlineData("review-pr.md", "review-pr.instructions.md")]
+    [InlineData("self-review.md", "self-review.instructions.md")]
+    [InlineData("create-pr.md", "create-pr.instructions.md")]
+    public void ToInstructionsFileName_ConvertsCorrectly(string input, string expected)
+    {
+        var result = InitCommand.ToInstructionsFileName(input);
+        Assert.Equal(expected, result);
     }
 
     // -------------------------------------------------------------------------
@@ -1083,6 +1178,7 @@ public class InitCommandTests
 
         var configExistedDuringLogin = false;
         var promptsExistedDuringLogin = false;
+        var instructionsExistedDuringLogin = false;
         Func<string, CancellationToken, Task<(int, string, string)>> processRunner = (args, _) =>
         {
             if (args == "--version")
@@ -1092,6 +1188,7 @@ public class InitCommandTests
                 configExistedDuringLogin = File.Exists(Path.Combine(tempDir, ".vscode", "mcp.json"))
                     || File.Exists(Path.Combine(tempDir, ".vs", "mcp.json"));
                 promptsExistedDuringLogin = Directory.Exists(Path.Combine(tempDir, ".github", "prompts"));
+                instructionsExistedDuringLogin = Directory.Exists(Path.Combine(tempDir, ".github", "instructions"));
                 return Task.FromResult((-1, "", "not logged in"));
             }
             if (args.Contains("login"))
@@ -1109,6 +1206,275 @@ public class InitCommandTests
             Assert.Equal(0, exitCode);
             Assert.True(configExistedDuringLogin, "MCP config should be written before az login is attempted");
             Assert.True(promptsExistedDuringLogin, "Prompt files should be copied before az login is attempted");
+            Assert.True(instructionsExistedDuringLogin, "Instruction files should be copied before az login is attempted");
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // GitHub CLI login during init
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task ExecuteAsync_UsesGitHubFlow_WhenProviderIsGitHub()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(Path.Combine(tempDir, ".git"));
+
+        Func<string, CancellationToken, Task<(int, string, string)>> processRunner = (args, _) =>
+        {
+            if (args == "--version")
+                return Task.FromResult((0, "gh version 2.50.0", ""));
+            if (args == "auth token")
+                return Task.FromResult((0, "ghp_existing-token", ""));
+            return Task.FromResult((-1, "", "unexpected"));
+        };
+
+        try
+        {
+            var output = new StringWriter();
+            var command = CreateCommand(output, tempDir, "rebuss-pure.exe",
+                processRunner: processRunner, detectedProvider: "GitHub");
+
+            var exitCode = await command.ExecuteAsync();
+
+            Assert.Equal(0, exitCode);
+            Assert.Contains("GitHub CLI: Using existing login session", output.ToString());
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_RunsGhAuthLogin_WhenNoExistingGitHubSession()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(Path.Combine(tempDir, ".git"));
+
+        var callCount = 0;
+        Func<string, CancellationToken, Task<(int, string, string)>> processRunner = (args, _) =>
+        {
+            callCount++;
+            if (args == "--version")
+                return Task.FromResult((0, "gh version 2.50.0", ""));
+            if (args == "auth token" && callCount <= 2)
+                return Task.FromResult((-1, "", "not logged in"));
+            if (args == "auth login --web")
+                return Task.FromResult((0, "", ""));
+            if (args == "auth token")
+                return Task.FromResult((0, "ghp_new-token", ""));
+            return Task.FromResult((-1, "", "unexpected"));
+        };
+
+        try
+        {
+            var output = new StringWriter();
+            var command = CreateCommand(output, tempDir, "rebuss-pure.exe",
+                processRunner: processRunner, detectedProvider: "GitHub");
+
+            var exitCode = await command.ExecuteAsync();
+
+            Assert.Equal(0, exitCode);
+            var outputText = output.ToString();
+            Assert.Contains("GitHub CLI login successful", outputText);
+            Assert.Contains("GitHub token acquired and cached", outputText);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ShowsGitHubAuthBanner_WhenGhCliNotInstalled()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(Path.Combine(tempDir, ".git"));
+
+        try
+        {
+            var output = new StringWriter();
+            var input = new StringReader("n");
+            var ghNotInstalled = new Func<string, CancellationToken, Task<(int, string, string)>>(
+                (_, _) => Task.FromResult((-1, "", "gh: command not found")));
+            var command = CreateCommand(output, tempDir, "rebuss-pure.exe",
+                processRunner: ghNotInstalled, input: input, detectedProvider: "GitHub");
+
+            var exitCode = await command.ExecuteAsync();
+
+            Assert.Equal(0, exitCode);
+            var outputText = output.ToString();
+            Assert.Contains("GitHub CLI is not installed", outputText);
+            Assert.Contains("AUTHENTICATION NOT CONFIGURED", outputText);
+            Assert.True(File.Exists(Path.Combine(tempDir, ".vscode", "mcp.json")));
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_InstallsGhCli_WhenUserConfirms()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(Path.Combine(tempDir, ".git"));
+
+        var callLog = new List<string>();
+        var ghInstalled = false;
+
+        Func<string, CancellationToken, Task<(int, string, string)>> processRunner = (args, _) =>
+        {
+            callLog.Add(args);
+            if (args == "--version" && !ghInstalled)
+                return Task.FromResult((-1, "", "not found"));
+            if (args == "install-gh-cli")
+            {
+                ghInstalled = true;
+                return Task.FromResult((0, "", ""));
+            }
+            if (args == "--version" && ghInstalled)
+                return Task.FromResult((0, "gh version 2.50.0", ""));
+            if (args == "auth token" && callLog.Count(a => a == "auth token") <= 1)
+                return Task.FromResult((-1, "", "not logged in"));
+            if (args == "auth login --web")
+                return Task.FromResult((0, "", ""));
+            if (args == "auth token")
+                return Task.FromResult((0, "ghp_new-token", ""));
+            return Task.FromResult((-1, "", "unexpected"));
+        };
+
+        try
+        {
+            var output = new StringWriter();
+            var input = new StringReader("y");
+            var command = CreateCommand(output, tempDir, "rebuss-pure.exe",
+                processRunner: processRunner, input: input, detectedProvider: "GitHub");
+
+            var exitCode = await command.ExecuteAsync();
+
+            Assert.Equal(0, exitCode);
+            var outputText = output.ToString();
+            Assert.Contains("Installing GitHub CLI", outputText);
+            Assert.Contains("GitHub CLI installed successfully", outputText);
+            Assert.Contains("GitHub CLI login successful", outputText);
+            Assert.Contains("install-gh-cli", callLog);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_SkipsGhLogin_WhenPatProvided_GitHubProvider()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(Path.Combine(tempDir, ".git"));
+
+        var processRunnerCalled = false;
+        Func<string, CancellationToken, Task<(int, string, string)>> processRunner = (_, _) =>
+        {
+            processRunnerCalled = true;
+            return Task.FromResult((0, "", ""));
+        };
+
+        try
+        {
+            var output = new StringWriter();
+            var command = CreateCommand(output, tempDir, "rebuss-pure.exe", "ghp_my-pat",
+                processRunner, detectedProvider: "GitHub");
+
+            var exitCode = await command.ExecuteAsync();
+
+            Assert.Equal(0, exitCode);
+            Assert.False(processRunnerCalled);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ShowsGitHubManualInstallHint_WhenInstallFails()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(Path.Combine(tempDir, ".git"));
+
+        Func<string, CancellationToken, Task<(int, string, string)>> processRunner = (args, _) =>
+        {
+            if (args == "--version")
+                return Task.FromResult((-1, "", "not found"));
+            if (args == "install-gh-cli")
+                return Task.FromResult((-1, "", "winget not found"));
+            return Task.FromResult((-1, "", "unexpected"));
+        };
+
+        try
+        {
+            var output = new StringWriter();
+            var input = new StringReader("y");
+            var command = CreateCommand(output, tempDir, "rebuss-pure.exe",
+                processRunner: processRunner, input: input, detectedProvider: "GitHub");
+
+            var exitCode = await command.ExecuteAsync();
+
+            Assert.Equal(0, exitCode);
+            var outputText = output.ToString();
+            Assert.Contains("installation failed", outputText);
+            Assert.Contains("https://cli.github.com/", outputText);
+            Assert.Contains("AUTHENTICATION NOT CONFIGURED", outputText);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_CreatesConfigAndPrompts_BeforeGhLogin()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(Path.Combine(tempDir, ".git"));
+
+        var configExistedDuringLogin = false;
+        var promptsExistedDuringLogin = false;
+        var instructionsExistedDuringLogin = false;
+        Func<string, CancellationToken, Task<(int, string, string)>> processRunner = (args, _) =>
+        {
+            if (args == "--version")
+                return Task.FromResult((0, "gh version 2.50.0", ""));
+            if (args == "auth token")
+            {
+                configExistedDuringLogin = File.Exists(Path.Combine(tempDir, ".vscode", "mcp.json"))
+                    || File.Exists(Path.Combine(tempDir, ".vs", "mcp.json"));
+                promptsExistedDuringLogin = Directory.Exists(Path.Combine(tempDir, ".github", "prompts"));
+                instructionsExistedDuringLogin = Directory.Exists(Path.Combine(tempDir, ".github", "instructions"));
+                return Task.FromResult((-1, "", "not logged in"));
+            }
+            if (args == "auth login --web")
+                return Task.FromResult((-1, "", "login failed"));
+            return Task.FromResult((-1, "", "unexpected"));
+        };
+
+        try
+        {
+            var output = new StringWriter();
+            var command = CreateCommand(output, tempDir, "rebuss-pure.exe", null,
+                processRunner, detectedProvider: "GitHub");
+
+            var exitCode = await command.ExecuteAsync();
+
+            Assert.Equal(0, exitCode);
+            Assert.True(configExistedDuringLogin, "MCP config should be written before gh login is attempted");
+            Assert.True(promptsExistedDuringLogin, "Prompt files should be copied before gh login is attempted");
+            Assert.True(instructionsExistedDuringLogin, "Instruction files should be copied before gh login is attempted");
         }
         finally
         {

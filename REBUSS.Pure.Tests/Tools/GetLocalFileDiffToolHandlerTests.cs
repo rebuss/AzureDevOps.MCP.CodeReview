@@ -2,7 +2,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
-using REBUSS.Pure.Services.Common.Models;
+using REBUSS.Pure.Core.Models;
 using REBUSS.Pure.Services.LocalReview;
 using REBUSS.Pure.Tools;
 
@@ -215,14 +215,14 @@ public class GetLocalFileDiffToolHandlerTests
     public void GetToolDefinition_RequiresPath()
     {
         var def = _handler.GetToolDefinition();
-        Assert.Contains("path", def.InputSchema.Required);
+        Assert.Contains("path", def.InputSchema.Required!);
     }
 
     [Fact]
     public void GetToolDefinition_ScopeIsOptional()
     {
         var def = _handler.GetToolDefinition();
-        Assert.DoesNotContain("scope", def.InputSchema.Required);
+        Assert.DoesNotContain("scope", def.InputSchema.Required!);
         Assert.True(def.InputSchema.Properties.ContainsKey("scope"));
     }
 

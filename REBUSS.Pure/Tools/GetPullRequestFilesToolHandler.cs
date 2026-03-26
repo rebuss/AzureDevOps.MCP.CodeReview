@@ -1,10 +1,10 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
+using REBUSS.Pure.Core;
+using REBUSS.Pure.Core.Exceptions;
+using REBUSS.Pure.Core.Models;
 using REBUSS.Pure.Mcp;
 using REBUSS.Pure.Mcp.Models;
-using REBUSS.Pure.Services.Common;
-using REBUSS.Pure.Services.FileList;
-using REBUSS.Pure.Services.FileList.Models;
 using REBUSS.Pure.Tools.Models;
 using System.Text.Json;
 
@@ -17,7 +17,7 @@ namespace REBUSS.Pure.Tools
     /// </summary>
     public class GetPullRequestFilesToolHandler : IMcpToolHandler
     {
-        private readonly IPullRequestFilesProvider _filesProvider;
+        private readonly IPullRequestDataProvider _filesProvider;
         private readonly ILogger<GetPullRequestFilesToolHandler> _logger;
 
         private static readonly JsonSerializerOptions JsonOptions = new()
@@ -30,7 +30,7 @@ namespace REBUSS.Pure.Tools
         public string ToolName => "get_pr_files";
 
         public GetPullRequestFilesToolHandler(
-            IPullRequestFilesProvider filesProvider,
+            IPullRequestDataProvider filesProvider,
             ILogger<GetPullRequestFilesToolHandler> logger)
         {
             _filesProvider = filesProvider;
@@ -40,8 +40,8 @@ namespace REBUSS.Pure.Tools
         public McpTool GetToolDefinition() => new()
         {
             Name = ToolName,
-            Description = "Retrieves structured information about all files changed in a specific Pull Request " +
-                          "from Azure DevOps. Returns per-file metadata (status, additions, deletions, extension, " +
+            Description = "Retrieves structured information about all files changed in a specific Pull Request. " +
+                          "Returns per-file metadata (status, additions, deletions, extension, " +
                           "binary/generated/test flags, review priority) and an aggregated summary by category.",
             InputSchema = new ToolInputSchema
             {

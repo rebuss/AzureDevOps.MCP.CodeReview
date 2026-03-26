@@ -1,9 +1,10 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
+using REBUSS.Pure.Core;
+using REBUSS.Pure.Core.Exceptions;
+using REBUSS.Pure.Core.Models;
 using REBUSS.Pure.Mcp;
 using REBUSS.Pure.Mcp.Models;
-using REBUSS.Pure.Services.Common;
-using REBUSS.Pure.Services.Content;
 using REBUSS.Pure.Tools.Models;
 using System.Text.Json;
 
@@ -16,7 +17,7 @@ namespace REBUSS.Pure.Tools
     /// </summary>
     public class GetFileContentAtRefToolHandler : IMcpToolHandler
     {
-        private readonly IFileContentProvider _fileContentProvider;
+        private readonly IFileContentDataProvider _fileContentProvider;
         private readonly ILogger<GetFileContentAtRefToolHandler> _logger;
 
         private static readonly JsonSerializerOptions JsonOptions = new()
@@ -29,7 +30,7 @@ namespace REBUSS.Pure.Tools
         public string ToolName => "get_file_content_at_ref";
 
         public GetFileContentAtRefToolHandler(
-            IFileContentProvider fileContentProvider,
+            IFileContentDataProvider fileContentProvider,
             ILogger<GetFileContentAtRefToolHandler> logger)
         {
             _fileContentProvider = fileContentProvider;

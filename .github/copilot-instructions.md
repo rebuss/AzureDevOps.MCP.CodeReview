@@ -2,7 +2,7 @@
 After applying all code changes and before finishing your response, update `CodebaseUnderstanding.md` to reflect every modification you made: add or remove files in the file-role map, update the model dependency graph, adjust DI registrations, revise conventions when needed, and replace the current file contents for every modified in-scope file. The structure and format of the document must remain unchanged.
 
 ### Update README
-After applying changes to the project, update the `README.md` file **only if** the modifications provide meaningful value to the documentation.  
+After applying changes to the project, update the `README.md` and `DeveloperGuide.md` files **only if** the modifications provide meaningful value to the documentation.  
 Skip the update if the changes are too minor, overly detailed, or not relevant for end-users.
 
 ### Code Quality and Testing Requirements

@@ -2,16 +2,16 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
-using REBUSS.Pure.Services.Common;
-using REBUSS.Pure.Services.Common.Models;
-using REBUSS.Pure.Services.Diff;
+using REBUSS.Pure.Core;
+using REBUSS.Pure.Core.Exceptions;
+using REBUSS.Pure.Core.Models;
 using REBUSS.Pure.Tools;
 
 namespace REBUSS.Pure.Tests.Tools;
 
 public class GetFileDiffToolHandlerTests
 {
-    private readonly IPullRequestDiffProvider _diffProvider = Substitute.For<IPullRequestDiffProvider>();
+    private readonly IPullRequestDataProvider _diffProvider = Substitute.For<IPullRequestDataProvider>();
     private readonly GetFileDiffToolHandler _handler;
 
     private static readonly PullRequestDiff SampleFileDiff = new()

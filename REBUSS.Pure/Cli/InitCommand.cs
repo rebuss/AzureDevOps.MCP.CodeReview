@@ -1,12 +1,12 @@
 using System.Diagnostics;
 using System.Reflection;
-using REBUSS.Pure.AzureDevOpsIntegration.Configuration;
 
 namespace REBUSS.Pure.Cli;
 
 /// <summary>
 /// Generates MCP server configuration file(s) in the current Git repository
-/// and copies review prompt files to <c>.github/prompts/</c> so that MCP clients
+/// and copies review prompt files to <c>.github/prompts/</c> and instruction files
+/// to <c>.github/instructions/</c> so that MCP clients
 /// (e.g. VS Code, Visual Studio, GitHub Copilot) can launch the server and use the prompts.
 /// <para>
 /// When no <c>--pat</c> is provided, the command runs <c>az login</c> so the user
@@ -39,23 +39,23 @@ public class InitCommand : ICliCommand
     private readonly string _workingDirectory;
     private readonly string _executablePath;
     private readonly string? _pat;
+    private readonly string? _detectedProvider;
     private readonly Func<string, CancellationToken, Task<(int ExitCode, string StdOut, string StdErr)>>? _processRunner;
-    private string? _azCliPathOverride;
 
     public string Name => "init";
 
     public InitCommand(TextWriter output, string workingDirectory, string executablePath, string? pat = null)
-        : this(output, Console.In, workingDirectory, executablePath, pat, processRunner: null)
+        : this(output, Console.In, workingDirectory, executablePath, pat, detectedProvider: null, processRunner: null)
     {
     }
 
-    public InitCommand(TextWriter output, TextReader input, string workingDirectory, string executablePath, string? pat = null)
-        : this(output, input, workingDirectory, executablePath, pat, processRunner: null)
+    public InitCommand(TextWriter output, TextReader input, string workingDirectory, string executablePath, string? pat = null, string? detectedProvider = null)
+        : this(output, input, workingDirectory, executablePath, pat, detectedProvider, processRunner: null)
     {
     }
 
     /// <summary>
-    /// Constructor that accepts an optional input reader and process runner for testability.
+    /// Constructor that accepts an optional input reader, detected provider, and process runner for testability.
     /// </summary>
     internal InitCommand(
         TextWriter output,
@@ -63,6 +63,7 @@ public class InitCommand : ICliCommand
         string workingDirectory,
         string executablePath,
         string? pat,
+        string? detectedProvider,
         Func<string, CancellationToken, Task<(int ExitCode, string StdOut, string StdErr)>>? processRunner)
     {
         _output = output;
@@ -70,6 +71,7 @@ public class InitCommand : ICliCommand
         _workingDirectory = workingDirectory;
         _executablePath = executablePath;
         _pat = pat;
+        _detectedProvider = detectedProvider;
         _processRunner = processRunner;
     }
 
@@ -82,7 +84,7 @@ public class InitCommand : ICliCommand
             return 1;
         }
 
-        // Create MCP config files and copy prompts FIRST — before any potentially
+        // Create MCP config files and copy prompts FIRST â€” before any potentially
         // interactive or long-running Azure CLI steps. This ensures files are written
         // even if the user cancels during az install or az login.
         var targets = ResolveConfigTargets(gitRoot);
@@ -112,10 +114,11 @@ public class InitCommand : ICliCommand
 
         await CopyPromptFilesAsync(gitRoot, cancellationToken);
 
-        // Authenticate via Azure CLI after configs and prompts are already on disk
+        // Authenticate via the appropriate CLI flow after configs and prompts are already on disk
         if (string.IsNullOrWhiteSpace(_pat))
         {
-            await TryAzureCliLoginAsync(cancellationToken);
+            var authFlow = CreateAuthFlow();
+            await authFlow.RunAsync(cancellationToken);
         }
 
         await _output.WriteLineAsync();
@@ -126,271 +129,58 @@ public class InitCommand : ICliCommand
     }
 
     /// <summary>
-    /// Attempts Azure CLI authentication: checks for an existing token first,
-    /// runs <c>az login</c> if needed, then acquires and caches a token.
-    /// If Azure CLI is not installed, offers to install it interactively.
+    /// Creates the appropriate CLI authentication flow based on the detected provider.
+    /// GitHub repos use <c>gh auth login</c>; Azure DevOps repos use <c>az login</c>.
     /// </summary>
-    private async Task TryAzureCliLoginAsync(CancellationToken cancellationToken)
+    private ICliAuthFlow CreateAuthFlow()
     {
-        // Check if Azure CLI is available
-        if (!await IsAzCliInstalledAsync(cancellationToken))
-        {
-            var installed = await PromptAndInstallAzCliAsync(cancellationToken);
-            if (!installed)
-            {
-                await WriteAuthFailureBannerAsync();
-                return;
-            }
-        }
+        var provider = _detectedProvider ?? DetectProviderFromGitRemote(_workingDirectory);
 
-        // Check if a valid token is already cached
-        var existingToken = await RunAzCliCommandAsync(
-            $"account get-access-token --resource {AzureCliTokenProvider.AzureDevOpsResourceId} --output json",
-            cancellationToken);
+        if (string.Equals(provider, "GitHub", StringComparison.OrdinalIgnoreCase))
+            return new GitHubCliAuthFlow(_output, _input, _processRunner);
 
-        if (existingToken.ExitCode == 0)
-        {
-            var parsed = AzureCliTokenProvider.ParseTokenResponse(existingToken.StdOut);
-            if (parsed is not null && parsed.ExpiresOn > DateTime.UtcNow.AddMinutes(5))
-            {
-                CacheAzureCliToken(parsed);
-                await _output.WriteLineAsync("Azure CLI: Using existing login session.");
-                await _output.WriteLineAsync();
-                return;
-            }
-        }
-
-        // No valid token — attempt az login (interactive — inherits console)
-        await _output.WriteLineAsync("No PAT provided. Attempting Azure CLI login...");
-        await _output.WriteLineAsync("A browser window will open for authentication.");
-        await _output.WriteLineAsync();
-
-        var loginExitCode = await RunAzLoginInteractiveAsync(cancellationToken);
-        if (loginExitCode != 0)
-        {
-            await WriteAuthFailureBannerAsync();
-            return;
-        }
-
-        await _output.WriteLineAsync("Azure CLI login successful.");
-
-        // Acquire and cache token
-        var tokenResult = await RunAzCliCommandAsync(
-            $"account get-access-token --resource {AzureCliTokenProvider.AzureDevOpsResourceId} --output json",
-            cancellationToken);
-
-        if (tokenResult.ExitCode == 0)
-        {
-            var token = AzureCliTokenProvider.ParseTokenResponse(tokenResult.StdOut);
-            if (token is not null)
-            {
-                CacheAzureCliToken(token);
-                await _output.WriteLineAsync("Azure DevOps token acquired and cached.");
-                await _output.WriteLineAsync();
-                return;
-            }
-        }
-
-        await _output.WriteLineAsync("Warning: Login succeeded but token acquisition failed.");
-        await _output.WriteLineAsync("The server will retry token acquisition at runtime.");
-        await _output.WriteLineAsync();
+        return new AzureDevOpsCliAuthFlow(_output, _input, _processRunner);
     }
 
     /// <summary>
-    /// Checks whether Azure CLI is installed by running <c>az --version</c>.
+    /// Auto-detects the SCM provider from the git remote URL of the working directory.
+    /// Returns <c>"GitHub"</c> if the remote points to github.com, otherwise <c>"AzureDevOps"</c>.
     /// </summary>
-    private async Task<bool> IsAzCliInstalledAsync(CancellationToken cancellationToken)
-    {
-        var result = await RunAzCliCommandAsync("--version", cancellationToken);
-        return result.ExitCode == 0;
-    }
-
-    /// <summary>
-    /// Prompts the user to install Azure CLI. If confirmed, runs the appropriate
-    /// platform installer (<c>winget</c> on Windows, <c>curl | bash</c> on Linux/macOS).
-    /// Returns <c>true</c> if installation succeeded.
-    /// </summary>
-    private async Task<bool> PromptAndInstallAzCliAsync(CancellationToken cancellationToken)
-    {
-        await _output.WriteLineAsync("Azure CLI is not installed.");
-        await _output.WriteLineAsync();
-        await _output.WriteAsync("Would you like to install Azure CLI now? [y/N]: ");
-
-        var response = _input.ReadLine();
-        if (!string.Equals(response?.Trim(), "y", StringComparison.OrdinalIgnoreCase))
-        {
-            await _output.WriteLineAsync();
-            return false;
-        }
-
-        await _output.WriteLineAsync();
-        await _output.WriteLineAsync("Installing Azure CLI...");
-        await _output.WriteLineAsync();
-
-        var installExitCode = await RunAzCliInstallAsync(cancellationToken);
-        if (installExitCode != 0)
-        {
-            await _output.WriteLineAsync("Azure CLI installation failed.");
-            await _output.WriteLineAsync("You can install it manually: https://aka.ms/install-azure-cli");
-            await _output.WriteLineAsync();
-            return false;
-        }
-
-        await _output.WriteLineAsync("Azure CLI installed successfully.");
-        await _output.WriteLineAsync();
-
-        // Verify installation — PATH may not be refreshed in the current process after winget.
-        // If the standard PATH lookup fails, probe known installation directories directly.
-        if (!await IsAzCliInstalledAsync(cancellationToken))
-        {
-            if (_processRunner is null)
-            {
-                var foundPath = AzureCliProcessHelper.TryFindAzCliOnWindows();
-                if (foundPath is not null)
-                {
-                    _azCliPathOverride = foundPath;
-                    await _output.WriteLineAsync($"Azure CLI found at: {foundPath}");
-                    return true;
-                }
-            }
-
-            await _output.WriteLineAsync("Azure CLI was installed but could not be found.");
-            await _output.WriteLineAsync("You may need to restart your terminal and run 'rebuss-pure init' again.");
-            await _output.WriteLineAsync();
-            return false;
-        }
-
-        return true;
-    }
-
-    /// <summary>
-    /// Runs the platform-specific Azure CLI installer interactively.
-    /// On Windows uses <c>winget install -e --id Microsoft.AzureCLI</c>.
-    /// On Linux/macOS uses <c>curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash</c>.
-    /// </summary>
-    private async Task<int> RunAzCliInstallAsync(CancellationToken cancellationToken)
-    {
-        if (_processRunner is not null)
-        {
-            var result = await _processRunner("install-az-cli", cancellationToken);
-            return result.ExitCode;
-        }
-
-        if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
-                System.Runtime.InteropServices.OSPlatform.Windows))
-        {
-            return await RunInteractiveProcessAsync(
-                "winget",
-                "install -e --id Microsoft.AzureCLI --accept-source-agreements --accept-package-agreements",
-                cancellationToken);
-        }
-
-        return await RunInteractiveProcessAsync(
-            "bash", "-c \"curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash\"", cancellationToken);
-    }
-
-    /// <summary>
-    /// Writes a prominent, actionable banner when Azure CLI login fails or is not available,
-    /// explaining how the user can authenticate for Azure DevOps PR reviews.
-    /// </summary>
-    private async Task WriteAuthFailureBannerAsync()
-    {
-        var appSettingsPath = Path.Combine(AppContext.BaseDirectory, "appsettings.Local.json");
-
-        await _output.WriteLineAsync();
-        await _output.WriteLineAsync("========================================");
-        await _output.WriteLineAsync("  AUTHENTICATION NOT CONFIGURED");
-        await _output.WriteLineAsync("========================================");
-        await _output.WriteLineAsync();
-        await _output.WriteLineAsync("Azure CLI login failed, was cancelled, or Azure CLI is not installed.");
-        await _output.WriteLineAsync("PR review tools will NOT work until you authenticate.");
-        await _output.WriteLineAsync("(Local self-review tools work without authentication.)");
-        await _output.WriteLineAsync();
-        await _output.WriteLineAsync("You have two options:");
-        await _output.WriteLineAsync();
-        await _output.WriteLineAsync("  OPTION 1 — Try again with Azure CLI (recommended):");
-        await _output.WriteLineAsync();
-        await _output.WriteLineAsync("    Install Azure CLI: https://aka.ms/install-azure-cli");
-        await _output.WriteLineAsync("    Then run:");
-        await _output.WriteLineAsync();
-        await _output.WriteLineAsync("      rebuss-pure init");
-        await _output.WriteLineAsync();
-        await _output.WriteLineAsync("    A browser window will open for login.");
-        await _output.WriteLineAsync();
-        await _output.WriteLineAsync("  OPTION 2 — Use a Personal Access Token (PAT):");
-        await _output.WriteLineAsync();
-        await _output.WriteLineAsync($"    Create the file: {appSettingsPath}");
-        await _output.WriteLineAsync();
-        await _output.WriteLineAsync("    With the following content:");
-        await _output.WriteLineAsync();
-        await _output.WriteLineAsync("      {");
-        await _output.WriteLineAsync("        \"AzureDevOps\": {");
-        await _output.WriteLineAsync("          \"PersonalAccessToken\": \"<your-pat-here>\"");
-        await _output.WriteLineAsync("        }");
-        await _output.WriteLineAsync("      }");
-        await _output.WriteLineAsync();
-        await _output.WriteLineAsync("    To create a PAT:");
-        await _output.WriteLineAsync("      1. Go to https://dev.azure.com/<your-org>/_usersSettings/tokens");
-        await _output.WriteLineAsync("      2. Click '+ New Token', select scope: Code (Read)");
-        await _output.WriteLineAsync("      3. Copy the token into the file above");
-        await _output.WriteLineAsync();
-        await _output.WriteLineAsync("    Or pass it directly:");
-        await _output.WriteLineAsync();
-        await _output.WriteLineAsync("      rebuss-pure init --pat <your-pat-here>");
-        await _output.WriteLineAsync();
-        await _output.WriteLineAsync("========================================");
-        await _output.WriteLineAsync();
-    }
-
-    private static void CacheAzureCliToken(AzureCliToken token)
+    internal static string DetectProviderFromGitRemote(string workingDirectory)
     {
         try
         {
-            var store = new LocalConfigStore(
-                Microsoft.Extensions.Logging.Abstractions.NullLogger<LocalConfigStore>.Instance);
-            var config = store.Load() ?? new CachedConfig();
-            config.AccessToken = token.AccessToken;
-            config.TokenType = "Bearer";
-            config.TokenExpiresOn = token.ExpiresOn;
-            store.Save(config);
+            var gitRoot = FindGitRepositoryRoot(workingDirectory);
+            if (gitRoot is null) return "AzureDevOps";
+
+            var psi = new ProcessStartInfo
+            {
+                FileName = "git",
+                Arguments = "remote get-url origin",
+                WorkingDirectory = gitRoot,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var process = Process.Start(psi);
+            if (process is null) return "AzureDevOps";
+
+            var output = process.StandardOutput.ReadToEnd();
+            process.WaitForExit(TimeSpan.FromSeconds(5));
+
+            if (process.ExitCode != 0) return "AzureDevOps";
+
+            if (output.Contains("github.com", StringComparison.OrdinalIgnoreCase))
+                return "GitHub";
         }
         catch
         {
-            // Caching failure is non-fatal during init
-        }
-    }
-
-    private async Task<(int ExitCode, string StdOut, string StdErr)> RunAzCliCommandAsync(
-        string arguments, CancellationToken cancellationToken)
-    {
-        if (_processRunner is not null)
-            return await _processRunner(arguments, cancellationToken);
-
-        var (fileName, args) = AzureCliProcessHelper.GetProcessStartArgs(arguments, _azCliPathOverride);
-        return await RunProcessAsync(fileName, args, cancellationToken);
-    }
-
-    /// <summary>
-    /// Runs <c>az login</c> interactively
-    /// so it can open a browser and display progress to the user.
-    /// </summary>
-    private async Task<int> RunAzLoginInteractiveAsync(CancellationToken cancellationToken)
-    {
-        if (_processRunner is not null)
-        {
-            var result = await _processRunner("login --allow-no-subscriptions", cancellationToken);
-            return result.ExitCode;
+            // Ignore detection errors â€” fall back to Azure DevOps
         }
 
-        // Disable the interactive tenant/subscription selector introduced in Azure CLI 2.61+.
-        // The env var scopes the override to this child process only — no permanent config change.
-        var envOverrides = new Dictionary<string, string>
-        {
-            ["AZURE_CORE_LOGIN_EXPERIENCE_V2"] = "off"
-        };
-
-        var (fileName, args) = AzureCliProcessHelper.GetProcessStartArgs("login --allow-no-subscriptions", _azCliPathOverride);
-        return await RunInteractiveProcessAsync(fileName, args, cancellationToken, envOverrides);
+        return "AzureDevOps";
     }
 
     internal static async Task<(int ExitCode, string StdOut, string StdErr)> RunProcessAsync(
@@ -428,7 +218,7 @@ public class InitCommand : ICliCommand
     }
 
     /// <summary>
-    /// Runs a process interactively — inherits the parent's stdin/stdout/stderr
+    /// Runs a process interactively â€” inherits the parent's stdin/stdout/stderr
     /// so the child can open a browser, display prompts, and interact with the user.
     /// Returns only the exit code (no captured output).
     /// </summary>
@@ -528,7 +318,7 @@ public class InitCommand : ICliCommand
     /// <summary>
     /// Merges the REBUSS.Pure server entry into an existing <c>mcp.json</c> file,
     /// preserving any other server entries already present.
-    /// Accepts raw (unescaped) paths — JSON escaping is handled by <see cref="System.Text.Json.Utf8JsonWriter"/>.
+    /// Accepts raw (unescaped) paths â€” JSON escaping is handled by <see cref="System.Text.Json.Utf8JsonWriter"/>.
     /// Falls back to <see cref="BuildConfigContent"/> when the existing content is not valid JSON.
     /// </summary>
     internal static string MergeConfigContent(
@@ -569,7 +359,7 @@ public class InitCommand : ICliCommand
                     }
                 }
 
-                // Write the REBUSS.Pure entry — Utf8JsonWriter handles JSON escaping of raw paths
+                // Write the REBUSS.Pure entry â€” Utf8JsonWriter handles JSON escaping of raw paths
                 // If no PAT was supplied, carry over any existing PAT from the current config.
                 var effectivePat = pat;
                 if (string.IsNullOrWhiteSpace(effectivePat))
@@ -599,7 +389,7 @@ public class InitCommand : ICliCommand
         }
         catch (System.Text.Json.JsonException)
         {
-            // Existing file is not valid JSON — replace it entirely
+            // Existing file is not valid JSON â€” replace it entirely
             var normalizedExePath = rawExePath.Replace("\\", "\\\\");
             var normalizedRepoPath = rawRepoPath.Replace("\\", "\\\\");
             return BuildConfigContent(normalizedExePath, normalizedRepoPath, pat);
@@ -632,10 +422,13 @@ public class InitCommand : ICliCommand
     private async Task CopyPromptFilesAsync(string gitRoot, CancellationToken cancellationToken)
     {
         var promptsTargetDir = Path.Combine(gitRoot, ".github", "prompts");
+        var instructionsTargetDir = Path.Combine(gitRoot, ".github", "instructions");
         Directory.CreateDirectory(promptsTargetDir);
+        Directory.CreateDirectory(instructionsTargetDir);
 
         var assembly = Assembly.GetExecutingAssembly();
-        var copiedCount = 0;
+        var promptsWritten = 0;
+        var instructionsWritten = 0;
 
         foreach (var promptFileName in PromptFileNames)
         {
@@ -647,24 +440,37 @@ public class InitCommand : ICliCommand
                 continue;
             }
 
-            var targetPath = Path.Combine(promptsTargetDir, promptFileName);
-
-            if (File.Exists(targetPath))
-            {
-                await _output.WriteLineAsync($"Prompt already exists, skipping: {targetPath}");
-                continue;
-            }
-
             using var stream = assembly.GetManifestResourceStream(resourceName)!;
             using var reader = new StreamReader(stream);
             var content = await reader.ReadToEndAsync(cancellationToken);
 
-            await File.WriteAllTextAsync(targetPath, content, cancellationToken);
-            copiedCount++;
+            // Always write to .github/prompts/ (overwrite enables prompt updates)
+            var promptPath = Path.Combine(promptsTargetDir, promptFileName);
+            await File.WriteAllTextAsync(promptPath, content, cancellationToken);
+            promptsWritten++;
+
+            // Always write to .github/instructions/ (overwrite enables instruction updates)
+            var instructionFileName = ToInstructionsFileName(promptFileName);
+            var instructionPath = Path.Combine(instructionsTargetDir, instructionFileName);
+            await File.WriteAllTextAsync(instructionPath, content, cancellationToken);
+            instructionsWritten++;
         }
 
-        if (copiedCount > 0)
-            await _output.WriteLineAsync($"Copied {copiedCount} prompt file(s) to {promptsTargetDir}");
+        if (promptsWritten > 0)
+            await _output.WriteLineAsync($"Copied {promptsWritten} prompt file(s) to {promptsTargetDir}");
+
+        if (instructionsWritten > 0)
+            await _output.WriteLineAsync($"Copied {instructionsWritten} instruction file(s) to {instructionsTargetDir}");
+    }
+
+    /// <summary>
+    /// Converts a prompt file name (e.g. <c>review-pr.md</c>) to the corresponding
+    /// instructions file name (e.g. <c>review-pr.instructions.md</c>).
+    /// </summary>
+    internal static string ToInstructionsFileName(string promptFileName)
+    {
+        var nameWithoutExtension = Path.GetFileNameWithoutExtension(promptFileName);
+        return $"{nameWithoutExtension}.instructions.md";
     }
 
     /// <summary>

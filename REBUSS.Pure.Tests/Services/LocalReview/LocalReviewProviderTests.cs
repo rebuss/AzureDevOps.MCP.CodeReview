@@ -1,9 +1,8 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
-using REBUSS.Pure.Mcp;
-using REBUSS.Pure.Services.Common;
-using REBUSS.Pure.Services.Common.Models;
-using REBUSS.Pure.Services.FileList.Classification;
+using REBUSS.Pure.Core;
+using REBUSS.Pure.Core.Models;
+using REBUSS.Pure.Core.Shared;
 using REBUSS.Pure.Services.LocalReview;
 
 namespace REBUSS.Pure.Tests.Services.LocalReview;

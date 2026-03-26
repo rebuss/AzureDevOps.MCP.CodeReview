@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\REBUSS.Pure\REBUSS.Pure.csproj" />
+    <ProjectReference Include="..\REBUSS.Pure.Core\REBUSS.Pure.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

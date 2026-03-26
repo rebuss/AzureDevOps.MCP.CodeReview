@@ -1,10 +1,10 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
+using REBUSS.Pure.Core;
+using REBUSS.Pure.Core.Exceptions;
+using REBUSS.Pure.Core.Models;
 using REBUSS.Pure.Mcp;
 using REBUSS.Pure.Mcp.Models;
-using REBUSS.Pure.Services.Common;
-using REBUSS.Pure.Services.Common.Models;
-using REBUSS.Pure.Services.Diff;
 using REBUSS.Pure.Tools.Models;
 using System.Text.Json;
 
@@ -17,7 +17,7 @@ namespace REBUSS.Pure.Tools
     /// </summary>
     public class GetFileDiffToolHandler : IMcpToolHandler
     {
-        private readonly IPullRequestDiffProvider _diffProvider;
+        private readonly IPullRequestDataProvider _diffProvider;
         private readonly ILogger<GetFileDiffToolHandler> _logger;
 
         private static readonly JsonSerializerOptions JsonOptions = new()
@@ -30,7 +30,7 @@ namespace REBUSS.Pure.Tools
         public string ToolName => "get_file_diff";
 
         public GetFileDiffToolHandler(
-            IPullRequestDiffProvider diffProvider,
+            IPullRequestDataProvider diffProvider,
             ILogger<GetFileDiffToolHandler> logger)
         {
             _diffProvider = diffProvider;
@@ -40,7 +40,7 @@ namespace REBUSS.Pure.Tools
         public McpTool GetToolDefinition() => new()
         {
             Name = ToolName,
-            Description = "Retrieves the diff for a single file in a specific Pull Request from Azure DevOps. " +
+            Description = "Retrieves the diff for a single file in a specific Pull Request. " +
                           "Returns a structured JSON object with the file diff including hunks optimized for AI code review.",
             InputSchema = new ToolInputSchema
             {

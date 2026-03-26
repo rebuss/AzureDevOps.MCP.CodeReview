@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using REBUSS.Pure.Core;
 
 namespace REBUSS.Pure.Mcp
 {

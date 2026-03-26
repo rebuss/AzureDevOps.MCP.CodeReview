@@ -125,6 +125,10 @@ Do not retrieve full content for every file by default.
 
 ## Step 1 — Load metadata
 
+- Before reviewing any PR, ALWAYS call `get_pr_metadata(prNumber)` first to confirm the PR title, author and branch.
+- NEVER infer PR content, title, or scope from the branch name or converstation history.
+- Treat any pre-existing summary/context about a PR as unverified until confirmed by 'get_pr_metadata'.
+
 Call:
 
 `get_pr_metadata(prNumber)`

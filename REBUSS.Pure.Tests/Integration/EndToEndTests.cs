@@ -1,10 +1,10 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
+using REBUSS.Pure.Core;
+using REBUSS.Pure.Core.Exceptions;
+using REBUSS.Pure.Core.Models;
 using REBUSS.Pure.Mcp;
-using REBUSS.Pure.Services.Common;
-using REBUSS.Pure.Services.Common.Models;
-using REBUSS.Pure.Services.Diff;
 using REBUSS.Pure.Tools;
 using System.Text;
 using System.Text.Json;
@@ -16,7 +16,7 @@ namespace REBUSS.Pure.Tests.Integration;
 /// </summary>
 public class EndToEndTests
 {
-    private readonly IPullRequestDiffProvider _diffProvider = Substitute.For<IPullRequestDiffProvider>();
+    private readonly IPullRequestDataProvider _diffProvider = Substitute.For<IPullRequestDataProvider>();
 
     private McpServer BuildServer(Stream input, Stream output)
     {
