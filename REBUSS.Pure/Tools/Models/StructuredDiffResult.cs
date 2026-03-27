@@ -13,6 +13,9 @@ namespace REBUSS.Pure.Tools.Models
 
         [JsonPropertyName("files")]
         public List<StructuredFileChange> Files { get; set; } = new();
+
+        [JsonPropertyName("manifest")]
+        public ContentManifestResult? Manifest { get; set; }
     }
 
     public class StructuredFileChange

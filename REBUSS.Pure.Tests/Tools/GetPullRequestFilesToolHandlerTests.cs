@@ -5,6 +5,8 @@ using NSubstitute.ExceptionExtensions;
 using REBUSS.Pure.Core;
 using REBUSS.Pure.Core.Exceptions;
 using REBUSS.Pure.Core.Models;
+using REBUSS.Pure.Core.Shared;
+using REBUSS.Pure.Services.ResponsePacking;
 using REBUSS.Pure.Tools;
 
 namespace REBUSS.Pure.Tests.Tools;
@@ -12,6 +14,9 @@ namespace REBUSS.Pure.Tests.Tools;
 public class GetPullRequestFilesToolHandlerTests
 {
     private readonly IPullRequestDataProvider _filesProvider = Substitute.For<IPullRequestDataProvider>();
+    private readonly IContextBudgetResolver _budgetResolver = Substitute.For<IContextBudgetResolver>();
+    private readonly ITokenEstimator _tokenEstimator = Substitute.For<ITokenEstimator>();
+    private readonly IFileClassifier _fileClassifier = Substitute.For<IFileClassifier>();
     private readonly GetPullRequestFilesToolHandler _handler;
 
     private static readonly PullRequestFiles SampleFiles = new()
@@ -43,8 +48,19 @@ public class GetPullRequestFilesToolHandlerTests
 
     public GetPullRequestFilesToolHandlerTests()
     {
+        _budgetResolver.Resolve(Arg.Any<int?>(), Arg.Any<string?>())
+            .Returns(new BudgetResolutionResult(200000, 140000, BudgetSource.Default, Array.Empty<string>()));
+        _tokenEstimator.Estimate(Arg.Any<string>(), Arg.Any<int>())
+            .Returns(new TokenEstimationResult(100, 0.07, true));
+        _fileClassifier.Classify(Arg.Any<string>())
+            .Returns(new FileClassification { Category = FileCategory.Source, Extension = ".cs", IsBinary = false, IsGenerated = false, IsTestFile = false, ReviewPriority = "high" });
+
         _handler = new GetPullRequestFilesToolHandler(
             _filesProvider,
+            new ResponsePacker(NullLogger<ResponsePacker>.Instance),
+            _budgetResolver,
+            _tokenEstimator,
+            _fileClassifier,
             NullLogger<GetPullRequestFilesToolHandler>.Instance);
     }
 
@@ -210,6 +226,24 @@ public class GetPullRequestFilesToolHandlerTests
         Assert.Contains("prNumber", tool.InputSchema.Properties.Keys);
         Assert.Equal("integer", tool.InputSchema.Properties["prNumber"].Type);
         Assert.Contains("prNumber", tool.InputSchema.Required!);
+        Assert.Contains("modelName", tool.InputSchema.Properties.Keys);
+        Assert.Contains("maxTokens", tool.InputSchema.Properties.Keys);
+    }
+
+    // --- Packing integration ---
+
+    [Fact]
+    public async Task ExecuteAsync_IncludesManifest_InResponse()
+    {
+        _filesProvider.GetFilesAsync(42, Arg.Any<CancellationToken>()).Returns(SampleFiles);
+
+        var result = await _handler.ExecuteAsync(CreateArgs(42));
+
+        Assert.False(result.IsError);
+        var doc = JsonDocument.Parse(result.Content[0].Text);
+        Assert.True(doc.RootElement.TryGetProperty("manifest", out var manifest));
+        Assert.True(manifest.TryGetProperty("summary", out var summary));
+        Assert.Equal(2, summary.GetProperty("totalItems").GetInt32());
     }
 
     // --- Helpers ---

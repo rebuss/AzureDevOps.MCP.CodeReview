@@ -17,3 +17,6 @@ REBUSS.Pure.GitHub.Tests/bin/
 REBUSS.Pure.GitHub.Tests/obj/
 REBUSS.Pure.SmokeTests/bin/
 REBUSS.Pure.SmokeTests/obj/
+.github/agents/
+speckit*.md
+.specify/

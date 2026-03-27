@@ -11,7 +11,9 @@ using REBUSS.Pure.GitHub.Configuration;
 using REBUSS.Pure.Logging;
 using REBUSS.Pure.Mcp;
 using REBUSS.Pure.Mcp.Handlers;
+using REBUSS.Pure.Services.ContextWindow;
 using REBUSS.Pure.Services.LocalReview;
+using ResponsePacking = REBUSS.Pure.Services.ResponsePacking;
 using REBUSS.Pure.Tools;
 
 namespace REBUSS.Pure
@@ -186,6 +188,14 @@ namespace REBUSS.Pure
             services.AddSingleton<IDiffAlgorithm, LcsDiffAlgorithm>();
             services.AddSingleton<IStructuredDiffBuilder, StructuredDiffBuilder>();
             services.AddSingleton<IFileClassifier, FileClassifier>();
+
+            // Context Window Awareness
+            services.Configure<ContextWindowOptions>(configuration.GetSection(ContextWindowOptions.SectionName));
+            services.AddSingleton<IContextBudgetResolver, ContextBudgetResolver>();
+            services.AddSingleton<ITokenEstimator, TokenEstimator>();
+
+            // Response Packing
+            services.AddSingleton<IResponsePacker, ResponsePacking.ResponsePacker>();
 
             // Provider selection: explicit config > auto-detection from git remote
             var provider = DetectProvider(configuration);

@@ -5,6 +5,8 @@ using NSubstitute.ExceptionExtensions;
 using REBUSS.Pure.Core;
 using REBUSS.Pure.Core.Exceptions;
 using REBUSS.Pure.Core.Models;
+using REBUSS.Pure.Core.Shared;
+using REBUSS.Pure.Services.ResponsePacking;
 using REBUSS.Pure.Tools;
 
 namespace REBUSS.Pure.Tests.Tools;
@@ -12,6 +14,9 @@ namespace REBUSS.Pure.Tests.Tools;
 public class GetPullRequestDiffToolHandlerTests
 {
     private readonly IPullRequestDataProvider _diffProvider = Substitute.For<IPullRequestDataProvider>();
+    private readonly IContextBudgetResolver _budgetResolver = Substitute.For<IContextBudgetResolver>();
+    private readonly ITokenEstimator _tokenEstimator = Substitute.For<ITokenEstimator>();
+    private readonly IFileClassifier _fileClassifier = Substitute.For<IFileClassifier>();
     private readonly GetPullRequestDiffToolHandler _handler;
 
     private static readonly PullRequestDiff SampleDiff = new()
@@ -48,8 +53,19 @@ public class GetPullRequestDiffToolHandlerTests
 
     public GetPullRequestDiffToolHandlerTests()
     {
+        _budgetResolver.Resolve(Arg.Any<int?>(), Arg.Any<string?>())
+            .Returns(new BudgetResolutionResult(200000, 140000, BudgetSource.Default, Array.Empty<string>()));
+        _tokenEstimator.Estimate(Arg.Any<string>(), Arg.Any<int>())
+            .Returns(new TokenEstimationResult(100, 0.07, true));
+        _fileClassifier.Classify(Arg.Any<string>())
+            .Returns(new FileClassification { Category = FileCategory.Source, Extension = ".cs", IsBinary = false, IsGenerated = false, IsTestFile = false, ReviewPriority = "high" });
+
         _handler = new GetPullRequestDiffToolHandler(
             _diffProvider,
+            new ResponsePacker(NullLogger<ResponsePacker>.Instance),
+            _budgetResolver,
+            _tokenEstimator,
+            _fileClassifier,
             NullLogger<GetPullRequestDiffToolHandler>.Instance);
     }
 
@@ -193,5 +209,56 @@ public class GetPullRequestDiffToolHandlerTests
     private static Dictionary<string, object> CreateArgs(int prNumber)
     {
         return new Dictionary<string, object> { ["prNumber"] = prNumber };
+    }
+
+    // --- Packing integration ---
+
+    [Fact]
+    public async Task ExecuteAsync_IncludesManifest_InResponse()
+    {
+        _diffProvider.GetDiffAsync(42, Arg.Any<CancellationToken>()).Returns(SampleDiff);
+
+        var result = await _handler.ExecuteAsync(CreateArgs(42));
+
+        Assert.False(result.IsError);
+        var doc = JsonDocument.Parse(result.Content[0].Text);
+        Assert.True(doc.RootElement.TryGetProperty("manifest", out var manifest));
+        Assert.True(manifest.TryGetProperty("items", out var items));
+        Assert.Equal(1, items.GetArrayLength());
+        Assert.True(manifest.TryGetProperty("summary", out var summary));
+        Assert.Equal(1, summary.GetProperty("totalItems").GetInt32());
+        Assert.Equal(1, summary.GetProperty("includedCount").GetInt32());
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_AcceptsOptionalModelName()
+    {
+        _diffProvider.GetDiffAsync(42, Arg.Any<CancellationToken>()).Returns(SampleDiff);
+
+        var args = new Dictionary<string, object>
+        {
+            ["prNumber"] = 42,
+            ["modelName"] = "Claude Sonnet"
+        };
+        var result = await _handler.ExecuteAsync(args);
+
+        Assert.False(result.IsError);
+        _budgetResolver.Received(1).Resolve(Arg.Any<int?>(), "Claude Sonnet");
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_AcceptsOptionalMaxTokens()
+    {
+        _diffProvider.GetDiffAsync(42, Arg.Any<CancellationToken>()).Returns(SampleDiff);
+
+        var args = new Dictionary<string, object>
+        {
+            ["prNumber"] = 42,
+            ["maxTokens"] = 50000
+        };
+        var result = await _handler.ExecuteAsync(args);
+
+        Assert.False(result.IsError);
+        _budgetResolver.Received(1).Resolve(50000, Arg.Any<string?>());
     }
 }

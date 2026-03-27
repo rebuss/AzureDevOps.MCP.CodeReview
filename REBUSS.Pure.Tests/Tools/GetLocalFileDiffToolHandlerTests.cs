@@ -2,8 +2,11 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
+using REBUSS.Pure.Core;
 using REBUSS.Pure.Core.Models;
+using REBUSS.Pure.Core.Shared;
 using REBUSS.Pure.Services.LocalReview;
+using REBUSS.Pure.Services.ResponsePacking;
 using REBUSS.Pure.Tools;
 
 namespace REBUSS.Pure.Tests.Tools;
@@ -11,6 +14,9 @@ namespace REBUSS.Pure.Tests.Tools;
 public class GetLocalFileDiffToolHandlerTests
 {
     private readonly ILocalReviewProvider _reviewProvider = Substitute.For<ILocalReviewProvider>();
+    private readonly IContextBudgetResolver _budgetResolver = Substitute.For<IContextBudgetResolver>();
+    private readonly ITokenEstimator _tokenEstimator = Substitute.For<ITokenEstimator>();
+    private readonly IFileClassifier _fileClassifier = Substitute.For<IFileClassifier>();
     private readonly GetLocalFileDiffToolHandler _handler;
 
     private static readonly PullRequestDiff SampleDiff = new()
@@ -43,8 +49,19 @@ public class GetLocalFileDiffToolHandlerTests
 
     public GetLocalFileDiffToolHandlerTests()
     {
+        _budgetResolver.Resolve(Arg.Any<int?>(), Arg.Any<string?>())
+            .Returns(new BudgetResolutionResult(200000, 140000, BudgetSource.Default, Array.Empty<string>()));
+        _tokenEstimator.Estimate(Arg.Any<string>(), Arg.Any<int>())
+            .Returns(new TokenEstimationResult(100, 0.07, true));
+        _fileClassifier.Classify(Arg.Any<string>())
+            .Returns(new FileClassification { Category = FileCategory.Source, Extension = ".cs", IsBinary = false, IsGenerated = false, IsTestFile = false, ReviewPriority = "high" });
+
         _handler = new GetLocalFileDiffToolHandler(
             _reviewProvider,
+            new ResponsePacker(NullLogger<ResponsePacker>.Instance),
+            _budgetResolver,
+            _tokenEstimator,
+            _fileClassifier,
             NullLogger<GetLocalFileDiffToolHandler>.Instance);
     }
 
@@ -224,6 +241,32 @@ public class GetLocalFileDiffToolHandlerTests
         var def = _handler.GetToolDefinition();
         Assert.DoesNotContain("scope", def.InputSchema.Required!);
         Assert.True(def.InputSchema.Properties.ContainsKey("scope"));
+    }
+
+    [Fact]
+    public void GetToolDefinition_HasPackingParameters()
+    {
+        var def = _handler.GetToolDefinition();
+        Assert.True(def.InputSchema.Properties.ContainsKey("modelName"));
+        Assert.True(def.InputSchema.Properties.ContainsKey("maxTokens"));
+    }
+
+    // --- Packing integration ---
+
+    [Fact]
+    public async Task ExecuteAsync_IncludesManifest_InResponse()
+    {
+        _reviewProvider.GetFileDiffAsync(
+                "src/Service.cs", Arg.Any<LocalReviewScope>(), Arg.Any<CancellationToken>())
+            .Returns(SampleDiff);
+
+        var result = await _handler.ExecuteAsync(CreateArgs("src/Service.cs"));
+
+        Assert.False(result.IsError);
+        var doc = JsonDocument.Parse(result.Content[0].Text);
+        Assert.True(doc.RootElement.TryGetProperty("manifest", out var manifest));
+        Assert.True(manifest.TryGetProperty("summary", out var summary));
+        Assert.Equal(1, summary.GetProperty("totalItems").GetInt32());
     }
 
     // --- Helpers ---

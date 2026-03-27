@@ -93,6 +93,8 @@ Returned when: unknown method, malformed request. Uses standard JSON-RPC error c
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `prNumber` | integer | ✅ | PR number/ID |
+| `modelName` | string | ❌ | Optional model name to resolve context window size |
+| `maxTokens` | integer | ❌ | Optional explicit context window size in tokens |
 
 #### Output — `PullRequestFilesResult`
 
@@ -114,11 +116,20 @@ Returned when: unknown method, malformed request. Uses standard JSON-RPC error c
     "sourceFiles": 1, "testFiles": 1, "configFiles": 0,
     "docsFiles": 0, "binaryFiles": 0, "generatedFiles": 0,
     "highPriorityFiles": 1
+  },
+  "manifest": {
+    "items": [
+      { "path": "src/Cache/CacheService.cs", "estimatedTokens": 100, "status": "Included", "priorityTier": "Source" }
+    ],
+    "summary": {
+      "totalItems": 2, "includedCount": 2, "partialCount": 0, "deferredCount": 0,
+      "totalBudgetTokens": 140000, "budgetUsed": 200, "budgetRemaining": 139800, "utilizationPercent": 0.1
+    }
   }
 }
 ```
 
-Uses **`PullRequestFileItem`** (shared with `get_local_files`) and **`PullRequestFilesSummaryResult`** (shared).
+Uses **`PullRequestFileItem`** (shared with `get_local_files`), **`PullRequestFilesSummaryResult`** (shared), and **`ContentManifestResult`** (packing manifest).
 
 ---
 
@@ -129,6 +140,8 @@ Uses **`PullRequestFileItem`** (shared with `get_local_files`) and **`PullReques
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `prNumber` | integer | ✅ | PR number/ID |
+| `modelName` | string | ❌ | Optional model name to resolve context window size |
+| `maxTokens` | integer | ❌ | Optional explicit context window size in tokens |
 
 #### Output — `StructuredDiffResult`
 
@@ -165,8 +178,9 @@ Uses **`PullRequestFileItem`** (shared with `get_local_files`) and **`PullReques
 | Field | Type | Nullable | Notes |
 |---|---|---|---|
 | `prNumber` | int? | **yes** | Set for PR diffs; `null` (omitted) for local diffs |
-| `skipReason` | string? | **yes** | Set when hunks are empty: `"Binary file"`, `"Generated file"`, `"Full rewrite"` |
+| `skipReason` | string? | **yes** | Set when hunks are empty: `"Binary file"`, `"Generated file"`, `"Full rewrite"`, or partial truncation reason |
 | `hunks` | array | no | Empty array `[]` when `skipReason` is set |
+| `manifest` | object? | **yes** | Packing manifest with items + summary; `null` (omitted) when WhenWritingNull |
 
 **Shared by:** `get_pr_diff`, `get_file_diff`, `get_local_file_diff`.
 
@@ -224,6 +238,8 @@ Same `StructuredDiffResult` shape. `files` array contains **exactly 1 element** 
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `scope` | string | no | `"working-tree"` | `"working-tree"`, `"staged"`, or any branch/ref name |
+| `modelName` | string | no | — | Optional model name to resolve context window size |
+| `maxTokens` | integer | no | — | Optional explicit context window size in tokens |
 
 #### Output — `LocalReviewFilesResult`
 
@@ -234,7 +250,8 @@ Same `StructuredDiffResult` shape. `files` array contains **exactly 1 element** 
   "currentBranch": "feature/cache",
   "totalFiles": 3,
   "files": [ /* PullRequestFileItem[] — same shape as get_pr_files */ ],
-  "summary": { /* PullRequestFilesSummaryResult — same shape as get_pr_files */ }
+  "summary": { /* PullRequestFilesSummaryResult — same shape as get_pr_files */ },
+  "manifest": { /* ContentManifestResult — same shape as get_pr_files manifest */ }
 }
 ```
 
@@ -242,6 +259,7 @@ Same `StructuredDiffResult` shape. `files` array contains **exactly 1 element** 
 |---|---|---|---|
 | `currentBranch` | string? | **yes** | Omitted when detached HEAD |
 | `scope` | string | no | Echoes the resolved scope value |
+| `manifest` | object? | **yes** | Packing manifest with items + summary |
 
 Reuses `PullRequestFileItem` and `PullRequestFilesSummaryResult` from `get_pr_files`.
 
@@ -257,10 +275,12 @@ Reuses `PullRequestFileItem` and `PullRequestFilesSummaryResult` from `get_pr_fi
 |---|---|---|---|---|
 | `path` | string | ✅ | — | Repository-relative file path |
 | `scope` | string | no | `"working-tree"` | Same scope values as `get_local_files` |
+| `modelName` | string | no | — | Optional model name to resolve context window size |
+| `maxTokens` | integer | no | — | Optional explicit context window size in tokens |
 
 #### Output
 
-Same `StructuredDiffResult` shape. `prNumber` is `null` (omitted from JSON). `files` array contains **exactly 1 element**.
+Same `StructuredDiffResult` shape with `manifest`. `prNumber` is `null` (omitted from JSON). `files` array contains **exactly 1 element**.
 
 ---
 
@@ -268,17 +288,21 @@ Same `StructuredDiffResult` shape. `prNumber` is `null` (omitted from JSON). `fi
 
 | DTO | Used by | Fields |
 |---|---|---|
-| **StructuredDiffResult** | `get_pr_diff`, `get_file_diff`, `get_local_file_diff` | `prNumber` (int?), `files` (StructuredFileChange[]) |
+| **StructuredDiffResult** | `get_pr_diff`, `get_file_diff`, `get_local_file_diff` | `prNumber` (int?), `files` (StructuredFileChange[]), `manifest`? (ContentManifestResult) |
 | **StructuredFileChange** | nested in above | `path`, `changeType`, `skipReason`?, `additions`, `deletions`, `hunks` |
 | **StructuredHunk** | nested in above | `oldStart`, `oldCount`, `newStart`, `newCount`, `lines` |
 | **StructuredLine** | nested in above | `op`, `text` |
 | **PullRequestFileItem** | `get_pr_files`, `get_local_files` | `path`, `status`, `additions`, `deletions`, `changes`, `extension`, `isBinary`, `isGenerated`, `isTestFile`, `reviewPriority` |
 | **PullRequestFilesSummaryResult** | `get_pr_files`, `get_local_files` | `sourceFiles`, `testFiles`, `configFiles`, `docsFiles`, `binaryFiles`, `generatedFiles`, `highPriorityFiles` |
+| **ContentManifestResult** | `get_pr_diff`, `get_pr_files`, `get_local_files`, `get_local_file_diff` | `items` (ManifestEntryResult[]), `summary` (ManifestSummaryResult) |
+| **ManifestEntryResult** | nested in ContentManifestResult | `path`, `estimatedTokens`, `status`, `priorityTier` |
+| **ManifestSummaryResult** | nested in ContentManifestResult | `totalItems`, `includedCount`, `partialCount`, `deferredCount`, `totalBudgetTokens`, `budgetUsed`, `budgetRemaining`, `utilizationPercent` |
 | **AuthorInfo** | `get_pr_metadata` | `login`, `displayName` |
 | **RefInfo** | `get_pr_metadata` | `ref`, `sha` |
 | **PrStats** | `get_pr_metadata` | `commits`, `changedFiles`, `additions`, `deletions` |
 | **DescriptionInfo** | `get_pr_metadata` | `text`, `isTruncated`, `originalLength`, `returnedLength` |
 | **SourceInfo** | `get_pr_metadata` | `repository`, `url` |
+| **ContextBudgetMetadata** | context window awareness (Feature 003 integration) | `totalBudgetTokens`, `safeBudgetTokens`, `source`, `estimatedTokensUsed`?, `percentageUsed`?, `warnings`? |
 
 ## 5. Enum & Constant Values
 

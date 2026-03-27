@@ -35,6 +35,16 @@ Full codebase context is included below (file-role map, dependency graph, DI reg
 | `REBUSS.Pure.Core\Models\FileClassification.cs` | File classification result | `FileClassification`, `FileCategory` (enum) | FileClassifier, AzureDevOpsFilesProvider, AzureDevOpsDiffProvider, LocalReviewProvider |
 | `REBUSS.Pure.Core\Models\PullRequestFiles.cs` | File list result models | `PullRequestFiles`, `PullRequestFileInfo`, `PullRequestFilesSummary` | AzureDevOpsFilesProvider, GetPullRequestFilesToolHandler, LocalReviewProvider, GetLocalChangesFilesToolHandler |
 | `REBUSS.Pure.Core\Models\FileContent.cs` | File content result | `FileContent` | AzureDevOpsFileContentProvider, GitHubFileContentProvider, GetFileContentAtRefToolHandler |
+| `REBUSS.Pure.Core\Models\BudgetSource.cs` | Budget resolution source enum | `BudgetSource` (enum: `Explicit`, `Registry`, `Default`) | ContextBudgetResolver |
+| `REBUSS.Pure.Core\Models\BudgetResolutionResult.cs` | Budget resolution result | `BudgetResolutionResult` (sealed record) | ContextBudgetResolver, ContextBudgetMetadata composition |
+| `REBUSS.Pure.Core\Models\TokenEstimationResult.cs` | Token estimation result | `TokenEstimationResult` (sealed record) | TokenEstimator, ContextBudgetMetadata composition |
+| `REBUSS.Pure.Core\Models\PackingItemStatus.cs` | Packing item inclusion status enum | `PackingItemStatus` (enum: `Included`, `Partial`, `Deferred`) | ResponsePacker, PackingDecisionItem |
+| `REBUSS.Pure.Core\Models\PackingCandidate.cs` | Input item for packing service | `PackingCandidate` (sealed record) | ResponsePacker, tool handlers |
+| `REBUSS.Pure.Core\Models\PackingDecisionItem.cs` | Per-item packing decision | `PackingDecisionItem` (sealed record) | ResponsePacker, tool handlers |
+| `REBUSS.Pure.Core\Models\ManifestEntry.cs` | Manifest line item | `ManifestEntry` (sealed record) | ContentManifest |
+| `REBUSS.Pure.Core\Models\ManifestSummary.cs` | Manifest aggregated stats | `ManifestSummary` (sealed record) | ContentManifest |
+| `REBUSS.Pure.Core\Models\ContentManifest.cs` | Domain manifest | `ContentManifest` (sealed record) | PackingDecision |
+| `REBUSS.Pure.Core\Models\PackingDecision.cs` | Full packing result | `PackingDecision` (sealed record) | IResponsePacker return type |
 
 ### Core interfaces (REBUSS.Pure.Core)
 
@@ -42,8 +52,11 @@ Full codebase context is included below (file-role map, dependency graph, DI reg
 |---|---|---|
 | `REBUSS.Pure.Core\IScmClient.cs` | Unified SCM client contract | `IScmClient` (extends `IPullRequestDataProvider` + `IFileContentDataProvider`), `IPullRequestDataProvider`, `IFileContentDataProvider` |
 | `REBUSS.Pure.Core\IWorkspaceRootProvider.cs` | Workspace/repository root resolution contract | `IWorkspaceRootProvider` � `SetCliRepositoryPath`, `SetRoots`, `GetRootUris`, `ResolveRepositoryRoot` |
+| `REBUSS.Pure.Core\IContextBudgetResolver.cs` | Context window budget resolution contract | `IContextBudgetResolver` — `Resolve(int?, string?)` → `BudgetResolutionResult` |
+| `REBUSS.Pure.Core\ITokenEstimator.cs` | Token estimation contract (schema-independent) | `ITokenEstimator` — `Estimate(string, int)` → `TokenEstimationResult` |
+| `REBUSS.Pure.Core\IResponsePacker.cs` | Response packing contract | `IResponsePacker` — `Pack(IReadOnlyList<PackingCandidate>, int)` → `PackingDecision` |
 
-### Core shared logic (REBUSS.Pure.Core\Shared)
+### Core shared logic(REBUSS.Pure.Core\Shared)
 
 | File | Role | Depends on |
 |---|---|---|
@@ -186,7 +199,22 @@ Full codebase context is included below (file-role map, dependency graph, DI reg
 | `REBUSS.Pure\Services\LocalReview\LocalReviewProvider.cs` | Orchestrates git client + diff builder + file classifier | `IWorkspaceRootProvider` (from Core), `ILocalGitClient`, `IStructuredDiffBuilder`, `IFileClassifier`, domain models |
 | `REBUSS.Pure\Services\LocalReview\LocalReviewExceptions.cs` | `LocalRepositoryNotFoundException`, `LocalFileNotFoundException`, `GitCommandException` | � |
 
-### MCP tool handlers (REBUSS.Pure\Tools)
+### Context Window Awareness (REBUSS.Pure\Services\ContextWindow)
+
+| File | Role | Depends on |
+|---|---|---|
+| `REBUSS.Pure\Services\ContextWindow\ContextWindowOptions.cs` | `IOptions<T>` configuration: safety margin, chars-per-token, default budget, min/max guardrails, model registry | — |
+| `REBUSS.Pure\Services\ContextWindow\ContextBudgetResolver.cs` | Three-tier budget resolution: explicit → registry → default, with guardrails and warnings | `IContextBudgetResolver`, `IOptions<ContextWindowOptions>`, `ILogger<ContextBudgetResolver>` |
+| `REBUSS.Pure\Services\ContextWindow\TokenEstimator.cs` | Character-count token estimation heuristic, schema-independent | `ITokenEstimator`, `IOptions<ContextWindowOptions>`, `ILogger<TokenEstimator>` |
+
+### Response Packing (REBUSS.Pure\Services)
+
+| File | Role | Depends on |
+|---|---|---|
+| `REBUSS.Pure\Services\PackingPriorityComparer.cs` | Compares `PackingCandidate` items: FileCategory asc, TotalChanges desc, Path asc | `PackingCandidate` |
+| `REBUSS.Pure\Services\ResponsePacker.cs` | Greedy priority-based packing: sorts candidates, includes until budget exhausted, first oversized gets Partial | `IResponsePacker`, `PackingPriorityComparer`, `ILogger<ResponsePacker>` |
+
+### MCP tool handlers(REBUSS.Pure\Tools)
 
 | File | Role | Depends on |
 |---|---|---|
@@ -207,8 +235,12 @@ Full codebase context is included below (file-role map, dependency graph, DI reg
 | `REBUSS.Pure\Tools\Models\PullRequestFilesResult.cs` | `PullRequestFilesResult`, `PullRequestFileItem`, `PullRequestFilesSummaryResult` (also reused by `LocalReviewFilesResult`) |
 | `REBUSS.Pure\Tools\Models\FileContentAtRefResult.cs` | `FileContentAtRefResult` |
 | `REBUSS.Pure\Tools\Models\LocalReviewFilesResult.cs` | `LocalReviewFilesResult` � JSON output for `get_local_files`; includes `repositoryRoot`, `scope`, `currentBranch` context fields |
+| `REBUSS.Pure\Tools\Models\ContextBudgetMetadata.cs` | `ContextBudgetMetadata` — context budget metadata DTO (totalBudgetTokens, safeBudgetTokens, source, estimatedTokensUsed?, percentageUsed?, warnings?); created by Feature 002, integrated in Feature 003 |
+| `REBUSS.Pure\Tools\Models\ManifestEntryResult.cs` | `ManifestEntryResult` — JSON output DTO for a single manifest item (path, estimatedTokens, status, priorityTier) |
+| `REBUSS.Pure\Tools\Models\ManifestSummaryResult.cs` | `ManifestSummaryResult` — JSON output DTO for manifest aggregated stats |
+| `REBUSS.Pure\Tools\Models\ContentManifestResult.cs` | `ContentManifestResult` — JSON output DTO wrapping manifest items + summary |
 
-### MCP infrastructure (REBUSS.Pure\Mcp)
+### MCP infrastructure(REBUSS.Pure\Mcp)
 
 | File | Role |
 |---|---|
@@ -335,6 +367,11 @@ Full codebase context is included below (file-role map, dependency graph, DI reg
 | `REBUSS.Pure.Tests\Services\LocalReview\LocalReviewScopeTests.cs` | `LocalReviewScope.Parse` — all scope kinds, ToString |
 | `REBUSS.Pure.Tests\Services\LocalReview\LocalGitClientParseTests.cs` | `LocalGitClient` porcelain/name-status parsing — via reflection on internal static methods |
 | `REBUSS.Pure.Tests\Services\LocalReview\LocalReviewProviderTests.cs` | `LocalReviewProvider` — files listing, status mapping, classification, file diff, skip reasons, exception cases |
+| `REBUSS.Pure.Tests\Services\ContextWindow\TokenEstimatorTests.cs` | `TokenEstimator` — token estimation accuracy, null/empty input, boundary conditions, custom ratio, invalid ratio fallback, rounding |
+| `REBUSS.Pure.Tests\Services\ContextWindow\ContextBudgetResolverTests.cs` | `ContextBudgetResolver` — explicit budget, registry lookup, default fallback, guardrails, safety margin, case-insensitive matching, edge cases |
+| `REBUSS.Pure.Tests\Services\PackingPriorityComparerTests.cs` | `PackingPriorityComparer` — FileCategory ordering, TotalChanges secondary sort, Path tiebreaker, null handling |
+| `REBUSS.Pure.Tests\Services\ResponsePackerTests.cs` | `ResponsePacker` — empty candidates, all-fit, budget exceeded, partial assignment, priority ordering, manifest correctness, utilization |
+| `REBUSS.Pure.Tests\Services\ResponsePackerAdvancedTests.cs` | `ResponsePacker` advanced — manifest completeness, edge cases, JSON structure, budget compliance, backward compatibility |
 | `REBUSS.Pure.Tests\Logging\FileLoggerProviderTests.cs` | `FileLoggerProvider` — daily rotation, file naming, write content, timestamp, retention/deletion, roll-over, non-log file safety |
 | `REBUSS.Pure.Tests\Integration\EndToEndTests.cs` | Full JSON-RPC pipeline: request → McpServer → handler → response |
 | `REBUSS.Pure.Tests\Mcp\McpServerTests.cs` | `McpServer` — initialize, tools/list, tools/call, unknown method, invalid JSON, empty lines, notifications |
@@ -633,6 +670,14 @@ services.AddSingleton<IWorkspaceRootProvider, McpWorkspaceRootProvider>();
 services.AddSingleton<IDiffAlgorithm, LcsDiffAlgorithm>();
 services.AddSingleton<IStructuredDiffBuilder, StructuredDiffBuilder>();
 services.AddSingleton<IFileClassifier, FileClassifier>();
+
+// Context Window Awareness
+services.Configure<ContextWindowOptions>(configuration.GetSection(ContextWindowOptions.SectionName));
+services.AddSingleton<IContextBudgetResolver, ContextBudgetResolver>();
+services.AddSingleton<ITokenEstimator, TokenEstimator>();
+
+// Response Packing
+services.AddSingleton<IResponsePacker, ResponsePacking.ResponsePacker>();
 
 // Provider selection: explicit config > GitHub.Owner > AzureDevOps.OrganizationName > git remote URL > default AzureDevOps
 var provider = DetectProvider(configuration);

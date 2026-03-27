@@ -25,5 +25,8 @@ namespace REBUSS.Pure.Tools.Models
 
         [JsonPropertyName("summary")]
         public PullRequestFilesSummaryResult Summary { get; set; } = new();
+
+        [JsonPropertyName("manifest")]
+        public ContentManifestResult? Manifest { get; set; }
     }
 }

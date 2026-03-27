@@ -4,7 +4,9 @@ using NSubstitute;
 using REBUSS.Pure.Core;
 using REBUSS.Pure.Core.Exceptions;
 using REBUSS.Pure.Core.Models;
+using REBUSS.Pure.Core.Shared;
 using REBUSS.Pure.Mcp;
+using REBUSS.Pure.Services.ResponsePacking;
 using REBUSS.Pure.Tools;
 using System.Text;
 using System.Text.Json;
@@ -17,12 +19,29 @@ namespace REBUSS.Pure.Tests.Integration;
 public class EndToEndTests
 {
     private readonly IPullRequestDataProvider _diffProvider = Substitute.For<IPullRequestDataProvider>();
+    private readonly IContextBudgetResolver _budgetResolver = Substitute.For<IContextBudgetResolver>();
+    private readonly ITokenEstimator _tokenEstimator = Substitute.For<ITokenEstimator>();
+    private readonly IFileClassifier _fileClassifier = Substitute.For<IFileClassifier>();
+
+    public EndToEndTests()
+    {
+        _budgetResolver.Resolve(Arg.Any<int?>(), Arg.Any<string?>())
+            .Returns(new BudgetResolutionResult(200000, 140000, BudgetSource.Default, Array.Empty<string>()));
+        _tokenEstimator.Estimate(Arg.Any<string>(), Arg.Any<int>())
+            .Returns(new TokenEstimationResult(100, 0.07, true));
+        _fileClassifier.Classify(Arg.Any<string>())
+            .Returns(new FileClassification { Category = FileCategory.Source, Extension = ".cs", IsBinary = false, IsGenerated = false, IsTestFile = false, ReviewPriority = "high" });
+    }
 
     private McpServer BuildServer(Stream input, Stream output)
     {
         var services = new ServiceCollection();
         services.AddLogging(b => b.SetMinimumLevel(LogLevel.None));
         services.AddSingleton(_diffProvider);
+        services.AddSingleton<IResponsePacker, ResponsePacker>();
+        services.AddSingleton(_budgetResolver);
+        services.AddSingleton(_tokenEstimator);
+        services.AddSingleton(_fileClassifier);
         services.AddSingleton<IMcpToolHandler, GetPullRequestDiffToolHandler>();
         services.AddSingleton(sp =>
             new McpServer(
