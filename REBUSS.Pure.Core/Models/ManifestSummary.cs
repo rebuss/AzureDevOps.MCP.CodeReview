@@ -11,6 +11,9 @@ namespace REBUSS.Pure.Core.Models.ResponsePacking;
 /// <param name="BudgetUsed">Sum of estimated tokens for included + partial items.</param>
 /// <param name="BudgetRemaining">TotalBudgetTokens minus BudgetUsed.</param>
 /// <param name="UtilizationPercent">BudgetUsed / TotalBudgetTokens × 100.</param>
+/// <param name="IncludedOnThisPage">Items included on the current page (null in non-paginated mode). Feature 004.</param>
+/// <param name="RemainingAfterThisPage">Items on subsequent pages (null in non-paginated mode). Feature 004.</param>
+/// <param name="TotalPages">Total number of pages (null in non-paginated mode). Feature 004.</param>
 public sealed record ManifestSummary(
     int TotalItems,
     int IncludedCount,
@@ -19,4 +22,7 @@ public sealed record ManifestSummary(
     int TotalBudgetTokens,
     int BudgetUsed,
     int BudgetRemaining,
-    double UtilizationPercent);
+    double UtilizationPercent,
+    int? IncludedOnThisPage = null,
+    int? RemainingAfterThisPage = null,
+    int? TotalPages = null);

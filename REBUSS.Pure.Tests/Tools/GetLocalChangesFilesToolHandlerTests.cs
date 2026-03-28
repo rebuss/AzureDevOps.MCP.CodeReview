@@ -17,6 +17,8 @@ public class GetLocalChangesFilesToolHandlerTests
     private readonly IContextBudgetResolver _budgetResolver = Substitute.For<IContextBudgetResolver>();
     private readonly ITokenEstimator _tokenEstimator = Substitute.For<ITokenEstimator>();
     private readonly IFileClassifier _fileClassifier = Substitute.For<IFileClassifier>();
+    private readonly IPageAllocator _pageAllocator = Substitute.For<IPageAllocator>();
+    private readonly IPageReferenceCodec _pageReferenceCodec = Substitute.For<IPageReferenceCodec>();
     private readonly GetLocalChangesFilesToolHandler _handler;
 
     public GetLocalChangesFilesToolHandlerTests()
@@ -34,6 +36,8 @@ public class GetLocalChangesFilesToolHandlerTests
             _budgetResolver,
             _tokenEstimator,
             _fileClassifier,
+            _pageAllocator,
+            _pageReferenceCodec,
             NullLogger<GetLocalChangesFilesToolHandler>.Instance);
     }
 

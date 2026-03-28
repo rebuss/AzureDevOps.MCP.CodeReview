@@ -17,6 +17,8 @@ public class GetPullRequestFilesToolHandlerTests
     private readonly IContextBudgetResolver _budgetResolver = Substitute.For<IContextBudgetResolver>();
     private readonly ITokenEstimator _tokenEstimator = Substitute.For<ITokenEstimator>();
     private readonly IFileClassifier _fileClassifier = Substitute.For<IFileClassifier>();
+    private readonly IPageAllocator _pageAllocator = Substitute.For<IPageAllocator>();
+    private readonly IPageReferenceCodec _pageReferenceCodec = Substitute.For<IPageReferenceCodec>();
     private readonly GetPullRequestFilesToolHandler _handler;
 
     private static readonly PullRequestFiles SampleFiles = new()
@@ -61,6 +63,8 @@ public class GetPullRequestFilesToolHandlerTests
             _budgetResolver,
             _tokenEstimator,
             _fileClassifier,
+            _pageAllocator,
+            _pageReferenceCodec,
             NullLogger<GetPullRequestFilesToolHandler>.Instance);
     }
 
@@ -225,9 +229,11 @@ public class GetPullRequestFilesToolHandlerTests
         Assert.Equal("get_pr_files", tool.Name);
         Assert.Contains("prNumber", tool.InputSchema.Properties.Keys);
         Assert.Equal("integer", tool.InputSchema.Properties["prNumber"].Type);
-        Assert.Contains("prNumber", tool.InputSchema.Required!);
+        Assert.Empty(tool.InputSchema.Required!); // prNumber optional per Q17/Q22 when pageReference used
         Assert.Contains("modelName", tool.InputSchema.Properties.Keys);
         Assert.Contains("maxTokens", tool.InputSchema.Properties.Keys);
+        Assert.Contains("pageReference", tool.InputSchema.Properties.Keys);
+        Assert.Contains("pageNumber", tool.InputSchema.Properties.Keys);
     }
 
     // --- Packing integration ---

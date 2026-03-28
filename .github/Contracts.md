@@ -95,6 +95,10 @@ Returned when: unknown method, malformed request. Uses standard JSON-RPC error c
 | `prNumber` | integer | ✅ | PR number/ID |
 | `modelName` | string | ❌ | Optional model name to resolve context window size |
 | `maxTokens` | integer | ❌ | Optional explicit context window size in tokens |
+| `pageReference` | string | ❌ | Opaque page reference from a previous response (Feature 004). When provided, `prNumber` becomes optional. Mutually exclusive with `pageNumber`. |
+| `pageNumber` | integer | ❌ | Page number for direct access (Feature 004). Mutually exclusive with `pageReference`. |
+
+> **Feature 004 note:** `prNumber` is **optional** when `pageReference` is provided (the page reference encodes the original request parameters). `pageReference` and `pageNumber` are mutually exclusive.
 
 #### Output — `PullRequestFilesResult`
 
@@ -131,6 +135,35 @@ Returned when: unknown method, malformed request. Uses standard JSON-RPC error c
 
 Uses **`PullRequestFileItem`** (shared with `get_local_files`), **`PullRequestFilesSummaryResult`** (shared), and **`ContentManifestResult`** (packing manifest).
 
+When paginated (Feature 004), the response includes additional top-level fields:
+
+```json
+{
+  "prNumber": 42,
+  "totalFiles": 2,
+  "files": [ /* ... */ ],
+  "summary": { /* ... */ },
+  "manifest": { /* ... */ },
+  "pagination": {
+    "currentPage": 1,
+    "totalPages": 3,
+    "hasMore": true,
+    "currentPageReference": "eyJ0IjoiZ2V0X3ByX2ZpbGVzIi...",
+    "nextPageReference": "eyJ0IjoiZ2V0X3ByX2ZpbGVzIi..."
+  },
+  "stalenessWarning": {
+    "message": "PR data has changed since pagination started...",
+    "originalFingerprint": "abc123",
+    "currentFingerprint": "def456"
+  }
+}
+```
+
+| Field | Type | Nullable | Notes |
+|---|---|---|---|
+| `pagination` | object? | **yes** | Feature 004: omitted when not paginated |
+| `stalenessWarning` | object? | **yes** | Feature 004: omitted when no staleness detected |
+
 ---
 
 ### 3.3 `get_pr_diff`
@@ -142,6 +175,10 @@ Uses **`PullRequestFileItem`** (shared with `get_local_files`), **`PullRequestFi
 | `prNumber` | integer | ✅ | PR number/ID |
 | `modelName` | string | ❌ | Optional model name to resolve context window size |
 | `maxTokens` | integer | ❌ | Optional explicit context window size in tokens |
+| `pageReference` | string | ❌ | Opaque page reference from a previous response (Feature 004). When provided, `prNumber` becomes optional. Mutually exclusive with `pageNumber`. |
+| `pageNumber` | integer | ❌ | Page number for direct access (Feature 004). Mutually exclusive with `pageReference`. |
+
+> **Feature 004 note:** `prNumber` is **optional** when `pageReference` is provided (the page reference encodes the original request parameters). `pageReference` and `pageNumber` are mutually exclusive.
 
 #### Output — `StructuredDiffResult`
 
@@ -183,6 +220,33 @@ Uses **`PullRequestFileItem`** (shared with `get_local_files`), **`PullRequestFi
 | `manifest` | object? | **yes** | Packing manifest with items + summary; `null` (omitted) when WhenWritingNull |
 
 **Shared by:** `get_pr_diff`, `get_file_diff`, `get_local_file_diff`.
+
+When paginated (Feature 004), the response includes additional top-level fields:
+
+```json
+{
+  "prNumber": 42,
+  "files": [ /* ... */ ],
+  "manifest": { /* ... */ },
+  "pagination": {
+    "currentPage": 1,
+    "totalPages": 3,
+    "hasMore": true,
+    "currentPageReference": "eyJ0IjoiZ2V0X3ByX2RpZmYiL...",
+    "nextPageReference": "eyJ0IjoiZ2V0X3ByX2RpZmYiL..."
+  },
+  "stalenessWarning": {
+    "message": "PR data has changed since pagination started...",
+    "originalFingerprint": "abc123",
+    "currentFingerprint": "def456"
+  }
+}
+```
+
+| Field | Type | Nullable | Notes |
+|---|---|---|---|
+| `pagination` | object? | **yes** | Feature 004: PaginationMetadataResult; omitted when not paginated |
+| `stalenessWarning` | object? | **yes** | Feature 004: StalenessWarningResult; omitted when no staleness detected |
 
 ---
 
@@ -240,6 +304,8 @@ Same `StructuredDiffResult` shape. `files` array contains **exactly 1 element** 
 | `scope` | string | no | `"working-tree"` | `"working-tree"`, `"staged"`, or any branch/ref name |
 | `modelName` | string | no | — | Optional model name to resolve context window size |
 | `maxTokens` | integer | no | — | Optional explicit context window size in tokens |
+| `pageReference` | string | no | — | Opaque page reference from a previous response (Feature 004). Mutually exclusive with `pageNumber`. |
+| `pageNumber` | integer | no | — | Page number for direct access (Feature 004). Mutually exclusive with `pageReference`. |
 
 #### Output — `LocalReviewFilesResult`
 
@@ -263,7 +329,34 @@ Same `StructuredDiffResult` shape. `files` array contains **exactly 1 element** 
 
 Reuses `PullRequestFileItem` and `PullRequestFilesSummaryResult` from `get_pr_files`.
 
-**Local `status` values differ from PR tools:** `"added"`, `"modified"`, `"removed"`, `"renamed"` (git status codes).
+When paginated (Feature 004), the response includes an additional top-level field:
+
+```json
+{
+  "repositoryRoot": "C:/Projects/MyApp",
+  "scope": "working-tree",
+  "currentBranch": "feature/cache",
+  "totalFiles": 3,
+  "files": [ /* ... */ ],
+  "summary": { /* ... */ },
+  "manifest": { /* ... */ },
+  "pagination": {
+    "currentPage": 1,
+    "totalPages": 2,
+    "hasMore": true,
+    "currentPageReference": "eyJ0IjoiZ2V0X2xvY2FsX2Zp...",
+    "nextPageReference": "eyJ0IjoiZ2V0X2xvY2FsX2Zp..."
+  }
+}
+```
+
+| Field | Type | Nullable | Notes |
+|---|---|---|---|
+| `pagination` | object? | **yes** | Feature 004: PaginationMetadataResult; omitted when not paginated |
+
+> **Note:** `get_local_files` does **not** include `stalenessWarning` (local tools use null fingerprint).
+
+**Local`status` values differ from PR tools:** `"added"`, `"modified"`, `"removed"`, `"renamed"` (git status codes).
 
 ---
 
@@ -288,7 +381,7 @@ Same `StructuredDiffResult` shape with `manifest`. `prNumber` is `null` (omitted
 
 | DTO | Used by | Fields |
 |---|---|---|
-| **StructuredDiffResult** | `get_pr_diff`, `get_file_diff`, `get_local_file_diff` | `prNumber` (int?), `files` (StructuredFileChange[]), `manifest`? (ContentManifestResult) |
+| **StructuredDiffResult** | `get_pr_diff`, `get_file_diff`, `get_local_file_diff` | `prNumber` (int?), `files` (StructuredFileChange[]), `manifest`? (ContentManifestResult), `pagination`? (PaginationMetadataResult — Feature 004), `stalenessWarning`? (StalenessWarningResult — Feature 004) |
 | **StructuredFileChange** | nested in above | `path`, `changeType`, `skipReason`?, `additions`, `deletions`, `hunks` |
 | **StructuredHunk** | nested in above | `oldStart`, `oldCount`, `newStart`, `newCount`, `lines` |
 | **StructuredLine** | nested in above | `op`, `text` |
@@ -296,13 +389,15 @@ Same `StructuredDiffResult` shape with `manifest`. `prNumber` is `null` (omitted
 | **PullRequestFilesSummaryResult** | `get_pr_files`, `get_local_files` | `sourceFiles`, `testFiles`, `configFiles`, `docsFiles`, `binaryFiles`, `generatedFiles`, `highPriorityFiles` |
 | **ContentManifestResult** | `get_pr_diff`, `get_pr_files`, `get_local_files`, `get_local_file_diff` | `items` (ManifestEntryResult[]), `summary` (ManifestSummaryResult) |
 | **ManifestEntryResult** | nested in ContentManifestResult | `path`, `estimatedTokens`, `status`, `priorityTier` |
-| **ManifestSummaryResult** | nested in ContentManifestResult | `totalItems`, `includedCount`, `partialCount`, `deferredCount`, `totalBudgetTokens`, `budgetUsed`, `budgetRemaining`, `utilizationPercent` |
+| **ManifestSummaryResult** | nested in ContentManifestResult | `totalItems`, `includedCount`, `partialCount`, `deferredCount`, `totalBudgetTokens`, `budgetUsed`, `budgetRemaining`, `utilizationPercent`, `includedOnThisPage`? (int? — Feature 004), `remainingAfterThisPage`? (int? — Feature 004), `totalPages`? (int? — Feature 004) |
 | **AuthorInfo** | `get_pr_metadata` | `login`, `displayName` |
 | **RefInfo** | `get_pr_metadata` | `ref`, `sha` |
 | **PrStats** | `get_pr_metadata` | `commits`, `changedFiles`, `additions`, `deletions` |
 | **DescriptionInfo** | `get_pr_metadata` | `text`, `isTruncated`, `originalLength`, `returnedLength` |
 | **SourceInfo** | `get_pr_metadata` | `repository`, `url` |
 | **ContextBudgetMetadata** | context window awareness (Feature 003 integration) | `totalBudgetTokens`, `safeBudgetTokens`, `source`, `estimatedTokensUsed`?, `percentageUsed`?, `warnings`? |
+| **PaginationMetadataResult** | `get_pr_diff`, `get_pr_files`, `get_local_files` (Feature 004) | `currentPage` (int), `totalPages` (int), `hasMore` (bool), `currentPageReference` (string), `nextPageReference`? (string) |
+| **StalenessWarningResult** | `get_pr_diff`, `get_pr_files` (Feature 004) | `message` (string), `originalFingerprint` (string), `currentFingerprint` (string) |
 
 ## 5. Enum & Constant Values
 

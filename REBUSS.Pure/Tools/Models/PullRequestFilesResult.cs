@@ -21,6 +21,14 @@ namespace REBUSS.Pure.Tools.Models
 
         [JsonPropertyName("manifest")]
         public ContentManifestResult? Manifest { get; set; }
+
+        /// <summary>Present when paginated (explicit budget provided). Feature 004.</summary>
+        [JsonPropertyName("pagination")]
+        public PaginationMetadataResult? Pagination { get; set; }
+
+        /// <summary>Present when PR data changed since pagination started. Feature 004.</summary>
+        [JsonPropertyName("stalenessWarning")]
+        public StalenessWarningResult? StalenessWarning { get; set; }
     }
 
     public class PullRequestFileItem

@@ -8,8 +8,10 @@ using REBUSS.Pure.Core.Shared;
 using REBUSS.Pure.Mcp;
 using REBUSS.Pure.Services.ResponsePacking;
 using REBUSS.Pure.Tools;
+using Services = REBUSS.Pure.Services;
 using System.Text;
 using System.Text.Json;
+using REBUSS.Pure.Services.Pagination;
 
 namespace REBUSS.Pure.Tests.Integration;
 
@@ -42,6 +44,8 @@ public class EndToEndTests
         services.AddSingleton(_budgetResolver);
         services.AddSingleton(_tokenEstimator);
         services.AddSingleton(_fileClassifier);
+        services.AddSingleton<IPageAllocator, PageAllocator>();
+        services.AddSingleton<IPageReferenceCodec, PageReferenceCodec>();
         services.AddSingleton<IMcpToolHandler, GetPullRequestDiffToolHandler>();
         services.AddSingleton(sp =>
             new McpServer(

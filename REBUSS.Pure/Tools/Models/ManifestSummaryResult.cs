@@ -30,4 +30,16 @@ public sealed class ManifestSummaryResult
 
     [JsonPropertyName("utilizationPercent")]
     public double UtilizationPercent { get; set; }
+
+    /// <summary>Items included on the current page (null in non-paginated mode → omitted). Feature 004.</summary>
+    [JsonPropertyName("includedOnThisPage")]
+    public int? IncludedOnThisPage { get; set; }
+
+    /// <summary>Items on subsequent pages (null in non-paginated mode → omitted). Feature 004.</summary>
+    [JsonPropertyName("remainingAfterThisPage")]
+    public int? RemainingAfterThisPage { get; set; }
+
+    /// <summary>Total number of pages (null in non-paginated mode → omitted). Feature 004.</summary>
+    [JsonPropertyName("totalPages")]
+    public int? TotalPages { get; set; }
 }

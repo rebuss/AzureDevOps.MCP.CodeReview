@@ -14,6 +14,7 @@ using REBUSS.Pure.Mcp.Handlers;
 using REBUSS.Pure.Services.ContextWindow;
 using REBUSS.Pure.Services.LocalReview;
 using ResponsePacking = REBUSS.Pure.Services.ResponsePacking;
+using Pagination = REBUSS.Pure.Services.Pagination;
 using REBUSS.Pure.Tools;
 
 namespace REBUSS.Pure
@@ -196,6 +197,10 @@ namespace REBUSS.Pure
 
             // Response Packing
             services.AddSingleton<IResponsePacker, ResponsePacking.ResponsePacker>();
+
+            // Deterministic Pagination (Feature 004)
+            services.AddSingleton<IPageAllocator, Pagination.PageAllocator>();
+            services.AddSingleton<IPageReferenceCodec, Pagination.PageReferenceCodec>();
 
             // Provider selection: explicit config > auto-detection from git remote
             var provider = DetectProvider(configuration);

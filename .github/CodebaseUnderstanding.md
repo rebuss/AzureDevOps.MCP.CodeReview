@@ -42,7 +42,11 @@ Full codebase context is included below (file-role map, dependency graph, DI reg
 | `REBUSS.Pure.Core\Models\PackingCandidate.cs` | Input item for packing service | `PackingCandidate` (sealed record) | ResponsePacker, tool handlers |
 | `REBUSS.Pure.Core\Models\PackingDecisionItem.cs` | Per-item packing decision | `PackingDecisionItem` (sealed record) | ResponsePacker, tool handlers |
 | `REBUSS.Pure.Core\Models\ManifestEntry.cs` | Manifest line item | `ManifestEntry` (sealed record) | ContentManifest |
-| `REBUSS.Pure.Core\Models\ManifestSummary.cs` | Manifest aggregated stats | `ManifestSummary` (sealed record) | ContentManifest |
+| `REBUSS.Pure.Core\Models\ManifestSummary.cs` | Manifest aggregated stats; +3 optional F004 params: IncludedOnThisPage (int?), RemainingAfterThisPage (int?), TotalPages (int?) | `ManifestSummary` (sealed record) | ContentManifest |
+| `REBUSS.Pure.Core\Models\PageReferenceData.cs` | Sealed record (Feature 004): data encoded in page reference tokens (ToolName, RequestParams as JsonElement, SafeBudgetTokens, PageNumber, DataFingerprint?) | `PageReferenceData` (sealed record, namespace `REBUSS.Pure.Core.Models.Pagination`) | PageReferenceCodec, PaginationOrchestrator |
+| `REBUSS.Pure.Core\Models\PageSliceItem.cs` | Sealed record (Feature 004): per-item allocation within a page (OriginalIndex, Status, EstimatedTokens, BudgetForPartial?) | `PageSliceItem` (sealed record, namespace `REBUSS.Pure.Core.Models.Pagination`) | PageSlice, PageAllocator |
+| `REBUSS.Pure.Core\Models\PageSlice.cs` | Sealed record (Feature 004): one page's boundaries and items (PageNumber, StartIndex, EndIndex, Items, BudgetUsed, BudgetRemaining) | `PageSlice` (sealed record, namespace `REBUSS.Pure.Core.Models.Pagination`) | PageAllocation, PageAllocator |
+| `REBUSS.Pure.Core\Models\PageAllocation.cs` | Sealed record (Feature 004): complete allocation across pages (Pages, TotalPages, TotalItems) | `PageAllocation` (sealed record, namespace `REBUSS.Pure.Core.Models.Pagination`) | IPageAllocator return type, tool handlers |
 | `REBUSS.Pure.Core\Models\ContentManifest.cs` | Domain manifest | `ContentManifest` (sealed record) | PackingDecision |
 | `REBUSS.Pure.Core\Models\PackingDecision.cs` | Full packing result | `PackingDecision` (sealed record) | IResponsePacker return type |
 
@@ -55,6 +59,8 @@ Full codebase context is included below (file-role map, dependency graph, DI reg
 | `REBUSS.Pure.Core\IContextBudgetResolver.cs` | Context window budget resolution contract | `IContextBudgetResolver` — `Resolve(int?, string?)` → `BudgetResolutionResult` |
 | `REBUSS.Pure.Core\ITokenEstimator.cs` | Token estimation contract (schema-independent) | `ITokenEstimator` — `Estimate(string, int)` → `TokenEstimationResult` |
 | `REBUSS.Pure.Core\IResponsePacker.cs` | Response packing contract | `IResponsePacker` — `Pack(IReadOnlyList<PackingCandidate>, int)` → `PackingDecision` |
+| `REBUSS.Pure.Core\IPageAllocator.cs` | Deterministic page allocation contract (Feature 004) | `IPageAllocator` — `Allocate(sortedCandidates, safeBudgetTokens)` → `PageAllocation` |
+| `REBUSS.Pure.Core\IPageReferenceCodec.cs` | Base64url page reference encode/decode contract (Feature 004) | `IPageReferenceCodec` — `Encode(PageReferenceData)` → `string`, `TryDecode(string)` → `PageReferenceData?` |
 
 ### Core shared logic(REBUSS.Pure.Core\Shared)
 
@@ -214,30 +220,41 @@ Full codebase context is included below (file-role map, dependency graph, DI reg
 | `REBUSS.Pure\Services\PackingPriorityComparer.cs` | Compares `PackingCandidate` items: FileCategory asc, TotalChanges desc, Path asc | `PackingCandidate` |
 | `REBUSS.Pure\Services\ResponsePacker.cs` | Greedy priority-based packing: sorts candidates, includes until budget exhausted, first oversized gets Partial | `IResponsePacker`, `PackingPriorityComparer`, `ILogger<ResponsePacker>` |
 
+### Pagination (REBUSS.Pure\Services\Pagination) — Feature 004
+
+| File | Role | Depends on |
+|---|---|---|
+| `REBUSS.Pure\Services\PageAllocator.cs` | Strict sequential page allocator: fills pages until budget exhausted, oversized items get Partial status | `IPageAllocator`, `PageAllocation`, `PageSlice`, `PageSliceItem`, `PackingItemStatus` |
+| `REBUSS.Pure\Services\PageReferenceCodec.cs` | Base64url JSON codec with compact keys (t/r/b/p/f) for page reference tokens | `IPageReferenceCodec`, `PageReferenceData` |
+| `REBUSS.Pure\Services\PaginationConstants.cs` | Static constants: PaginationOverhead=150, BaseManifestOverhead=100, PerItemManifestOverhead=15, MinimumBudgetForPagination=265 | — |
+| `REBUSS.Pure\Services\PaginationOrchestrator.cs` | Internal static helper: validation, page resolution, param matching, staleness detection, metadata building | `PageReferenceData`, `PageAllocation`, `PaginationConstants`, `PaginationMetadataResult`, `StalenessWarningResult` |
+
 ### MCP tool handlers(REBUSS.Pure\Tools)
 
 | File | Role | Depends on |
 |---|---|---|
-| `REBUSS.Pure\Tools\GetPullRequestDiffToolHandler.cs` | `get_pr_diff` � returns structured JSON with per-file hunks | `IPullRequestDataProvider`, `StructuredDiffResult` models |
+| `REBUSS.Pure\Tools\GetPullRequestDiffToolHandler.cs` | `get_pr_diff` — returns structured JSON with per-file hunks; F004 integration: dual F003/F004 paths, pageReference resume, staleness detection, pageNumber access; prNumber now optional when pageReference is provided | `IPullRequestDataProvider`, `IPageAllocator`, `IPageReferenceCodec`, `StructuredDiffResult` models, `PaginationMetadataResult`, `StalenessWarningResult` |
 | `REBUSS.Pure\Tools\GetFileDiffToolHandler.cs` | `get_file_diff` � returns structured JSON for a single file | `IPullRequestDataProvider`, `StructuredDiffResult` models |
 | `REBUSS.Pure\Tools\GetPullRequestMetadataToolHandler.cs` | `get_pr_metadata` � returns PR metadata JSON | `IPullRequestDataProvider`, `PullRequestMetadataResult` models |
-| `REBUSS.Pure\Tools\GetPullRequestFilesToolHandler.cs` | `get_pr_files` � returns classified file list JSON | `IPullRequestDataProvider`, `PullRequestFilesResult` models |
+| `REBUSS.Pure\Tools\GetPullRequestFilesToolHandler.cs` | `get_pr_files` — returns classified file list JSON; F004 integration: same pagination pattern as get_pr_diff; prNumber now optional when pageReference is provided | `IPullRequestDataProvider`, `IPageAllocator`, `IPageReferenceCodec`, `PullRequestFilesResult` models, `PaginationMetadataResult`, `StalenessWarningResult` |
 | `REBUSS.Pure\Tools\GetFileContentAtRefToolHandler.cs` | `get_file_content_at_ref` � returns file content JSON | `IFileContentDataProvider`, `FileContentAtRefResult` model |
-| `REBUSS.Pure\Tools\GetLocalChangesFilesToolHandler.cs` | `get_local_files` � lists locally changed files with classification | `ILocalReviewProvider`, `LocalReviewFilesResult` model |
+| `REBUSS.Pure\Tools\GetLocalChangesFilesToolHandler.cs` | `get_local_files` — lists locally changed files with classification; F004 integration: pagination support but no staleness (null fingerprint) | `ILocalReviewProvider`, `IPageAllocator`, `IPageReferenceCodec`, `LocalReviewFilesResult` model, `PaginationMetadataResult` |
 | `REBUSS.Pure\Tools\GetLocalFileDiffToolHandler.cs` | `get_local_file_diff` � returns structured diff for a single local file | `ILocalReviewProvider`, `StructuredDiffResult` models |
 
 ### Tool output models (REBUSS.Pure\Tools\Models)
 
 | File | Role |
 |---|---|
-| `REBUSS.Pure\Tools\Models\StructuredDiffResult.cs` | `StructuredDiffResult`, `StructuredFileChange`, `StructuredHunk`, `StructuredLine` � diff tool JSON output (shared by PR and local tools); `PrNumber` is `int?` (null for local diffs, omitted from JSON) |
+| `REBUSS.Pure\Tools\Models\StructuredDiffResult.cs` | `StructuredDiffResult`, `StructuredFileChange`, `StructuredHunk`, `StructuredLine` — diff tool JSON output (shared by PR and local tools); `PrNumber` is `int?` (null for local diffs, omitted from JSON); +`Pagination` (PaginationMetadataResult?) and `StalenessWarning` (StalenessWarningResult?) nullable properties (Feature 004) |
 | `REBUSS.Pure\Tools\Models\PullRequestMetadataResult.cs` | `PullRequestMetadataResult`, `AuthorInfo`, `RefInfo`, `PrStats`, `DescriptionInfo`, `SourceInfo` |
-| `REBUSS.Pure\Tools\Models\PullRequestFilesResult.cs` | `PullRequestFilesResult`, `PullRequestFileItem`, `PullRequestFilesSummaryResult` (also reused by `LocalReviewFilesResult`) |
+| `REBUSS.Pure\Tools\Models\PullRequestFilesResult.cs` | `PullRequestFilesResult`, `PullRequestFileItem`, `PullRequestFilesSummaryResult` (also reused by `LocalReviewFilesResult`); +`Pagination` (PaginationMetadataResult?) and `StalenessWarning` (StalenessWarningResult?) nullable properties (Feature 004) |
 | `REBUSS.Pure\Tools\Models\FileContentAtRefResult.cs` | `FileContentAtRefResult` |
-| `REBUSS.Pure\Tools\Models\LocalReviewFilesResult.cs` | `LocalReviewFilesResult` � JSON output for `get_local_files`; includes `repositoryRoot`, `scope`, `currentBranch` context fields |
+| `REBUSS.Pure\Tools\Models\LocalReviewFilesResult.cs` | `LocalReviewFilesResult` — JSON output for `get_local_files`; includes `repositoryRoot`, `scope`, `currentBranch` context fields; +`Pagination` (PaginationMetadataResult?) nullable property (Feature 004, no staleness for local tools) |
 | `REBUSS.Pure\Tools\Models\ContextBudgetMetadata.cs` | `ContextBudgetMetadata` — context budget metadata DTO (totalBudgetTokens, safeBudgetTokens, source, estimatedTokensUsed?, percentageUsed?, warnings?); created by Feature 002, integrated in Feature 003 |
 | `REBUSS.Pure\Tools\Models\ManifestEntryResult.cs` | `ManifestEntryResult` — JSON output DTO for a single manifest item (path, estimatedTokens, status, priorityTier) |
-| `REBUSS.Pure\Tools\Models\ManifestSummaryResult.cs` | `ManifestSummaryResult` — JSON output DTO for manifest aggregated stats |
+| `REBUSS.Pure\Tools\Models\ManifestSummaryResult.cs` | `ManifestSummaryResult` — JSON output DTO for manifest aggregated stats; +3 nullable properties: includedOnThisPage (int?), remainingAfterThisPage (int?), totalPages (int?) — omitted when null (Feature 004) |
+| `REBUSS.Pure\Tools\Models\PaginationMetadataResult.cs` | `PaginationMetadataResult` — pagination navigation DTO: currentPage, totalPages, hasMore, currentPageReference, nextPageReference? (Feature 004) |
+| `REBUSS.Pure\Tools\Models\StalenessWarningResult.cs` | `StalenessWarningResult` — staleness warning DTO: message, originalFingerprint, currentFingerprint (Feature 004) |
 | `REBUSS.Pure\Tools\Models\ContentManifestResult.cs` | `ContentManifestResult` — JSON output DTO wrapping manifest items + summary |
 
 ### MCP infrastructure(REBUSS.Pure\Mcp)
@@ -358,11 +375,11 @@ Full codebase context is included below (file-role map, dependency graph, DI reg
 | `REBUSS.Pure.GitHub.Tests\Configuration\GitHubChainedAuthenticationProviderTests.cs` | `GitHubChainedAuthenticationProvider` — PAT precedence, cached tokens, GitHub CLI token acquisition and caching, expired token fallback, null expiry used as valid, `InvalidateCachedToken`, `BuildAuthRequiredMessage` |
 | `REBUSS.Pure.GitHub.Tests\Configuration\GitHubCliTokenProviderTests.cs` | `GitHubCliTokenProvider.ParseTokenResponse` — valid plain text, whitespace trimming, empty/null/whitespace returns null, `DefaultTokenLifetime` constant (24 hours) |
 | `REBUSS.Pure.GitHub.Tests\Configuration\GitHubCliProcessHelperTests.cs` | `GitHubCliProcessHelper.GetProcessStartArgs` — Windows `cmd.exe /c gh` wrapping, Linux direct `gh` invocation, custom `ghPath`; `TryFindGhCliOnWindows` |
-| `REBUSS.Pure.Tests\Tools\GetPullRequestDiffToolHandlerTests.cs` | `GetPullRequestDiffToolHandler` — structured JSON output, validation, exceptions |
+| `REBUSS.Pure.Tests\Tools\GetPullRequestDiffToolHandlerTests.cs` | `GetPullRequestDiffToolHandler` — structured JSON output, validation, exceptions; +15 F004 pagination tests (updated constructor with IPageAllocator, IPageReferenceCodec deps) |
 | `REBUSS.Pure.Tests\Tools\GetFileDiffToolHandlerTests.cs` | `GetFileDiffToolHandler` — structured JSON output, validation, schema, exceptions |
-| `REBUSS.Pure.Tests\Tools\GetPullRequestFilesToolHandlerTests.cs` | `GetPullRequestFilesToolHandler` |
+| `REBUSS.Pure.Tests\Tools\GetPullRequestFilesToolHandlerTests.cs` | `GetPullRequestFilesToolHandler` (updated constructor with IPageAllocator, IPageReferenceCodec deps) |
 | `REBUSS.Pure.Tests\Tools\GetFileContentAtRefToolHandlerTests.cs` | `GetFileContentAtRefToolHandler` |
-| `REBUSS.Pure.Tests\Tools\GetLocalChangesFilesToolHandlerTests.cs` | `GetLocalChangesFilesToolHandler` — scope parsing, JSON output, error handling |
+| `REBUSS.Pure.Tests\Tools\GetLocalChangesFilesToolHandlerTests.cs` | `GetLocalChangesFilesToolHandler` — scope parsing, JSON output, error handling (updated constructor with IPageAllocator, IPageReferenceCodec deps) |
 | `REBUSS.Pure.Tests\Tools\GetLocalFileDiffToolHandlerTests.cs` | `GetLocalFileDiffToolHandler` — validation, scope routing, error handling, tool definition |
 | `REBUSS.Pure.Tests\Services\LocalReview\LocalReviewScopeTests.cs` | `LocalReviewScope.Parse` — all scope kinds, ToString |
 | `REBUSS.Pure.Tests\Services\LocalReview\LocalGitClientParseTests.cs` | `LocalGitClient` porcelain/name-status parsing — via reflection on internal static methods |
@@ -372,6 +389,9 @@ Full codebase context is included below (file-role map, dependency graph, DI reg
 | `REBUSS.Pure.Tests\Services\PackingPriorityComparerTests.cs` | `PackingPriorityComparer` — FileCategory ordering, TotalChanges secondary sort, Path tiebreaker, null handling |
 | `REBUSS.Pure.Tests\Services\ResponsePackerTests.cs` | `ResponsePacker` — empty candidates, all-fit, budget exceeded, partial assignment, priority ordering, manifest correctness, utilization |
 | `REBUSS.Pure.Tests\Services\ResponsePackerAdvancedTests.cs` | `ResponsePacker` advanced — manifest completeness, edge cases, JSON structure, budget compliance, backward compatibility |
+| `REBUSS.Pure.Tests\Services\PageAllocatorTests.cs` | `PageAllocator` (Feature 004) — 14 tests: single/multi-page allocation, oversized items, empty input, determinism, scale |
+| `REBUSS.Pure.Tests\Services\PageReferenceCodecTests.cs` | `PageReferenceCodec` (Feature 004) — 11 tests: round-trip encoding, null fingerprint, malformed input, safety |
+| `REBUSS.Pure.Tests\Services\PaginationOrchestratorTests.cs` | `PaginationOrchestrator` (Feature 004) — 18 tests: validation, page resolution, param matching, staleness detection, metadata building |
 | `REBUSS.Pure.Tests\Logging\FileLoggerProviderTests.cs` | `FileLoggerProvider` — daily rotation, file naming, write content, timestamp, retention/deletion, roll-over, non-log file safety |
 | `REBUSS.Pure.Tests\Integration\EndToEndTests.cs` | Full JSON-RPC pipeline: request → McpServer → handler → response |
 | `REBUSS.Pure.Tests\Mcp\McpServerTests.cs` | `McpServer` — initialize, tools/list, tools/call, unknown method, invalid JSON, empty lines, notifications |
@@ -393,7 +413,7 @@ Full codebase context is included below (file-role map, dependency graph, DI reg
 | `REBUSS.Pure.SmokeTests\Expectations\AdoTestExpectations.cs` | Expected values from Azure DevOps fixture PR (title, state, file paths, statuses, code fragments) |
 | `REBUSS.Pure.SmokeTests\Expectations\GitHubTestExpectations.cs` | Expected values from GitHub fixture PR (title, state, file paths, statuses, code fragments) |
 | `REBUSS.Pure.SmokeTests\Protocol\InitializeProtocolTests.cs` | Protocol tests (no credentials): MCP initialize handshake — protocol version, server info, capabilities |
-| `REBUSS.Pure.SmokeTests\Protocol\ToolsListProtocolTests.cs` | Protocol tests (no credentials): tools/list — tool count, names, schemas, prNumber required |
+| `REBUSS.Pure.SmokeTests\Protocol\ToolsListProtocolTests.cs` | Protocol tests (no credentials): tools/list — tool count, names, schemas; PrNumberTools reduced to get_file_diff+get_pr_metadata, +PaginationEnabledTools array, +2 schema assertions for F004 pagination parameters |
 | `REBUSS.Pure.SmokeTests\Contracts\AzureDevOps\AdoMetadataContractTests.cs` | Contract tests (ADO): `get_pr_metadata` — PR number, title, state, branches, author, stats, commits, source, description, isDraft |
 | `REBUSS.Pure.SmokeTests\Contracts\AzureDevOps\AdoFilesContractTests.cs` | Contract tests (ADO): `get_pr_files` — file count, paths, statuses, additions/deletions, extension, classification, review priority, binary/generated |
 | `REBUSS.Pure.SmokeTests\Contracts\AzureDevOps\AdoDiffContractTests.cs` | Contract tests (ADO): `get_pr_diff` — PR number, file count, hunks, structure, line ops, additions/deletions, code fragment |
@@ -678,6 +698,10 @@ services.AddSingleton<ITokenEstimator, TokenEstimator>();
 
 // Response Packing
 services.AddSingleton<IResponsePacker, ResponsePacking.ResponsePacker>();
+
+// Pagination (Feature 004)
+services.AddSingleton<IPageAllocator, Pagination.PageAllocator>();
+services.AddSingleton<IPageReferenceCodec, Pagination.PageReferenceCodec>();
 
 // Provider selection: explicit config > GitHub.Owner > AzureDevOps.OrganizationName > git remote URL > default AzureDevOps
 var provider = DetectProvider(configuration);

@@ -3,10 +3,13 @@ using Microsoft.Extensions.Logging;
 using REBUSS.Pure.Core;
 using REBUSS.Pure.Core.Exceptions;
 using REBUSS.Pure.Core.Models;
+using REBUSS.Pure.Core.Models.Pagination;
 using REBUSS.Pure.Core.Models.ResponsePacking;
 using REBUSS.Pure.Core.Shared;
 using REBUSS.Pure.Mcp;
 using REBUSS.Pure.Mcp.Models;
+using REBUSS.Pure.Services.Pagination;
+using REBUSS.Pure.Services.ResponsePacking;
 using REBUSS.Pure.Tools.Models;
 using System.Text.Json;
 
@@ -16,7 +19,7 @@ namespace REBUSS.Pure.Tools
     /// Handles the execution of the get_pr_files MCP tool.
     /// Validates input, delegates to <see cref="IPullRequestFilesProvider"/>,
     /// and formats the result as a structured JSON response.
-    /// Integrates with response packing to fit results within the context budget.
+    /// Integrates with response packing (F003) and deterministic pagination (F004).
     /// </summary>
     public class GetPullRequestFilesToolHandler : IMcpToolHandler
     {
@@ -25,6 +28,8 @@ namespace REBUSS.Pure.Tools
         private readonly IContextBudgetResolver _budgetResolver;
         private readonly ITokenEstimator _tokenEstimator;
         private readonly IFileClassifier _fileClassifier;
+        private readonly IPageAllocator _pageAllocator;
+        private readonly IPageReferenceCodec _pageReferenceCodec;
         private readonly ILogger<GetPullRequestFilesToolHandler> _logger;
 
         private static readonly JsonSerializerOptions JsonOptions = new()
@@ -42,6 +47,8 @@ namespace REBUSS.Pure.Tools
             IContextBudgetResolver budgetResolver,
             ITokenEstimator tokenEstimator,
             IFileClassifier fileClassifier,
+            IPageAllocator pageAllocator,
+            IPageReferenceCodec pageReferenceCodec,
             ILogger<GetPullRequestFilesToolHandler> logger)
         {
             _filesProvider = filesProvider;
@@ -49,6 +56,8 @@ namespace REBUSS.Pure.Tools
             _budgetResolver = budgetResolver;
             _tokenEstimator = tokenEstimator;
             _fileClassifier = fileClassifier;
+            _pageAllocator = pageAllocator;
+            _pageReferenceCodec = pageReferenceCodec;
             _logger = logger;
         }
 
@@ -77,9 +86,19 @@ namespace REBUSS.Pure.Tools
                     {
                         Type = "integer",
                         Description = "Optional explicit context window size in tokens"
+                    },
+                    ["pageReference"] = new ToolProperty
+                    {
+                        Type = "string",
+                        Description = "Opaque page reference from a previous response. Encodes all context needed to re-derive the page."
+                    },
+                    ["pageNumber"] = new ToolProperty
+                    {
+                        Type = "integer",
+                        Description = "Page number for direct access (requires original params + budget)"
                     }
                 },
-                Required = new List<string> { "prNumber" }
+                Required = new List<string>() // prNumber optional per Q17/Q22 when pageReference used
             }
         };
 
@@ -89,48 +108,182 @@ namespace REBUSS.Pure.Tools
         {
             try
             {
-                if (!TryExtractPrNumber(arguments, out var prNumber, out var error))
+                var pageReference = ExtractOptionalString(arguments, "pageReference");
+                var pageNumber = ExtractOptionalInt(arguments, "pageNumber");
+
+                var mutualExclError = PaginationOrchestrator.ValidateInputs(pageReference, pageNumber);
+                if (mutualExclError != null)
+                    return CreateErrorResult(mutualExclError);
+
+                int? prNumber = null;
+                if (arguments != null && arguments.TryGetValue("prNumber", out var prNumberObj))
                 {
-                    _logger.LogWarning("[{ToolName}] Validation failed: {Error}", ToolName, error);
-                    return CreateErrorResult(error);
+                    try
+                    {
+                        prNumber = prNumberObj is JsonElement jsonEl ? jsonEl.GetInt32() : Convert.ToInt32(prNumberObj);
+                        if (prNumber <= 0)
+                            return CreateErrorResult("prNumber must be greater than 0");
+                    }
+                    catch
+                    {
+                        return CreateErrorResult("Invalid prNumber parameter: must be an integer");
+                    }
                 }
 
-                var modelName = ExtractOptionalString(arguments!, "modelName");
-                var maxTokens = ExtractOptionalInt(arguments!, "maxTokens");
+                if (prNumber == null && pageReference == null)
+                    return CreateErrorResult("Missing required parameter: prNumber");
+
+                var modelName = ExtractOptionalString(arguments, "modelName");
+                var maxTokens = ExtractOptionalInt(arguments, "maxTokens");
+                var hasExplicitBudget = modelName != null || maxTokens != null;
 
                 _logger.LogInformation("[{ToolName}] Entry: PR #{PrNumber}", ToolName, prNumber);
                 var sw = Stopwatch.StartNew();
 
-                var prFiles = await _filesProvider.GetFilesAsync(prNumber, cancellationToken);
-
                 var budget = _budgetResolver.Resolve(maxTokens, modelName);
-                var result = BuildPackedResult(prNumber, prFiles, budget.SafeBudgetTokens);
 
-                var json = JsonSerializer.Serialize(result, JsonOptions);
+                var resolution = PaginationOrchestrator.ResolvePage(
+                    pageReference, pageNumber, _pageReferenceCodec, budget.SafeBudgetTokens, hasExplicitBudget);
+
+                if (!resolution.IsSuccess)
+                    return CreateErrorResult(resolution.ErrorMessage!);
+
+                var effectivePrNumber = prNumber;
+                if (resolution.DecodedParams != null)
+                {
+                    if (resolution.DecodedParams.Value.TryGetProperty("prNumber", out var decodedPr))
+                        effectivePrNumber = decodedPr.GetInt32();
+
+                    if (prNumber != null)
+                    {
+                        var prJsonElement = JsonDocument.Parse($"{prNumber}").RootElement;
+                        var paramError = PaginationOrchestrator.ValidateParameterMatch(
+                            resolution.DecodedParams, "prNumber", prJsonElement);
+                        if (paramError != null)
+                            return CreateErrorResult(paramError);
+                    }
+                }
+
+                if (effectivePrNumber == null || effectivePrNumber <= 0)
+                    return CreateErrorResult("Missing required parameter: prNumber");
+
+                var effectiveBudget = resolution.ResolvedBudget;
+
+                Task<FullPullRequestMetadata>? metadataTask = null;
+                var isPageRefMode = pageReference != null;
+                if (isPageRefMode && resolution.Fingerprint != null)
+                    metadataTask = _filesProvider.GetMetadataAsync(effectivePrNumber.Value, cancellationToken);
+
+                var prFiles = await _filesProvider.GetFilesAsync(effectivePrNumber.Value, cancellationToken);
+
+                if (!hasExplicitBudget && pageReference == null)
+                {
+                    var result = BuildPackedResult(effectivePrNumber.Value, prFiles, budget.SafeBudgetTokens);
+                    var json = JsonSerializer.Serialize(result, JsonOptions);
+                    sw.Stop();
+                    _logger.LogInformation("[{ToolName}] Completed (F003): PR #{PrNumber}, {FileCount} files, {ElapsedMs}ms",
+                        ToolName, effectivePrNumber, prFiles.Files.Count, sw.ElapsedMilliseconds);
+                    return CreateSuccessResult(json);
+                }
+
+                // Feature 004 path
+                var fileItems = BuildFileItems(prFiles);
+                var candidates = BuildCandidates(fileItems, effectiveBudget);
+                var sortedCandidates = SortCandidates(candidates);
+
+                PageAllocation allocation;
+                try
+                {
+                    allocation = _pageAllocator.Allocate(sortedCandidates, effectiveBudget);
+                }
+                catch (InvalidOperationException ex) when (ex.Message.Contains("too small"))
+                {
+                    return CreateErrorResult(ex.Message);
+                }
+
+                var requestedPage = resolution.PageNumber;
+                if (requestedPage < 1 || requestedPage > allocation.TotalPages)
+                    return CreateErrorResult($"Page number {requestedPage} is out of range. Valid range: 1 to {allocation.TotalPages}.");
+
+                var pageSlice = allocation.Pages[requestedPage - 1];
+
+                var packedFiles = ExtractPageFiles(fileItems, sortedCandidates, pageSlice);
+
+                StalenessWarningResult? staleness = null;
+                if (metadataTask != null)
+                {
+                    var metadata = await metadataTask;
+                    staleness = PaginationOrchestrator.CheckStaleness(
+                        resolution.Fingerprint, metadata.LastMergeSourceCommitId, isPageRefMode);
+                }
+
+                string? currentFingerprint = resolution.Fingerprint;
+                if (currentFingerprint == null)
+                {
+                    try
+                    {
+                        var meta = await _filesProvider.GetMetadataAsync(effectivePrNumber.Value, cancellationToken);
+                        currentFingerprint = meta.LastMergeSourceCommitId;
+                    }
+                    catch
+                    {
+                        _logger.LogDebug("[{ToolName}] Could not fetch metadata for fingerprint", ToolName);
+                    }
+                }
+
+                var requestParams = JsonDocument.Parse($"{{\"prNumber\":{effectivePrNumber}}}").RootElement;
+
+                var paginationMeta = PaginationOrchestrator.BuildPaginationMetadata(
+                    allocation, requestedPage, _pageReferenceCodec,
+                    ToolName, requestParams, effectiveBudget, currentFingerprint);
+
+                var manifestResult = BuildPageManifest(sortedCandidates, pageSlice, allocation, effectiveBudget);
+
+                var paginatedResult = new PullRequestFilesResult
+                {
+                    PrNumber = effectivePrNumber.Value,
+                    TotalFiles = prFiles.Files.Count,
+                    Files = packedFiles,
+                    Summary = new PullRequestFilesSummaryResult
+                    {
+                        SourceFiles = prFiles.Summary.SourceFiles,
+                        TestFiles = prFiles.Summary.TestFiles,
+                        ConfigFiles = prFiles.Summary.ConfigFiles,
+                        DocsFiles = prFiles.Summary.DocsFiles,
+                        BinaryFiles = prFiles.Summary.BinaryFiles,
+                        GeneratedFiles = prFiles.Summary.GeneratedFiles,
+                        HighPriorityFiles = prFiles.Summary.HighPriorityFiles
+                    },
+                    Manifest = manifestResult,
+                    Pagination = paginationMeta,
+                    StalenessWarning = staleness
+                };
+
+                var jsonResult = JsonSerializer.Serialize(paginatedResult, JsonOptions);
                 sw.Stop();
+                _logger.LogInformation(
+                    "[{ToolName}] Completed (F004): PR #{PrNumber}, page {Page}/{TotalPages}, {ElapsedMs}ms",
+                    ToolName, effectivePrNumber, requestedPage, allocation.TotalPages, sw.ElapsedMilliseconds);
 
-                _logger.LogInformation("[{ToolName}] Completed: PR #{PrNumber}, {FileCount} file(s), {ResponseLength} chars, {ElapsedMs}ms",
-                    ToolName, prNumber, prFiles.Files.Count, json.Length, sw.ElapsedMilliseconds);
-
-                return CreateSuccessResult(json);
+                return CreateSuccessResult(jsonResult);
             }
             catch (PullRequestNotFoundException ex)
             {
-                _logger.LogWarning(ex, "[{ToolName}] Pull request not found (prNumber={PrNumber})", ToolName, arguments?.GetValueOrDefault("prNumber"));
+                _logger.LogWarning(ex, "[{ToolName}] Pull request not found", ToolName);
                 return CreateErrorResult($"Pull Request not found: {ex.Message}");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "[{ToolName}] Error (prNumber={PrNumber})", ToolName, arguments?.GetValueOrDefault("prNumber"));
+                _logger.LogError(ex, "[{ToolName}] Error", ToolName);
                 return CreateErrorResult($"Error retrieving PR files: {ex.Message}");
             }
         }
 
-        // --- Result builder -------------------------------------------------------
+        // --- Build helpers ---
 
-        private PullRequestFilesResult BuildPackedResult(int prNumber, PullRequestFiles prFiles, int safeBudgetTokens)
+        private static List<PullRequestFileItem> BuildFileItems(PullRequestFiles prFiles)
         {
-            var fileItems = prFiles.Files.Select(f => new PullRequestFileItem
+            return prFiles.Files.Select(f => new PullRequestFileItem
             {
                 Path = f.Path,
                 Status = f.Status,
@@ -143,8 +296,10 @@ namespace REBUSS.Pure.Tools
                 IsTestFile = f.IsTestFile,
                 ReviewPriority = f.ReviewPriority
             }).ToList();
+        }
 
-            // Estimate tokens per file item and build candidates
+        private List<PackingCandidate> BuildCandidates(List<PullRequestFileItem> fileItems, int safeBudgetTokens)
+        {
             var candidates = new List<PackingCandidate>(fileItems.Count);
             for (var i = 0; i < fileItems.Count; i++)
             {
@@ -159,10 +314,65 @@ namespace REBUSS.Pure.Tools
                     classification.Category,
                     fi.Additions + fi.Deletions));
             }
+            return candidates;
+        }
 
+        private static List<PackingCandidate> SortCandidates(List<PackingCandidate> candidates)
+        {
+            var sorted = new List<PackingCandidate>(candidates);
+            sorted.Sort(PackingPriorityComparer.Instance);
+            return sorted;
+        }
+
+        private static List<PullRequestFileItem> ExtractPageFiles(
+            List<PullRequestFileItem> allFiles,
+            List<PackingCandidate> candidates,
+            PageSlice pageSlice)
+        {
+            var pageFiles = new List<PullRequestFileItem>();
+            foreach (var item in pageSlice.Items)
+            {
+                var candidate = candidates[item.OriginalIndex];
+                var fileItem = allFiles.FirstOrDefault(f => f.Path == candidate.Path);
+                if (fileItem != null)
+                    pageFiles.Add(fileItem);
+            }
+            return pageFiles;
+        }
+
+        private ContentManifestResult BuildPageManifest(
+            List<PackingCandidate> candidates,
+            PageSlice pageSlice,
+            PageAllocation allocation,
+            int safeBudgetTokens)
+        {
+            var entries = pageSlice.Items.Select(item =>
+            {
+                var candidate = candidates[item.OriginalIndex];
+                return new ManifestEntryResult
+                {
+                    Path = candidate.Path,
+                    EstimatedTokens = item.EstimatedTokens,
+                    Status = item.Status.ToString(),
+                    PriorityTier = candidate.Category.ToString()
+                };
+            }).ToList();
+
+            return new ContentManifestResult
+            {
+                Items = entries,
+                Summary = PaginationOrchestrator.BuildExtendedManifestSummary(pageSlice, allocation, safeBudgetTokens)
+            };
+        }
+
+        // --- F003 result builder ---
+
+        private PullRequestFilesResult BuildPackedResult(int prNumber, PullRequestFiles prFiles, int safeBudgetTokens)
+        {
+            var fileItems = BuildFileItems(prFiles);
+            var candidates = BuildCandidates(fileItems, safeBudgetTokens);
             var decision = _packer.Pack(candidates, safeBudgetTokens);
 
-            // Filter: include Included and Partial items, defer the rest
             var packedFiles = new List<PullRequestFileItem>();
             for (var i = 0; i < decision.Items.Count; i++)
             {
@@ -214,52 +424,17 @@ namespace REBUSS.Pure.Tools
             };
         }
 
-        // --- Input extraction -----------------------------------------------------
+        // --- Input extraction ---
 
-        private static bool TryExtractPrNumber(
-            Dictionary<string, object>? arguments,
-            out int prNumber,
-            out string errorMessage)
+        private static string? ExtractOptionalString(Dictionary<string, object>? arguments, string key)
         {
-            prNumber = 0;
-            errorMessage = string.Empty;
-
-            if (arguments == null || !arguments.TryGetValue("prNumber", out var prNumberObj))
-            {
-                errorMessage = "Missing required parameter: prNumber";
-                return false;
-            }
-
-            try
-            {
-                prNumber = prNumberObj is JsonElement jsonElement
-                    ? jsonElement.GetInt32()
-                    : Convert.ToInt32(prNumberObj);
-            }
-            catch
-            {
-                errorMessage = "Invalid prNumber parameter: must be an integer";
-                return false;
-            }
-
-            if (prNumber <= 0)
-            {
-                errorMessage = "prNumber must be greater than 0";
-                return false;
-            }
-
-            return true;
-        }
-
-        private static string? ExtractOptionalString(Dictionary<string, object> arguments, string key)
-        {
-            if (!arguments.TryGetValue(key, out var value)) return null;
+            if (arguments == null || !arguments.TryGetValue(key, out var value)) return null;
             return value is JsonElement jsonElement ? jsonElement.GetString() : value?.ToString();
         }
 
-        private static int? ExtractOptionalInt(Dictionary<string, object> arguments, string key)
+        private static int? ExtractOptionalInt(Dictionary<string, object>? arguments, string key)
         {
-            if (!arguments.TryGetValue(key, out var value)) return null;
+            if (arguments == null || !arguments.TryGetValue(key, out var value)) return null;
             try
             {
                 return value is JsonElement jsonElement ? jsonElement.GetInt32() : Convert.ToInt32(value);
@@ -270,7 +445,7 @@ namespace REBUSS.Pure.Tools
             }
         }
 
-        // --- Result helpers -------------------------------------------------------
+        // --- Result helpers ---
 
         private static ToolResult CreateSuccessResult(string text) => new()
         {
