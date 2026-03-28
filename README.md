@@ -139,6 +139,19 @@ This will:
 - ✔ copy instruction files to `.github/instructions/` (for GitHub Copilot custom instructions)
 - ✔ authenticate via Azure CLI (opens browser for login) or accept a GitHub PAT
 
+### Global mode (`-g`)
+
+If Visual Studio does not detect the local `.vs/mcp.json` file in your repository, use the global flag:
+
+```bash
+cd /path/to/your/repo
+rebuss-pure init -g
+```
+
+This writes the MCP configuration to the **user-level** paths (`~/.vs/mcp.json` and `~/.vscode/mcp.json`) instead of the repository-local directories. The global config points `--repo` to the current repository, so it works for any workspace you open.
+
+> **Switching between repositories:** If you use multiple repositories, run `rebuss-pure init -g` in the target repository before switching to it. This updates the global configuration to point to the correct workspace.
+
 ---
 
 ## 3. Review a Pull Request

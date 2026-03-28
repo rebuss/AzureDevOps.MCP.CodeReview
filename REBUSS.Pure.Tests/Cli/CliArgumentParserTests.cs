@@ -224,4 +224,54 @@ public class CliArgumentParserTests
         Assert.Equal("my-repo", result.Repository);
     }
 
+    // --- Global flag for init ---
+
+    [Fact]
+    public void Parse_InitWithGlobalShortFlag_ReturnsIsGlobalTrue()
+    {
+        var result = CliArgumentParser.Parse(["init", "-g"]);
+
+        Assert.False(result.IsServerMode);
+        Assert.Equal("init", result.CommandName);
+        Assert.True(result.IsGlobal);
+    }
+
+    [Fact]
+    public void Parse_InitWithGlobalLongFlag_ReturnsIsGlobalTrue()
+    {
+        var result = CliArgumentParser.Parse(["init", "--global"]);
+
+        Assert.False(result.IsServerMode);
+        Assert.Equal("init", result.CommandName);
+        Assert.True(result.IsGlobal);
+    }
+
+    [Fact]
+    public void Parse_InitWithGlobalFlagCaseInsensitive_ReturnsIsGlobalTrue()
+    {
+        var result = CliArgumentParser.Parse(["init", "--GLOBAL"]);
+
+        Assert.False(result.IsServerMode);
+        Assert.True(result.IsGlobal);
+    }
+
+    [Fact]
+    public void Parse_InitWithGlobalAndPat_ReturnsBothValues()
+    {
+        var result = CliArgumentParser.Parse(["init", "-g", "--pat", "my-token"]);
+
+        Assert.False(result.IsServerMode);
+        Assert.Equal("init", result.CommandName);
+        Assert.True(result.IsGlobal);
+        Assert.Equal("my-token", result.Pat);
+    }
+
+    [Fact]
+    public void Parse_InitWithoutGlobal_ReturnsIsGlobalFalse()
+    {
+        var result = CliArgumentParser.Parse(["init"]);
+
+        Assert.False(result.IsGlobal);
+    }
+
 }

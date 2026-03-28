@@ -39,18 +39,19 @@ public class InitCommand : ICliCommand
     private readonly string _workingDirectory;
     private readonly string _executablePath;
     private readonly string? _pat;
+    private readonly bool _isGlobal;
     private readonly string? _detectedProvider;
     private readonly Func<string, CancellationToken, Task<(int ExitCode, string StdOut, string StdErr)>>? _processRunner;
 
     public string Name => "init";
 
-    public InitCommand(TextWriter output, string workingDirectory, string executablePath, string? pat = null)
-        : this(output, Console.In, workingDirectory, executablePath, pat, detectedProvider: null, processRunner: null)
+    public InitCommand(TextWriter output, string workingDirectory, string executablePath, string? pat = null, bool isGlobal = false)
+        : this(output, Console.In, workingDirectory, executablePath, pat, isGlobal, detectedProvider: null, processRunner: null)
     {
     }
 
-    public InitCommand(TextWriter output, TextReader input, string workingDirectory, string executablePath, string? pat = null, string? detectedProvider = null)
-        : this(output, input, workingDirectory, executablePath, pat, detectedProvider, processRunner: null)
+    public InitCommand(TextWriter output, TextReader input, string workingDirectory, string executablePath, string? pat = null, bool isGlobal = false, string? detectedProvider = null)
+        : this(output, input, workingDirectory, executablePath, pat, isGlobal, detectedProvider, processRunner: null)
     {
     }
 
@@ -63,6 +64,7 @@ public class InitCommand : ICliCommand
         string workingDirectory,
         string executablePath,
         string? pat,
+        bool isGlobal,
         string? detectedProvider,
         Func<string, CancellationToken, Task<(int ExitCode, string StdOut, string StdErr)>>? processRunner)
     {
@@ -71,6 +73,7 @@ public class InitCommand : ICliCommand
         _workingDirectory = workingDirectory;
         _executablePath = executablePath;
         _pat = pat;
+        _isGlobal = isGlobal;
         _detectedProvider = detectedProvider;
         _processRunner = processRunner;
     }
@@ -87,7 +90,9 @@ public class InitCommand : ICliCommand
         // Create MCP config files and copy prompts FIRST — before any potentially
         // interactive or long-running Azure CLI steps. This ensures files are written
         // even if the user cancels during az install or az login.
-        var targets = ResolveConfigTargets(gitRoot);
+        var targets = _isGlobal
+            ? ResolveGlobalConfigTargets()
+            : ResolveConfigTargets(gitRoot);
 
         var normalizedExePath = _executablePath.Replace("\\", "\\\\");
         var normalizedRepoPath = gitRoot.Replace("\\", "\\\\");
@@ -286,6 +291,29 @@ public class InitCommand : ICliCommand
                 Path.Combine(gitRoot, VisualStudioDir, McpConfigFileName)));
 
         return targets;
+    }
+
+    /// <summary>
+    /// Returns global (user-level) MCP configuration targets.
+    /// Writes to <c>~/.vs/mcp.json</c> (Visual Studio) and <c>~/.vscode/mcp.json</c> (VS Code)
+    /// in the user's home directory so every workspace picks up the configuration.
+    /// </summary>
+    internal static List<McpConfigTarget> ResolveGlobalConfigTargets()
+    {
+        var userHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
+        return
+        [
+            new McpConfigTarget(
+                "Visual Studio (global)",
+                Path.Combine(userHome, VisualStudioDir),
+                Path.Combine(userHome, VisualStudioDir, McpConfigFileName)),
+
+            new McpConfigTarget(
+                "VS Code (global)",
+                Path.Combine(userHome, VsCodeDir),
+                Path.Combine(userHome, VsCodeDir, McpConfigFileName))
+        ];
     }
 
     internal static bool DetectsVsCode(string gitRoot) =>

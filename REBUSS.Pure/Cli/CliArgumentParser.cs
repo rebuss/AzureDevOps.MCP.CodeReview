@@ -21,15 +21,21 @@ public class CliArgumentParser
         if (string.Equals(command, "init", StringComparison.OrdinalIgnoreCase))
         {
             string? initPat = null;
+            bool isGlobal = false;
             for (int i = 1; i < args.Length; i++)
             {
                 if (string.Equals(args[i], "--pat", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
                 {
                     initPat = args[i + 1];
-                    break;
+                    i++;
+                }
+                else if (string.Equals(args[i], "-g", StringComparison.OrdinalIgnoreCase)
+                         || string.Equals(args[i], "--global", StringComparison.OrdinalIgnoreCase))
+                {
+                    isGlobal = true;
                 }
             }
-            return CliParseResult.CliMode("init", initPat);
+            return CliParseResult.CliMode("init", initPat, isGlobal);
         }
 
         string? repoPath = null;
@@ -155,11 +161,17 @@ public sealed class CliParseResult
         Owner = owner
     };
 
-    public static CliParseResult CliMode(string commandName, string? pat = null) => new()
+    /// <summary>
+    /// Whether the <c>-g</c> / <c>--global</c> flag was passed to the <c>init</c> command.
+    /// </summary>
+    public bool IsGlobal { get; private init; }
+
+    public static CliParseResult CliMode(string commandName, string? pat = null, bool isGlobal = false) => new()
     {
         IsServerMode = false,
         CommandName = commandName,
         Pat = pat,
-        RepoPath = null
+        RepoPath = null,
+        IsGlobal = isGlobal
     };
 }

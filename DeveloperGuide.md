@@ -12,6 +12,9 @@ rebuss-pure init
 
 # With a Personal Access Token
 rebuss-pure init --pat <your-pat>
+
+# Global mode — writes user-level config (~/.vs/mcp.json & ~/.vscode/mcp.json)
+rebuss-pure init -g
 ```
 
 **What it does:**
@@ -22,13 +25,23 @@ rebuss-pure init --pat <your-pat>
 4. Copies prompt files to `.github/prompts/`
 5. Copies instruction files to `.github/instructions/` (`.instructions.md` extension)
 
-**IDE detection logic:**
+**IDE detection logic (local mode):**
 
 | Markers found | Config written to |
 |---|---|
 | `.vscode/` or `*.code-workspace` only | `.vscode/mcp.json` |
 | `.vs/` or `*.sln` only | `.vs/mcp.json` |
 | Both or neither | Both locations |
+
+**Global mode (`-g` / `--global`):**
+
+When the `-g` flag is used, the MCP configuration is written to the user's home directory
+(`~/.vs/mcp.json` and `~/.vscode/mcp.json`) instead of the repository-local directories.
+The `--repo` argument in the config points to the current repository's git root.
+
+This is useful when Visual Studio does not detect the local `.vs/mcp.json` file.
+If you work with multiple repositories, run `rebuss-pure init -g` in the target repository
+before switching to it to update the global configuration.
 
 ---
 
