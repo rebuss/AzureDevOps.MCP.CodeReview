@@ -261,7 +261,43 @@ Full codebase context is included below (file-role map, dependency graph, DI reg
 
 | File | Role |
 |---|---|
-| `REBUSS.Pure\Services\McpWorkspaceRootProvider.cs` | Implementation of `IWorkspaceRootProvider` (from Core): resolves repo root from CLI `--repo` (highest priority), MCP roots (lazily fetched via `IMcpServer.RequestRootsAsync()`), or `localRepoPath` config; guards against unexpanded variables; reads `LocalRepoPath` directly from `IConfiguration` to avoid circular dependency with `IPostConfigureOptions<AzureDevOpsOptions>` |
+| `REBUSS.Pure\Mcp\McpServer.cs` | Main server loop: reads JSON-RPC over stdio, dispatches to method handlers; silently ignores notifications (messages without `id`) for unregistered methods per MCP/JSON-RPC spec |
+| `REBUSS.Pure\Mcp\IMcpMethodHandler.cs` | Interface: handles one JSON-RPC method |
+| `REBUSS.Pure\Mcp\IMcpToolHandler.cs` | Interface: MCP tool (definition + execution) |
+| `REBUSS.Pure\Mcp\McpWorkspaceRootProvider.cs` | Implementation of `IWorkspaceRootProvider` (from Core): resolves repo root from CLI `--repo` (highest priority), MCP roots, or `localRepoPath` config; guards against unexpanded variables; reads `LocalRepoPath` directly from `IConfiguration` to avoid circular dependency with `IPostConfigureOptions<AzureDevOpsOptions>` |
+| `REBUSS.Pure\Mcp\Handlers\InitializeMethodHandler.cs` | `initialize` method handler — negotiates protocol version via `IMcpProtocolVersionNegotiator`, extracts MCP roots, stores via `IWorkspaceRootProvider` |
+| `REBUSS.Pure\Mcp\Handlers\ToolsListMethodHandler.cs` | `tools/list` method handler |
+| `REBUSS.Pure\Mcp\Handlers\ToolsCallMethodHandler.cs` | `tools/call` method handler � resolves tool by name, delegates |
+| `REBUSS.Pure\Mcp\IJsonRpcSerializer.cs` | Interface: JSON-RPC serialization |
+| `REBUSS.Pure\Mcp\SystemTextJsonSerializer.cs` | System.Text.Json implementation (camelCase, no indent, ignore nulls) |
+| `REBUSS.Pure\Mcp\IJsonRpcTransport.cs` | Interface: read/write JSON-RPC messages |
+| `REBUSS.Pure\Mcp\StreamJsonRpcTransport.cs` | Newline-delimited stream transport |
+| `REBUSS.Pure\Mcp\McpMethodNotFoundException.cs` | Method not found exception |
+| `REBUSS.Pure\Mcp\McpProtocolVersionException.cs` | Protocol version negotiation failure exception |
+| `REBUSS.Pure\Mcp\IMcpProtocolVersionNegotiator.cs` | Interface: negotiates MCP protocol version between client and server |
+| `REBUSS.Pure\Mcp\McpProtocolVersionNegotiator.cs` | Default implementation: maintains supported version list, selects highest compatible version |
+
+### MCP models (REBUSS.Pure\Mcp\Models)
+
+| File | Role |
+|---|---|
+| `REBUSS.Pure\Mcp\Models\JsonRpcMessage.cs` | Base class (jsonrpc = "2.0") |
+| `REBUSS.Pure\Mcp\Models\JsonRpcRequest.cs` | Request: id, method, params |
+| `REBUSS.Pure\Mcp\Models\JsonRpcResponse.cs` | Response: id, result, error |
+| `REBUSS.Pure\Mcp\Models\JsonRpcError.cs` | Error: code, message, data |
+| `REBUSS.Pure\Mcp\Models\McpTool.cs` | Tool definition: name, description, inputSchema |
+| `REBUSS.Pure\Mcp\Models\ToolInputSchema.cs` | JSON Schema for tool input |
+| `REBUSS.Pure\Mcp\Models\ToolProperty.cs` | Schema property: type, description, enum, default |
+| `REBUSS.Pure\Mcp\Models\ToolCallParams.cs` | Tool call params: name, arguments |
+| `REBUSS.Pure\Mcp\Models\ToolResult.cs` | Tool result: content items, isError |
+| `REBUSS.Pure\Mcp\Models\ContentItem.cs` | Content item: type, text |
+| `REBUSS.Pure\Mcp\Models\InitializeResult.cs` | Initialize result: protocol version, capabilities, server info |
+| `REBUSS.Pure\Mcp\Models\InitializeParams.cs` | Initialize params: protocol version and roots list from MCP client |
+| `REBUSS.Pure\Mcp\Models\McpRoot.cs` | MCP root: uri, name |
+| `REBUSS.Pure\Mcp\Models\ServerCapabilities.cs` | Server capabilities |
+| `REBUSS.Pure\Mcp\Models\ServerInfo.cs` | Server info: name, version |
+| `REBUSS.Pure\Mcp\Models\ToolsCapability.cs` | Tools capability: listChanged |
+| `REBUSS.Pure\Mcp\Models\ToolsListResult.cs` | Tools list result |
 
 ### CLI infrastructure (REBUSS.Pure\Cli)
 
@@ -361,7 +397,10 @@ Full codebase context is included below (file-role map, dependency graph, DI reg
 | `REBUSS.Pure.Tests\Services\PaginationOrchestratorTests.cs` | `PaginationOrchestrator` (Feature 004) — 18 tests: validation, page resolution, param matching, staleness detection, metadata building |
 | `REBUSS.Pure.Tests\Logging\FileLoggerProviderTests.cs` | `FileLoggerProvider` — daily rotation, file naming, write content, timestamp, retention/deletion, roll-over, non-log file safety |
 | `REBUSS.Pure.Tests\Integration\EndToEndTests.cs` | Integration: DI-constructed handler → mocked provider → structured JSON result; tests happy path and PR-not-found error |
-| `REBUSS.Pure.Tests\Services\McpWorkspaceRootProviderTests.cs` | `McpWorkspaceRootProvider` — URI conversion, repo root resolution, MCP roots, localRepoPath fallback, CLI `--repo` precedence |
+| `REBUSS.Pure.Tests\Mcp\McpServerTests.cs` | `McpServer` — initialize, tools/list, tools/call, unknown method, invalid JSON, empty lines, notifications |
+| `REBUSS.Pure.Tests\Mcp\InitializeMethodHandlerTests.cs` | `InitializeMethodHandler` — protocol version negotiation, roots extraction, storage, edge cases |
+| `REBUSS.Pure.Tests\Mcp\McpProtocolVersionNegotiatorTests.cs` | `McpProtocolVersionNegotiator` — exact match, downward negotiation, future/past versions, null/empty input |
+| `REBUSS.Pure.Tests\Mcp\McpWorkspaceRootProviderTests.cs` | `McpWorkspaceRootProvider` — URI conversion, repo root resolution, MCP roots, localRepoPath fallback, CLI `--repo` precedence |
 | `REBUSS.Pure.Tests\Cli\CliArgumentParserTests.cs` | `CliArgumentParser` — server mode, `--repo`, `--pat`, `--org`, `--project`, `--repository`, `init` command, combined args, edge cases |
 | `REBUSS.Pure.Tests\Cli\InitCommandTests.cs` | `InitCommand` — generates `mcp.json`, copies prompt and instruction files (always overwrites), error cases, subdirectory support, Azure DevOps CLI login, GitHub CLI login, PAT carry-over |
 | `REBUSS.Pure.SmokeTests\Fixtures\TempGitRepoFixture.cs` | Test fixture: creates/disposes temp git repositories with configurable remote URL and IDE markers |
@@ -500,6 +539,16 @@ CliParseResult (+ Pat, Organization, Project, Repository)
   ? Program.RunMcpServerAsync [Pure]               (consumes: reads RepoPath, passes to IWorkspaceRootProvider;
                                                      reads Pat/Organization/Project/Repository, adds as in-memory config overrides)
   ? Program.RunCliCommandAsync [Pure]              (consumes: reads CommandName, dispatches to ICliCommand)
+
+McpRoot / InitializeParams
+  → InitializeMethodHandler [Pure]                 (consumes: extracts protocolVersion + roots from initialize request)
+  → IWorkspaceRootProvider [Core]                  (stores: root URIs from MCP client)
+  → McpWorkspaceRootProvider [Pure]                (resolves: repo root from CLI --repo, MCP roots, or localRepoPath)
+  → ConfigurationResolver [AzureDevOps]            (consumes: workspace root for git detection)
+
+IMcpProtocolVersionNegotiator [Pure interface]
+  → McpProtocolVersionNegotiator [Pure]            (implements: maintains supported version list, selects highest compatible)
+  → InitializeMethodHandler [Pure]                 (consumes: negotiates version during initialize handshake)
 
 DetectedGitInfo
   ? GitRemoteDetector [AzureDevOps]                (produces via synchronous Detect())
@@ -690,8 +739,8 @@ switch (provider)
         break;
 }
 
-// MCP tool handlers: discovered automatically via [McpServerToolType] attribute
-// by WithToolsFromAssembly() — no manual registration needed for:
+// MCP tool handlers
+// SDK-migrated handlers (registered via [McpServerToolType] attribute discovery):
 // GetPullRequestDiffToolHandler, GetPullRequestFilesToolHandler, GetLocalChangesFilesToolHandler,
 // GetFileDiffToolHandler, GetPullRequestMetadataToolHandler, GetFileContentAtRefToolHandler,
 // GetLocalFileDiffToolHandler
@@ -699,6 +748,20 @@ switch (provider)
 // Local self-review pipeline
 services.AddSingleton<ILocalGitClient, LocalGitClient>();
 services.AddSingleton<ILocalReviewProvider, LocalReviewProvider>();
+
+// JSON-RPC infrastructure
+services.AddSingleton<IJsonRpcSerializer, SystemTextJsonSerializer>();
+services.AddSingleton<IJsonRpcTransport>(_ =>
+    new StreamJsonRpcTransport(Console.OpenStandardInput(), Console.OpenStandardOutput()));
+services.AddSingleton<IMcpProtocolVersionNegotiator, McpProtocolVersionNegotiator>();
+
+// Method handlers
+services.AddSingleton<IMcpMethodHandler, InitializeMethodHandler>();
+services.AddSingleton<IMcpMethodHandler, ToolsListMethodHandler>();
+services.AddSingleton<IMcpMethodHandler, ToolsCallMethodHandler>();
+
+// Server
+services.AddSingleton<McpServer>(...);
 
 // In RunMcpServerAsync: CLI arguments (--pat, --org, --project, --repository) are
 // collected into a Dictionary and added via AddInMemoryCollection to the configuration
