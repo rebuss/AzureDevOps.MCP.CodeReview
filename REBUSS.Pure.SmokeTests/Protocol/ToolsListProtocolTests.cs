@@ -18,13 +18,16 @@ public class ToolsListProtocolTests
         "get_pr_files",
         "get_file_content_at_ref",
         "get_local_files",
-        "get_local_file_diff"
+        "get_local_file_diff",
+        "get_pr_content",
+        "get_local_content"
     ];
 
     private static readonly string[] PrNumberTools =
     [
         "get_file_diff",
-        "get_pr_metadata"
+        "get_pr_metadata",
+        "get_pr_content"
     ];
 
     /// <summary>
@@ -45,14 +48,14 @@ public class ToolsListProtocolTests
     }
 
     [Fact]
-    public async Task ToolsList_ReturnsAllSevenTools()
+    public async Task ToolsList_ReturnsAllNineTools()
     {
         var response = await _fixture.Server.SendToolsListAsync();
         var tools = response.RootElement
             .GetProperty("result")
             .GetProperty("tools");
 
-        Assert.Equal(7, tools.GetArrayLength());
+        Assert.Equal(9, tools.GetArrayLength());
     }
 
     [Fact]
@@ -171,5 +174,34 @@ public class ToolsListProtocolTests
             "get_local_file_diff should not have pageReference (excluded from pagination).");
         Assert.False(props.TryGetProperty("pageNumber", out _),
             "get_local_file_diff should not have pageNumber (excluded from pagination).");
+    }
+
+    /// <summary>
+    /// Feature 003: New content tools must declare pageNumber property.
+    /// </summary>
+    [Fact]
+    public async Task ToolsList_ContentTools_HavePageNumberProperty()
+    {
+        var response = await _fixture.Server.SendToolsListAsync();
+        var tools = response.RootElement
+            .GetProperty("result")
+            .GetProperty("tools");
+
+        var toolMap = tools.EnumerateArray()
+            .ToDictionary(
+                t => t.GetProperty("name").GetString()!,
+                t => t);
+
+        foreach (var toolName in new[] { "get_pr_content", "get_local_content" })
+        {
+            Assert.True(toolMap.ContainsKey(toolName), $"Tool '{toolName}' not found.");
+
+            var schema = toolMap[toolName].GetProperty("inputSchema");
+            Assert.True(schema.TryGetProperty("properties", out var props),
+                $"Tool '{toolName}' has no 'properties' in schema.");
+
+            Assert.True(props.TryGetProperty("pageNumber", out _),
+                $"Tool '{toolName}' is missing 'pageNumber' property.");
+        }
     }
 }

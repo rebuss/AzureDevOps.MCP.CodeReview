@@ -48,6 +48,9 @@ namespace REBUSS.Pure.Tools.Models
 
         [JsonPropertyName("source")]
         public SourceInfo Source { get; set; } = new();
+
+        [JsonPropertyName("contentPaging")]
+        public ContentPagingInfo? ContentPaging { get; set; }
     }
 
     public class AuthorInfo

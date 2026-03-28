@@ -6,6 +6,9 @@ using ModelContextProtocol.Server;
 using REBUSS.Pure.Core;
 using REBUSS.Pure.Core.Exceptions;
 using REBUSS.Pure.Core.Models;
+using REBUSS.Pure.Core.Models.ResponsePacking;
+using REBUSS.Pure.Core.Shared;
+using REBUSS.Pure.Services.ResponsePacking;
 using REBUSS.Pure.Tools.Models;
 using System.Text.Json;
 
@@ -15,11 +18,16 @@ namespace REBUSS.Pure.Tools
     /// Handles the execution of the get_pr_metadata MCP tool.
     /// Validates input, delegates to <see cref="IPullRequestMetadataProvider"/>,
     /// and formats the result as a structured JSON response.
+    /// When budget parameters are provided, also computes pagination info.
     /// </summary>
     [McpServerToolType]
     public class GetPullRequestMetadataToolHandler
     {
         private readonly IPullRequestDataProvider _metadataProvider;
+        private readonly IContextBudgetResolver _budgetResolver;
+        private readonly ITokenEstimator _tokenEstimator;
+        private readonly IFileClassifier _fileClassifier;
+        private readonly IPageAllocator _pageAllocator;
         private readonly ILogger<GetPullRequestMetadataToolHandler> _logger;
 
         private const int MaxDescriptionLength = 800;
@@ -33,18 +41,30 @@ namespace REBUSS.Pure.Tools
 
         public GetPullRequestMetadataToolHandler(
             IPullRequestDataProvider metadataProvider,
+            IContextBudgetResolver budgetResolver,
+            ITokenEstimator tokenEstimator,
+            IFileClassifier fileClassifier,
+            IPageAllocator pageAllocator,
             ILogger<GetPullRequestMetadataToolHandler> logger)
         {
             _metadataProvider = metadataProvider;
+            _budgetResolver = budgetResolver;
+            _tokenEstimator = tokenEstimator;
+            _fileClassifier = fileClassifier;
+            _pageAllocator = pageAllocator;
             _logger = logger;
         }
 
         [McpServerTool(Name = "get_pr_metadata"), Description(
             "Retrieves metadata for a specific Pull Request. " +
             "Returns a JSON object with PR details including title, author, state, " +
-            "branches, stats, commit SHAs, and description.")]
+            "branches, stats, commit SHAs, and description. " +
+            "When modelName or maxTokens is provided, also returns contentPaging " +
+            "with page count and per-page file breakdown for use with get_pr_content.")]
         public async Task<string> ExecuteAsync(
             [Description("The Pull Request number/ID to retrieve metadata for")] int? prNumber = null,
+            [Description("Model name for context budget resolution (e.g. 'gpt-4o'). Triggers pagination info.")] string? modelName = null,
+            [Description("Explicit token budget override. Triggers pagination info.")] int? maxTokens = null,
             CancellationToken cancellationToken = default)
         {
             if (prNumber != null && prNumber <= 0)
@@ -60,6 +80,14 @@ namespace REBUSS.Pure.Tools
 
                 var metadata = await _metadataProvider.GetMetadataAsync(prNumber.Value, cancellationToken);
                 var result = BuildMetadataResult(prNumber.Value, metadata);
+
+                // Compute pagination info when budget parameters are provided
+                if (modelName != null || maxTokens != null)
+                {
+                    var pagingInfo = await BuildContentPagingInfoAsync(
+                        prNumber.Value, modelName, maxTokens, cancellationToken);
+                    result.ContentPaging = pagingInfo;
+                }
 
                 var json = JsonSerializer.Serialize(result, JsonOptions);
                 sw.Stop();
@@ -83,6 +111,48 @@ namespace REBUSS.Pure.Tools
                 _logger.LogError(ex, "[get_pr_metadata] Error (prNumber={PrNumber})", prNumber);
                 throw new McpException($"Error retrieving PR metadata: {ex.Message}");
             }
+        }
+
+        // --- Pagination info builder -----------------------------------------------
+
+        private async Task<ContentPagingInfo> BuildContentPagingInfoAsync(
+            int prNumber, string? modelName, int? maxTokens, CancellationToken ct)
+        {
+            var files = await _metadataProvider.GetFilesAsync(prNumber, ct);
+
+            var budget = _budgetResolver.Resolve(maxTokens, modelName);
+            var safeBudget = budget.SafeBudgetTokens;
+
+            var candidates = BuildStatBasedCandidates(files.Files);
+            candidates.Sort(PackingPriorityComparer.Instance);
+
+            var allocation = _pageAllocator.Allocate(candidates, safeBudget);
+
+            var filesByPage = allocation.Pages
+                .Select(p => new PageFileCount(p.PageNumber, p.Items.Count))
+                .ToList();
+
+            return new ContentPagingInfo(
+                TotalPages: allocation.TotalPages,
+                TotalFiles: allocation.TotalItems,
+                BudgetPerPageTokens: safeBudget,
+                FilesByPage: filesByPage);
+        }
+
+        private List<PackingCandidate> BuildStatBasedCandidates(List<PullRequestFileInfo> files)
+        {
+            var candidates = new List<PackingCandidate>(files.Count);
+            foreach (var file in files)
+            {
+                var estimatedTokens = _tokenEstimator.EstimateFromStats(file.Additions, file.Deletions);
+                var classification = _fileClassifier.Classify(file.Path);
+                candidates.Add(new PackingCandidate(
+                    file.Path,
+                    estimatedTokens,
+                    classification.Category,
+                    file.Additions + file.Deletions));
+            }
+            return candidates;
         }
 
         // --- Result builder -------------------------------------------------------

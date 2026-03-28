@@ -138,4 +138,59 @@ public class TokenEstimatorTests
         Assert.Equal(100.0, result.PercentageUsed);
         Assert.False(result.FitsWithinBudget);
     }
+
+    // --- EstimateFromStats tests --------------------------------------------------
+
+    [Fact]
+    public void EstimateFromStats_TypicalValues_ReturnsLineTimesFactorPlusOverhead()
+    {
+        var estimator = CreateEstimator();
+
+        // (10 + 5) * 15 + 50 = 275
+        var result = estimator.EstimateFromStats(additions: 10, deletions: 5);
+
+        Assert.Equal(275, result);
+    }
+
+    [Fact]
+    public void EstimateFromStats_ZeroLines_ReturnsOverheadOnly()
+    {
+        var estimator = CreateEstimator();
+
+        var result = estimator.EstimateFromStats(additions: 0, deletions: 0);
+
+        Assert.Equal(50, result);
+    }
+
+    [Fact]
+    public void EstimateFromStats_NegativeValues_ClampedToZero()
+    {
+        var estimator = CreateEstimator();
+
+        var result = estimator.EstimateFromStats(additions: -5, deletions: -10);
+
+        Assert.Equal(50, result);
+    }
+
+    [Fact]
+    public void EstimateFromStats_OneNegativeOnePositive_ClampsNegativeOnly()
+    {
+        var estimator = CreateEstimator();
+
+        // Max(0, -3) + Max(0, 20) = 20 lines → 20 * 15 + 50 = 350
+        var result = estimator.EstimateFromStats(additions: -3, deletions: 20);
+
+        Assert.Equal(350, result);
+    }
+
+    [Fact]
+    public void EstimateFromStats_LargeValues_ScalesLinearly()
+    {
+        var estimator = CreateEstimator();
+
+        // (1000 + 500) * 15 + 50 = 22_550
+        var result = estimator.EstimateFromStats(additions: 1000, deletions: 500);
+
+        Assert.Equal(22_550, result);
+    }
 }

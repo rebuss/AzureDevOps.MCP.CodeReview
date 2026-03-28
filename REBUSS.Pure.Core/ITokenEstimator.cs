@@ -17,4 +17,14 @@ public interface ITokenEstimator
     /// <param name="safeBudgetTokens">The available safe budget in tokens.</param>
     /// <returns>Estimation result with token count, percentage, and fit signal.</returns>
     TokenEstimationResult Estimate(string serializedContent, int safeBudgetTokens);
+
+    /// <summary>
+    /// Estimates the token count for a file diff based on line-change statistics,
+    /// without requiring the actual diff content. Uses a fixed per-line token factor
+    /// plus a per-file overhead constant.
+    /// </summary>
+    /// <param name="additions">Number of added lines (clamped to 0 if negative).</param>
+    /// <param name="deletions">Number of deleted lines (clamped to 0 if negative).</param>
+    /// <returns>Estimated token count (always ≥ PerFileOverhead).</returns>
+    int EstimateFromStats(int additions, int deletions);
 }

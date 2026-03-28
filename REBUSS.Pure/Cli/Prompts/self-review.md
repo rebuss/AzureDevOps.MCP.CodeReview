@@ -6,10 +6,10 @@ This review MUST:
 - use only MCP tools from `REBUSS.Pure`
 - NEVER inspect files or project state directly from the editor or local workspace
 - NEVER reason about local changes without calling MCP tools
-- rely solely on `get_local_files` and `get_local_file_diff`
+- rely on `get_local_content` as the primary review tool
 - abort if MCP tools are unavailable
 
-If any required MCP tool is missing, respond with:  
+If any required MCP tool is missing, respond with:
 **"Cannot proceed: required MCP tools not available."**
 
 ---
@@ -27,94 +27,109 @@ No other input is needed to determine the scope.
 
 # Allowed MCP Tools (Strict)
 
-### `get_local_files([scope])`
-Call this **first**.
+### `get_local_content(pageNumber, [scope], [modelName], [maxTokens])`
+
+**Primary review tool.** Use this to iterate through pages of local change content.
 
 Purpose:
-- detect locally changed files
-- understand the scope and categories of changes
-- decide which files need further inspection
+- retrieve structured diffs for all files on a specific page
+- each page is pre-sized to fit within the context budget
+- the response includes `repositoryRoot`, `currentBranch`, `scope`, page info, and per-file diffs
+
+The first page response tells you the `totalPages` - loop through all pages.
+
+Start with page 1:
+```
+response = get_local_content(pageNumber: 1, scope: "staged")
+```
 
 The response includes:
-- repositoryRoot
-- scope
-- currentBranch
-- totalFiles
-- list of files with: path, status, additions, deletions, extension, classification, reviewPriority
-- summary by category (source / test / config / docs / binary / generated)
+- `repositoryRoot` - absolute path to the git repository
+- `currentBranch` - current branch name (null if detached HEAD)
+- `scope` - the scope used
+- `pageNumber` / `totalPages` - pagination info
+- `files` - array of structured diffs per file
+- `summary.filesOnPage`, `summary.totalFiles`, `summary.hasMorePages`, `summary.categories`
 
 ---
 
-### `get_local_file_diff(path, [scope])`
-Call **only after** `get_local_files`.
+### Legacy tools (available but not recommended)
 
-Purpose:
-- obtain structured diffs for selected files
-- minimize context consumption
+These tools remain available for specific use cases:
 
-Notes:
-- must reuse the SAME `scope` as used in `get_local_files`
-- files may be skipped with a `skipReason`
-- skipped diffs must NOT be analyzed
+- `get_local_files([scope])` - list changed files with stats (no diffs)
+- `get_local_file_diff(path, [scope])` - single-file diff
+
+Prefer `get_local_content` - it provides server-managed pagination and reduces tool calls.
 
 ---
 
 # Mandatory Workflow
 
-## Step 1 — List changed files
+## Step 1 - Retrieve first page of content
+
 Call:
 
-get_local_files([scope])
+`get_local_content(pageNumber: 1, scope: "staged")`
 
-Then:
-- note repositoryRoot and currentBranch  
-- read file categories and priorities  
-- decide which files are worth reviewing (source › config › tests › docs)
+From the response:
+- note `repositoryRoot` and `currentBranch`
+- note `totalPages` to plan iteration
+- review each file in the `files` array
+- check `summary.categories` for change distribution
 
 ---
 
-## Step 2 — Retrieve diffs only for relevant files
+## Step 2 - Iterate remaining pages
 
-For each file that merits actual review:
+If `summary.hasMorePages` is true, continue:
 
-get_local_file_diff(path, [scope])
+```
+for pageNumber in 2..totalPages:
+    response = get_local_content(pageNumber, scope: "staged")
+    review each file in response.files
+```
 
-Skip:
-- binary files  
-- generated files  
-- trivial changes  
-- files with `skipReason`  
+For each file:
+- analyze the diff hunks for issues
+- note files with `skipReason` - do not analyze their content
 
 ---
 
 # Review Priorities
 
 Order:
-1. High-priority source files  
-2. Other source files  
-3. Configuration files  
-4. Test files  
-5. Documentation  
+1. High-priority source files
+2. Other source files
+3. Configuration files
+4. Test files
+5. Documentation
 
 ---
 
 # What to Look For
 
 Check diffs for:
-- correctness issues  
-- potential bugs or regressions  
-- null safety problems  
-- concurrency hazards  
-- async/await correctness  
-- missing validation or error-handling  
-- unintended behavior changes  
-- performance regressions  
-- duplicated or fragile logic  
-- missing or insufficient tests  
+- correctness issues
+- potential bugs or regressions
+- null safety problems
+- concurrency hazards
+- async/await correctness
+- missing validation or error-handling
+- unintended behavior changes
+- performance regressions
+- duplicated or fragile logic
+- missing or insufficient tests
 
 For test changes:
-- ensure coverage matches modified logic  
-- confirm assertions are meaningful  
+- ensure coverage matches modified logic
+- confirm assertions are meaningful
+
+---
+
+# Skipped Diffs
+
+Files may have their diff skipped with a `skipReason` field (e.g. `"binary file"`, `"generated file"`, `"file deleted"`). Do not analyze their content - acknowledge the skip in review notes.
 
 ---
 
@@ -122,29 +137,30 @@ For test changes:
 
 ## Verdict
 Short summary including:
-- repository root  
-- current branch  
-- scope used  
-- number of files reviewed  
+- repository root
+- current branch
+- scope used
+- number of files reviewed
+- number of pages processed
 
 ---
 
 ## Critical Issues
 For each:
-- file path  
-- severity  
-- issue description  
-- why it matters  
-- recommended fix  
+- file path
+- severity
+- issue description
+- why it matters
+- recommended fix
 
 ---
 
 ## Important Improvements
 For each:
-- file path  
-- what to improve  
-- reason  
-- suggested correction  
+- file path
+- what to improve
+- reason
+- suggested correction
 
 ---
 
@@ -154,17 +170,18 @@ For each:
 
 ## Review Notes
 Include:
-- scope used  
-- which files were reviewed  
-- which files were skipped and why  
-- limitations due to large change sets (if applicable)  
+- scope used
+- which pages were reviewed
+- which files were reviewed
+- which files were skipped and why
+- limitations due to large change sets (if applicable)
 
 ---
 
 # Behavioral Requirements
 
-- Never infer file contents.  
-- Never analyze files outside MCP responses.  
-- Avoid unnecessary tool calls.  
-- Prefer fewer, higher-value insights.  
-- If something is uncertain, mark it as a potential risk.  
+- Never infer file contents.
+- Never analyze files outside MCP responses.
+- Avoid unnecessary tool calls.
+- Prefer fewer, higher-value insights.
+- If something is uncertain, mark it as a potential risk.

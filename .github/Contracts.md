@@ -65,6 +65,8 @@ Error messages by tool:
 - `get_file_content_at_ref`: `"File not found: ..."`, `"Error retrieving file content: ..."`
 - `get_local_files`: `"Repository not found: ..."`, `"Git command failed: ..."`
 - `get_local_file_diff`: `"File not found in local changes: ..."`, `"Repository not found: ..."`, `"Git command failed: ..."`
+- `get_pr_content`: `"Missing required parameter: prNumber"`, `"Missing required parameter: pageNumber"`, `"pageNumber N exceeds total pages M"`, `"Pull Request not found: ..."`, `"Error retrieving PR content: ..."`
+- `get_local_content`: `"Missing required parameter: pageNumber"`, `"pageNumber N exceeds total pages M"`, `"Error retrieving local content: ..."`
 
 ### JSON-RPC errors (protocol level)
 
@@ -150,11 +152,15 @@ Auto-generated JSON Schema:
 
 #### Input
 
-Auto-generated from `GetPullRequestMetadataToolHandler.ExecuteAsync` signature.
+Auto-generated from `GetPullRequestMetadataToolHandler.ExecuteAsync` signature. `prNumber` is logically required (validated at runtime); budget parameters are optional and trigger `contentPaging` computation.
 
-| Parameter | C# Type | Required | Description |
-|---|---|---|---|
-| `prNumber` | `int` | ✅ | The Pull Request number/ID to retrieve metadata for |
+| Parameter | C# Type | Required | Default | Description |
+|---|---|---|---|---|
+| `prNumber` | `int?` | ✅ (runtime) | `null` | The Pull Request number/ID to retrieve metadata for |
+| `modelName` | `string?` | ❌ | `null` | Model name for context budget resolution (e.g. `"gpt-4o"`). Triggers pagination info. |
+| `maxTokens` | `int?` | ❌ | `null` | Explicit token budget override. Triggers pagination info. |
+
+> **Feature 005 note:** When `modelName` or `maxTokens` is provided, the response includes a `contentPaging` section with page allocation info for use with `get_pr_content`.
 
 #### Output — `PullRequestMetadataResult`
 
@@ -173,7 +179,19 @@ Auto-generated from `GetPullRequestMetadataToolHandler.ExecuteAsync` signature.
   "stats": { "commits": 3, "changedFiles": 5, "additions": 120, "deletions": 40 },
   "commitShas": ["def456", "789abc", "012def"],
   "description": { "text": "PR description...", "isTruncated": false, "originalLength": 18, "returnedLength": 18 },
-  "source": { "repository": "org/repo", "url": "https://dev.azure.com/org/project/_git/repo/pullrequest/42" }
+  "source": { "repository": "org/repo", "url": "https://dev.azure.com/org/project/_git/repo/pullrequest/42" },
+  "contentPaging": {
+    "totalPages": 5,
+    "totalFiles": 286,
+    "budgetPerPageTokens": 89600,
+    "filesByPage": [
+      { "pageNumber": 1, "fileCount": 12 },
+      { "pageNumber": 2, "fileCount": 15 },
+      { "pageNumber": 3, "fileCount": 18 },
+      { "pageNumber": 4, "fileCount": 14 },
+      { "pageNumber": 5, "fileCount": 8 }
+    ]
+  }
 }
 ```
 
@@ -185,6 +203,11 @@ Auto-generated from `GetPullRequestMetadataToolHandler.ExecuteAsync` signature.
 | `updatedAt` | string | **yes** | Set to `closedDate` if present; omitted when null |
 | `description.text` | string | no | Truncated to **800 chars** if longer |
 | `description.isTruncated` | bool | no | `true` when original exceeded 800 chars |
+| `contentPaging` | object | **yes** | Only present when `modelName` or `maxTokens` is provided; omitted otherwise (WhenWritingNull) |
+| `contentPaging.totalPages` | int | no | Total number of content pages |
+| `contentPaging.totalFiles` | int | no | Total number of changed files across all pages |
+| `contentPaging.budgetPerPageTokens` | int | no | Safe token budget used for page allocation |
+| `contentPaging.filesByPage` | array | no | Per-page file count breakdown (`PageFileCount[]`) |
 
 ---
 
@@ -491,12 +514,138 @@ Same `StructuredDiffResult` shape with `manifest`. `prNumber` is `null` (omitted
 
 ---
 
+### 4.8 `get_pr_content`
+
+#### Input
+
+Auto-generated from `GetPullRequestContentToolHandler.ExecuteAsync` signature. All parameters are nullable with defaults, making them optional in the schema. `prNumber` and `pageNumber` are logically required (validated at runtime).
+
+| Parameter | C# Type | Required | Default | Description |
+|---|---|---|---|---|
+| `prNumber` | `int?` | ✅ (runtime) | `null` | The Pull Request number/ID |
+| `pageNumber` | `int?` | ✅ (runtime) | `null` | Page number to retrieve (1-based) |
+| `modelName` | `string?` | ❌ | `null` | Model name for context budget resolution |
+| `maxTokens` | `int?` | ❌ | `null` | Explicit token budget override |
+
+#### Output — `PullRequestContentPageResult`
+
+```json
+{
+  "prNumber": 42,
+  "pageNumber": 1,
+  "totalPages": 5,
+  "files": [
+    {
+      "path": "src/Cache/CacheService.cs",
+      "changeType": "edit",
+      "additions": 5, "deletions": 2,
+      "hunks": [
+        {
+          "oldStart": 10, "oldCount": 7, "newStart": 10, "newCount": 10,
+          "lines": [
+            { "op": " ", "text": "    public class CacheService" },
+            { "op": "-", "text": "        private int _ttl = 60;" },
+            { "op": "+", "text": "        private int _ttl = 300;" }
+          ]
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "filesOnPage": 12,
+    "totalFiles": 286,
+    "estimatedTokens": 85000,
+    "hasMorePages": true,
+    "categories": { "source": 8, "test": 3, "config": 1 }
+  }
+}
+```
+
+| Field | Type | Nullable | Notes |
+|---|---|---|---|
+| `prNumber` | int | no | Echoes input PR number |
+| `pageNumber` | int | no | Current page (1-based) |
+| `totalPages` | int | no | Total number of pages |
+| `files` | array | no | `StructuredFileChange[]` — diff content for files on this page |
+| `summary.filesOnPage` | int | no | Number of files included on this page |
+| `summary.totalFiles` | int | no | Total files across all pages |
+| `summary.estimatedTokens` | int | no | Estimated token usage for this page |
+| `summary.hasMorePages` | bool | no | `true` when `pageNumber < totalPages` |
+| `summary.categories` | object | no | File count by category (e.g. `"source"`, `"test"`, `"config"`) |
+
+Error messages: `"Missing required parameter: prNumber"`, `"prNumber must be greater than 0"`, `"Missing required parameter: pageNumber"`, `"pageNumber must be >= 1"`, `"pageNumber N exceeds total pages M"`, `"Pull Request not found: ..."`, `"Error retrieving PR content: ..."`.
+
+---
+
+### 4.9 `get_local_content`
+
+#### Input
+
+Auto-generated from `GetLocalContentToolHandler.ExecuteAsync` signature. All parameters are nullable with defaults, making them optional in the schema. `pageNumber` is logically required (validated at runtime).
+
+| Parameter | C# Type | Required | Default | Description |
+|---|---|---|---|---|
+| `pageNumber` | `int?` | ✅ (runtime) | `null` | Page number to retrieve (1-based) |
+| `scope` | `string?` | ❌ | `null` (resolved to `"working-tree"`) | Review scope: `"working-tree"`, `"staged"`, or a branch/ref name |
+| `modelName` | `string?` | ❌ | `null` | Model name for context budget resolution |
+| `maxTokens` | `int?` | ❌ | `null` | Explicit token budget override |
+
+#### Output — `LocalContentPageResult`
+
+```json
+{
+  "repositoryRoot": "C:/Projects/MyApp",
+  "currentBranch": "feature/cache",
+  "scope": "working-tree",
+  "pageNumber": 1,
+  "totalPages": 2,
+  "files": [
+    {
+      "path": "src/Cache/CacheService.cs",
+      "changeType": "edit",
+      "additions": 5, "deletions": 2,
+      "hunks": [
+        {
+          "oldStart": 10, "oldCount": 7, "newStart": 10, "newCount": 10,
+          "lines": [
+            { "op": " ", "text": "    public class CacheService" },
+            { "op": "-", "text": "        private int _ttl = 60;" },
+            { "op": "+", "text": "        private int _ttl = 300;" }
+          ]
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "filesOnPage": 5,
+    "totalFiles": 8,
+    "estimatedTokens": 12000,
+    "hasMorePages": true,
+    "categories": { "source": 3, "test": 1, "config": 1 }
+  }
+}
+```
+
+| Field | Type | Nullable | Notes |
+|---|---|---|---|
+| `repositoryRoot` | string | no | Absolute path to the repository root |
+| `currentBranch` | string | **yes** | Omitted when detached HEAD |
+| `scope` | string | no | Echoes the resolved scope value |
+| `pageNumber` | int | no | Current page (1-based) |
+| `totalPages` | int | no | Total number of pages |
+| `files` | array | no | `StructuredFileChange[]` — diff content for files on this page |
+| `summary` | object | no | `ContentPageSummary` — same shape as `get_pr_content` summary |
+
+Error messages: `"Missing required parameter: pageNumber"`, `"pageNumber must be >= 1"`, `"pageNumber N exceeds total pages M"`, `"Error retrieving local content: ..."`.
+
+---
+
 ## 5. Shared DTO Reference
 
 | DTO | Used by | Fields |
 |---|---|---|
 | **StructuredDiffResult** | `get_pr_diff`, `get_file_diff`, `get_local_file_diff` | `prNumber` (int?), `files` (StructuredFileChange[]), `manifest`? (ContentManifestResult), `pagination`? (PaginationMetadataResult — Feature 004), `stalenessWarning`? (StalenessWarningResult — Feature 004) |
-| **StructuredFileChange** | nested in above | `path`, `changeType`, `skipReason`?, `additions`, `deletions`, `hunks` |
+| **StructuredFileChange** | nested in StructuredDiffResult, `get_pr_content`, `get_local_content` | `path`, `changeType`, `skipReason`?, `additions`, `deletions`, `hunks` |
 | **StructuredHunk** | nested in above | `oldStart`, `oldCount`, `newStart`, `newCount`, `lines` |
 | **StructuredLine** | nested in above | `op`, `text` |
 | **PullRequestFileItem** | `get_pr_files`, `get_local_files` | `path`, `status`, `additions`, `deletions`, `changes`, `extension`, `isBinary`, `isGenerated`, `isTestFile`, `reviewPriority` |
@@ -504,6 +653,12 @@ Same `StructuredDiffResult` shape with `manifest`. `prNumber` is `null` (omitted
 | **ContentManifestResult** | `get_pr_diff`, `get_pr_files`, `get_local_files`, `get_local_file_diff` | `items` (ManifestEntryResult[]), `summary` (ManifestSummaryResult) |
 | **ManifestEntryResult** | nested in ContentManifestResult | `path`, `estimatedTokens`, `status`, `priorityTier` |
 | **ManifestSummaryResult** | nested in ContentManifestResult | `totalItems`, `includedCount`, `partialCount`, `deferredCount`, `totalBudgetTokens`, `budgetUsed`, `budgetRemaining`, `utilizationPercent`, `includedOnThisPage`? (int? — Feature 004), `remainingAfterThisPage`? (int? — Feature 004), `totalPages`? (int? — Feature 004) |
+| **PullRequestMetadataResult** | `get_pr_metadata` | `prNumber`, `id`, `title`, `author` (AuthorInfo), `state`, `isDraft`, `createdAt`, `updatedAt`?, `base` (RefInfo), `head` (RefInfo), `stats` (PrStats), `commitShas`, `description` (DescriptionInfo), `source` (SourceInfo), `contentPaging`? (ContentPagingInfo) |
+| **ContentPagingInfo** | `get_pr_metadata` (when budget params provided) | `totalPages` (int), `totalFiles` (int), `budgetPerPageTokens` (int), `filesByPage` (PageFileCount[]) |
+| **PageFileCount** | nested in ContentPagingInfo | `pageNumber` (int), `fileCount` (int) |
+| **PullRequestContentPageResult** | `get_pr_content` | `prNumber` (int), `pageNumber` (int), `totalPages` (int), `files` (StructuredFileChange[]), `summary` (ContentPageSummary) |
+| **LocalContentPageResult** | `get_local_content` | `repositoryRoot` (string), `currentBranch`? (string), `scope` (string), `pageNumber` (int), `totalPages` (int), `files` (StructuredFileChange[]), `summary` (ContentPageSummary) |
+| **ContentPageSummary** | `get_pr_content`, `get_local_content` | `filesOnPage` (int), `totalFiles` (int), `estimatedTokens` (int), `hasMorePages` (bool), `categories` (Dictionary<string, int>) |
 | **AuthorInfo** | `get_pr_metadata` | `login`, `displayName` |
 | **RefInfo** | `get_pr_metadata` | `ref`, `sha` |
 | **PrStats** | `get_pr_metadata` | `commits`, `changedFiles`, `additions`, `deletions` |

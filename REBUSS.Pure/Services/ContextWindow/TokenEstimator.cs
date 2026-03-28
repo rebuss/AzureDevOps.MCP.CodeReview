@@ -13,6 +13,8 @@ namespace REBUSS.Pure.Services.ContextWindow;
 public sealed class TokenEstimator : ITokenEstimator
 {
     private const double DefaultCharsPerToken = 4.0;
+    private const int AvgTokensPerLine = 15;
+    private const int PerFileOverhead = 50;
 
     private readonly IOptions<ContextWindowOptions> _options;
     private readonly ILogger<TokenEstimator> _logger;
@@ -46,5 +48,11 @@ public sealed class TokenEstimator : ITokenEstimator
         var fitsWithinBudget = estimatedTokens <= safeBudgetTokens;
 
         return new TokenEstimationResult(estimatedTokens, percentageUsed, fitsWithinBudget);
+    }
+
+    public int EstimateFromStats(int additions, int deletions)
+    {
+        var lineCount = Math.Max(0, additions) + Math.Max(0, deletions);
+        return lineCount * AvgTokensPerLine + PerFileOverhead;
     }
 }

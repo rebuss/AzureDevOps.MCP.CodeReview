@@ -57,7 +57,7 @@ Full codebase context is included below (file-role map, dependency graph, DI reg
 | `REBUSS.Pure.Core\IScmClient.cs` | Unified SCM client contract | `IScmClient` (extends `IPullRequestDataProvider` + `IFileContentDataProvider`), `IPullRequestDataProvider`, `IFileContentDataProvider` |
 | `REBUSS.Pure.Core\IWorkspaceRootProvider.cs` | Workspace/repository root resolution contract | `IWorkspaceRootProvider` � `SetCliRepositoryPath`, `SetRoots`, `GetRootUris`, `ResolveRepositoryRoot` |
 | `REBUSS.Pure.Core\IContextBudgetResolver.cs` | Context window budget resolution contract | `IContextBudgetResolver` — `Resolve(int?, string?)` → `BudgetResolutionResult` |
-| `REBUSS.Pure.Core\ITokenEstimator.cs` | Token estimation contract (schema-independent) | `ITokenEstimator` — `Estimate(string, int)` → `TokenEstimationResult` |
+| `REBUSS.Pure.Core\ITokenEstimator.cs` | Token estimation contract (schema-independent) | `ITokenEstimator` — `Estimate(string, int)` → `TokenEstimationResult`, `EstimateFromStats(int, int)` → `int` |
 | `REBUSS.Pure.Core\IResponsePacker.cs` | Response packing contract | `IResponsePacker` — `Pack(IReadOnlyList<PackingCandidate>, int)` → `PackingDecision` |
 | `REBUSS.Pure.Core\IPageAllocator.cs` | Deterministic page allocation contract (Feature 004) | `IPageAllocator` — `Allocate(sortedCandidates, safeBudgetTokens)` → `PageAllocation` |
 | `REBUSS.Pure.Core\IPageReferenceCodec.cs` | Base64url page reference encode/decode contract (Feature 004) | `IPageReferenceCodec` — `Encode(PageReferenceData)` → `string`, `TryDecode(string)` → `PageReferenceData?` |
@@ -211,7 +211,7 @@ Full codebase context is included below (file-role map, dependency graph, DI reg
 |---|---|---|
 | `REBUSS.Pure\Services\ContextWindow\ContextWindowOptions.cs` | `IOptions<T>` configuration: safety margin, chars-per-token, default budget, min/max guardrails, model registry | — |
 | `REBUSS.Pure\Services\ContextWindow\ContextBudgetResolver.cs` | Three-tier budget resolution: explicit → registry → default, with guardrails and warnings | `IContextBudgetResolver`, `IOptions<ContextWindowOptions>`, `ILogger<ContextBudgetResolver>` |
-| `REBUSS.Pure\Services\ContextWindow\TokenEstimator.cs` | Character-count token estimation heuristic, schema-independent | `ITokenEstimator`, `IOptions<ContextWindowOptions>`, `ILogger<TokenEstimator>` |
+| `REBUSS.Pure\Services\ContextWindow\TokenEstimator.cs` | Character-count token estimation heuristic, schema-independent; stat-based estimation (`EstimateFromStats`) using `AvgTokensPerLine=15`, `PerFileOverhead=50` | `ITokenEstimator`, `IOptions<ContextWindowOptions>`, `ILogger<TokenEstimator>` |
 
 ### Response Packing (REBUSS.Pure\Services)
 
@@ -235,7 +235,9 @@ Full codebase context is included below (file-role map, dependency graph, DI reg
 |---|---|---|
 | `REBUSS.Pure\Tools\GetPullRequestDiffToolHandler.cs` | `[McpServerToolType]` `get_pr_diff` — returns structured JSON with per-file hunks; F004 integration: dual F003/F004 paths, pageReference resume, staleness detection, pageNumber access; prNumber now optional when pageReference is provided; SDK attribute-based registration (`[McpServerTool]`/`[Description]`), throws `McpException` for errors | `IPullRequestDataProvider`, `IPageAllocator`, `IPageReferenceCodec`, `StructuredDiffResult` models, `PaginationMetadataResult`, `StalenessWarningResult` |
 | `REBUSS.Pure\Tools\GetFileDiffToolHandler.cs` | `[McpServerToolType]` `get_file_diff` — returns structured JSON for a single file; SDK attribute-based registration (`[McpServerTool]`/`[Description]`), throws `McpException`/`ArgumentException` for errors | `IPullRequestDataProvider`, `StructuredDiffResult` models |
-| `REBUSS.Pure\Tools\GetPullRequestMetadataToolHandler.cs` | `[McpServerToolType]` `get_pr_metadata` — returns PR metadata JSON; SDK attribute-based registration (`[McpServerTool]`/`[Description]`), throws `McpException`/`ArgumentException` for errors | `IPullRequestDataProvider`, `PullRequestMetadataResult` models |
+| `REBUSS.Pure\Tools\GetPullRequestMetadataToolHandler.cs` | `[McpServerToolType]` `get_pr_metadata` — returns PR metadata JSON; extended with optional `modelName`/`maxTokens` params to compute `contentPaging` (page allocation via stat-based estimation); SDK attribute-based registration (`[McpServerTool]`/`[Description]`), throws `McpException` for errors | `IPullRequestDataProvider`, `IContextBudgetResolver`, `ITokenEstimator`, `IFileClassifier`, `IPageAllocator`, `PullRequestMetadataResult` models |
+| `REBUSS.Pure\Tools\GetPullRequestContentToolHandler.cs` | `[McpServerToolType]` `get_pr_content` — returns paginated diff content for a single page of a PR; stat-based page allocation, fetches full diff then filters to page files; SDK attribute-based registration | `IPullRequestDataProvider`, `IContextBudgetResolver`, `ITokenEstimator`, `IFileClassifier`, `IPageAllocator`, `PullRequestContentPageResult`, `ContentPageSummary` models |
+| `REBUSS.Pure\Tools\GetLocalContentToolHandler.cs` | `[McpServerToolType]` `get_local_content` — returns paginated diff content for a single page of local changes; stat-based page allocation, per-file diff fetch (only page files); SDK attribute-based registration | `ILocalReviewProvider`, `IContextBudgetResolver`, `ITokenEstimator`, `IFileClassifier`, `IPageAllocator`, `LocalContentPageResult`, `ContentPageSummary` models |
 | `REBUSS.Pure\Tools\GetPullRequestFilesToolHandler.cs` | `[McpServerToolType]` `get_pr_files` — returns classified file list JSON; F004 integration: same pagination pattern as get_pr_diff; prNumber now optional when pageReference is provided; SDK attribute-based registration, throws `McpException` for errors | `IPullRequestDataProvider`, `IPageAllocator`, `IPageReferenceCodec`, `PullRequestFilesResult` models, `PaginationMetadataResult`, `StalenessWarningResult` |
 | `REBUSS.Pure\Tools\GetFileContentAtRefToolHandler.cs` | `[McpServerToolType]` `get_file_content_at_ref` — returns file content JSON; SDK attribute-based registration (`[McpServerTool]`/`[Description]`), throws `McpException`/`ArgumentException` for errors | `IFileContentDataProvider`, `FileContentAtRefResult` model |
 | `REBUSS.Pure\Tools\GetLocalChangesFilesToolHandler.cs` | `[McpServerToolType]` `get_local_files` — lists locally changed files with classification; F004 integration: pagination support but no staleness (null fingerprint); SDK attribute-based registration, throws `McpException` for errors | `ILocalReviewProvider`, `IPageAllocator`, `IPageReferenceCodec`, `LocalReviewFilesResult` model, `PaginationMetadataResult` |
@@ -246,7 +248,10 @@ Full codebase context is included below (file-role map, dependency graph, DI reg
 | File | Role |
 |---|---|
 | `REBUSS.Pure\Tools\Models\StructuredDiffResult.cs` | `StructuredDiffResult`, `StructuredFileChange`, `StructuredHunk`, `StructuredLine` — diff tool JSON output (shared by PR and local tools); `PrNumber` is `int?` (null for local diffs, omitted from JSON); +`Pagination` (PaginationMetadataResult?) and `StalenessWarning` (StalenessWarningResult?) nullable properties (Feature 004) |
-| `REBUSS.Pure\Tools\Models\PullRequestMetadataResult.cs` | `PullRequestMetadataResult`, `AuthorInfo`, `RefInfo`, `PrStats`, `DescriptionInfo`, `SourceInfo` |
+| `REBUSS.Pure\Tools\Models\PullRequestMetadataResult.cs` | `PullRequestMetadataResult`, `AuthorInfo`, `RefInfo`, `PrStats`, `DescriptionInfo`, `SourceInfo`; +`ContentPaging` (ContentPagingInfo?) nullable property for pagination info when budget params provided |
+| `REBUSS.Pure\Tools\Models\ContentPagingInfo.cs` | `ContentPagingInfo` (totalPages, totalFiles, budgetPerPageTokens, filesByPage), `PageFileCount` (pageNumber, fileCount) — pagination overview included in `get_pr_metadata` response |
+| `REBUSS.Pure\Tools\Models\PullRequestContentPageResult.cs` | `PullRequestContentPageResult` (prNumber, pageNumber, totalPages, files, summary), `ContentPageSummary` (filesOnPage, totalFiles, estimatedTokens, hasMorePages, categories) — response DTO for `get_pr_content`; `ContentPageSummary` shared with `LocalContentPageResult` |
+| `REBUSS.Pure\Tools\Models\LocalContentPageResult.cs` | `LocalContentPageResult` (repositoryRoot, currentBranch?, scope, pageNumber, totalPages, files, summary) — response DTO for `get_local_content`; reuses `ContentPageSummary` |
 | `REBUSS.Pure\Tools\Models\PullRequestFilesResult.cs` | `PullRequestFilesResult`, `PullRequestFileItem`, `PullRequestFilesSummaryResult` (also reused by `LocalReviewFilesResult`); +`Pagination` (PaginationMetadataResult?) and `StalenessWarning` (StalenessWarningResult?) nullable properties (Feature 004) |
 | `REBUSS.Pure\Tools\Models\FileContentAtRefResult.cs` | `FileContentAtRefResult` |
 | `REBUSS.Pure\Tools\Models\LocalReviewFilesResult.cs` | `LocalReviewFilesResult` — JSON output for `get_local_files`; includes `repositoryRoot`, `scope`, `currentBranch` context fields; +`Pagination` (PaginationMetadataResult?) nullable property (Feature 004, no staleness for local tools) |
@@ -309,8 +314,8 @@ Full codebase context is included below (file-role map, dependency graph, DI reg
 | `REBUSS.Pure\Cli\AzureDevOpsCliAuthFlow.cs` | Azure DevOps auth flow: checks for Azure CLI, runs `az login`, caches token; offers to install Azure CLI if not found |
 | `REBUSS.Pure\Cli\GitHubCliAuthFlow.cs` | GitHub auth flow: checks for GitHub CLI, runs `gh auth login --web`, caches token; offers to install GitHub CLI if not found |
 | `REBUSS.Pure\Cli\InitCommand.cs` | `init` command: generates MCP config files (local or global via `-g`), supports `--ide vscode`/`--ide vs` to force a specific IDE target (skips auto-detection), copies prompt and instruction files (always overwrites `.github/prompts/*.md` and `.github/instructions/*.instructions.md` to enable updates), delegates authentication to `ICliAuthFlow` via `CreateAuthFlow()` (selects `GitHubCliAuthFlow` or `AzureDevOpsCliAuthFlow` based on `DetectProviderFromGitRemote()` or explicit `--provider`); global mode writes to `~/.vs/mcp.json` and `~/.vscode/mcp.json` via `ResolveGlobalConfigTargets()` |
-| `REBUSS.Pure\Cli\Prompts\review-pr.md` | Embedded resource: PR review prompt template |
-| `REBUSS.Pure\Cli\Prompts\self-review.md` | Embedded resource: self-review prompt template |
+| `REBUSS.Pure\Cli\Prompts\review-pr.md` | Embedded resource: PR review prompt template; redesigned for `get_pr_metadata`(with budget) + `get_pr_content` page loop workflow; legacy tools documented as available |
+| `REBUSS.Pure\Cli\Prompts\self-review.md` | Embedded resource: self-review prompt template; redesigned for `get_local_content` page loop workflow; legacy tools documented as available |
 | `REBUSS.Pure\Cli\Prompts\create-pr.md` | Embedded resource: create-PR prompt template (not yet deployed by `init`; reserved for future `#create-pr` command) |
 
 ### Logging
@@ -384,10 +389,13 @@ Full codebase context is included below (file-role map, dependency graph, DI reg
 | `REBUSS.Pure.Tests\Tools\GetFileContentAtRefToolHandlerTests.cs` | `GetFileContentAtRefToolHandler` — structured JSON output, validation (McpException), provider exceptions (McpException) |
 | `REBUSS.Pure.Tests\Tools\GetLocalChangesFilesToolHandlerTests.cs` | `GetLocalChangesFilesToolHandler` — scope parsing, JSON output, error handling (McpException), packing manifest |
 | `REBUSS.Pure.Tests\Tools\GetLocalFileDiffToolHandlerTests.cs` | `GetLocalFileDiffToolHandler` — structured JSON output, validation (McpException), scope routing, error handling (McpException), packing manifest |
+| `REBUSS.Pure.Tests\Tools\GetPullRequestMetadataToolHandlerTests.cs` | `GetPullRequestMetadataToolHandler` — structured JSON output, validation (McpException), provider exceptions, +contentPaging computation (stat-based estimation, page allocation, backward compatibility without budget params) |
+| `REBUSS.Pure.Tests\Tools\GetPullRequestContentToolHandlerTests.cs` | `GetPullRequestContentToolHandler` — structured JSON output, validation (McpException), pagination (page filtering, category breakdown, multi-page, out-of-range), PR not found error |
+| `REBUSS.Pure.Tests\Tools\GetLocalContentToolHandlerTests.cs` | `GetLocalContentToolHandler` — structured JSON output, validation (McpException), pagination (per-file diff fetch, category breakdown, scope routing, multi-page, out-of-range) |
 | `REBUSS.Pure.Tests\Services\LocalReview\LocalReviewScopeTests.cs` | `LocalReviewScope.Parse` — all scope kinds, ToString |
 | `REBUSS.Pure.Tests\Services\LocalReview\LocalGitClientParseTests.cs` | `LocalGitClient` porcelain/name-status parsing — via reflection on internal static methods |
 | `REBUSS.Pure.Tests\Services\LocalReview\LocalReviewProviderTests.cs` | `LocalReviewProvider` — files listing, status mapping, classification, file diff, skip reasons, exception cases |
-| `REBUSS.Pure.Tests\Services\ContextWindow\TokenEstimatorTests.cs` | `TokenEstimator` — token estimation accuracy, null/empty input, boundary conditions, custom ratio, invalid ratio fallback, rounding |
+| `REBUSS.Pure.Tests\Services\ContextWindow\TokenEstimatorTests.cs` | `TokenEstimator` — token estimation accuracy, null/empty input, boundary conditions, custom ratio, invalid ratio fallback, rounding; +`EstimateFromStats` tests (additions+deletions, zero lines fallback, negative values clamped) |
 | `REBUSS.Pure.Tests\Services\ContextWindow\ContextBudgetResolverTests.cs` | `ContextBudgetResolver` — explicit budget, registry lookup, default fallback, guardrails, safety margin, case-insensitive matching, edge cases |
 | `REBUSS.Pure.Tests\Services\PackingPriorityComparerTests.cs` | `PackingPriorityComparer` — FileCategory ordering, TotalChanges secondary sort, Path tiebreaker, null handling |
 | `REBUSS.Pure.Tests\Services\ResponsePackerTests.cs` | `ResponsePacker` — empty candidates, all-fit, budget exceeded, partial assignment, priority ordering, manifest correctness, utilization |
@@ -417,7 +425,7 @@ Full codebase context is included below (file-role map, dependency graph, DI reg
 | `REBUSS.Pure.SmokeTests\Expectations\AdoTestExpectations.cs` | Expected values from Azure DevOps fixture PR (title, state, file paths, statuses, code fragments) |
 | `REBUSS.Pure.SmokeTests\Expectations\GitHubTestExpectations.cs` | Expected values from GitHub fixture PR (title, state, file paths, statuses, code fragments) |
 | `REBUSS.Pure.SmokeTests\Protocol\InitializeProtocolTests.cs` | Protocol tests (no credentials): MCP initialize handshake — protocol version, server info, capabilities |
-| `REBUSS.Pure.SmokeTests\Protocol\ToolsListProtocolTests.cs` | Protocol tests (no credentials): tools/list — tool count, names, schemas; PrNumberTools checks property declaration (not required array) for get_file_diff+get_pr_metadata, +PaginationEnabledTools array, +2 schema assertions for F004 pagination parameters |
+| `REBUSS.Pure.SmokeTests\Protocol\ToolsListProtocolTests.cs` | Protocol tests (no credentials): tools/list — tool count (9), names, schemas; PrNumberTools checks property declaration (not required array) for get_file_diff+get_pr_metadata+get_pr_content, +PaginationEnabledTools array, +2 schema assertions for F004 pagination parameters, +ContentTools_HavePageNumberProperty for get_pr_content/get_local_content |
 | `REBUSS.Pure.SmokeTests\Contracts\AzureDevOps\AdoMetadataContractTests.cs` | Contract tests (ADO): `get_pr_metadata` — PR number, title, state, branches, author, stats, commits, source, description, isDraft |
 | `REBUSS.Pure.SmokeTests\Contracts\AzureDevOps\AdoFilesContractTests.cs` | Contract tests (ADO): `get_pr_files` — file count, paths, statuses, additions/deletions, extension, classification, review priority, binary/generated |
 | `REBUSS.Pure.SmokeTests\Contracts\AzureDevOps\AdoDiffContractTests.cs` | Contract tests (ADO): `get_pr_diff` — PR number, file count, hunks, structure, line ops, additions/deletions, code fragment |
@@ -501,6 +509,7 @@ IScmClient / IPullRequestDataProvider / IFileContentDataProvider [Core interface
   ? GetPullRequestDiffToolHandler [Pure]           (consumes IPullRequestDataProvider)
   ? GetFileDiffToolHandler [Pure]                  (consumes IPullRequestDataProvider)
   ? GetPullRequestMetadataToolHandler [Pure]       (consumes IPullRequestDataProvider)
+  ? GetPullRequestContentToolHandler [Pure]        (consumes IPullRequestDataProvider)
   ? GetPullRequestFilesToolHandler [Pure]          (consumes IPullRequestDataProvider)
   ? GetFileContentAtRefToolHandler [Pure]          (consumes IFileContentDataProvider)
   ? AnalysisInput [Core]                           (carries IFileContentDataProvider for on-demand content fetching)
@@ -519,10 +528,12 @@ LocalReviewScope / LocalFileStatus
   ? LocalReviewProvider [Pure]                     (consumes: orchestrates git client + diff builder)
   ? GetLocalChangesFilesToolHandler [Pure]          (consumes scope string ? parse ? pass to provider)
   ? GetLocalFileDiffToolHandler [Pure]              (consumes scope string + path ? pass to provider)
+  ? GetLocalContentToolHandler [Pure]               (consumes scope string + pageNumber ? pass to provider)
 
 LocalReviewFiles
   ? LocalReviewProvider [Pure]                     (produces)
   ? GetLocalChangesFilesToolHandler [Pure]          (consumes: maps to LocalReviewFilesResult)
+  ? GetLocalContentToolHandler [Pure]               (consumes: maps to LocalContentPageResult)
 
 AzureDevOpsOptions (+ LocalRepoPath) [AzureDevOps]
   ? ConfigurationResolver [AzureDevOps]            (IPostConfigureOptions: merges user > detected > cached values into options)

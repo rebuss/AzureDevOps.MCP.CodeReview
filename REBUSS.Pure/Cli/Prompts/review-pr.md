@@ -48,60 +48,46 @@ Avoid focusing on minor style issues unless they affect correctness or maintaina
 
 Use the following MCP tools from `REBUSS.Pure`.
 
-### get_pr_metadata(prNumber)
+### get_pr_metadata(prNumber, [modelName], [maxTokens])
 
-Use **first**.
+Use **first**. Always pass `modelName` or `maxTokens` to enable pagination info.
 
 Purpose:
 - understand the scope of the PR
 - retrieve `base.sha` and `head.sha`
 - retrieve PR title, author and description
-- determine review strategy
+- obtain `contentPaging` — the total page count and per-page file breakdown
+
+The response includes a `contentPaging` section when budget parameters are provided:
+```json
+{
+  "contentPaging": {
+    "totalPages": 3,
+    "totalFiles": 42,
+    "budgetPerPageTokens": 89600,
+    "filesByPage": [
+      { "pageNumber": 1, "fileCount": 12 },
+      { "pageNumber": 2, "fileCount": 15 },
+      { "pageNumber": 3, "fileCount": 15 }
+    ]
+  }
+}
+```
 
 ---
 
-### get_pr_files(prNumber)
+### get_pr_content(prNumber, pageNumber, [modelName], [maxTokens])
 
-Use **after metadata**.
-
-Purpose:
-- retrieve the list of changed files
-- obtain per-file statistics (additions/deletions/changes)
-- determine which files to review first
-
-Use this to avoid loading the entire PR diff at once.
-
----
-
-### get_pr_diff(prNumber)
-
-Use for **small PRs** as a faster alternative to iterating `get_file_diff` over each file.
+**Primary review tool.** Use this to iterate through pages of review content.
 
 Purpose:
-- retrieve the complete structured diff for all changed files in a single call
-- get a quick overview of all changes at once
+- retrieve the structured diff for all files on a specific page
+- each page is pre-sized to fit within the context budget
+- use the same `modelName`/`maxTokens` as the metadata call for consistent page allocation
 
-The response is a structured JSON object containing per-file hunks. Each file includes `path`, `changeType`, `additions`, `deletions`, and a `hunks` array. Each hunk contains location metadata and ordered lines with operation types (`+`, `-`, ` `).
+The response includes per-file diffs with `path`, `changeType`, `additions`, `deletions`, `hunks`, and a `summary` with `filesOnPage`, `totalFiles`, `estimatedTokens`, `hasMorePages`, and `categories`.
 
-Some files may have their diff **automatically skipped** by the server (see *Skipped Diffs* below). Their `hunks` array will be empty and a `skipReason` field will explain why.
-
-Do not use for large PRs — prefer `get_file_diff` to keep context small.
-
----
-
-### get_file_diff(prNumber, path)
-
-Default method for reviewing code.
-
-Purpose:
-- retrieve the structured diff for a specific file
-- analyze changes with minimal context cost
-
-The response is a structured JSON object containing the file's `path`, `changeType`, `additions`, `deletions`, and a `hunks` array. Each hunk contains `oldStart`, `oldCount`, `newStart`, `newCount`, and ordered `lines` with an `op` field (`+`, `-`, ` `) and `text`.
-
-If the file belongs to a skip category (deleted, renamed, binary, generated, or full-file rewrite), the response contains a `skipReason` value and an empty `hunks` array. In that case, do not attempt to analyze the diff content — acknowledge the skip reason and move on.
-
-Always prefer this before retrieving full file content.
+Files may have their diff **automatically skipped** — their `hunks` array will be empty and a `skipReason` field will explain why (see *Skipped Diffs* below).
 
 ---
 
@@ -113,7 +99,6 @@ Purpose:
 - retrieve the full file content from a specific revision.
 
 Use:
-
 - `head.sha` to inspect the new implementation
 - `base.sha` to inspect the previous implementation
 
@@ -121,50 +106,54 @@ Do not retrieve full content for every file by default.
 
 ---
 
-# Mandatory Review Workflow
+### Legacy tools (available but not recommended for reviews)
 
-## Step 1 — Load metadata
+These tools remain available for specific use cases:
 
-- Before reviewing any PR, ALWAYS call `get_pr_metadata(prNumber)` first to confirm the PR title, author and branch.
-- NEVER infer PR content, title, or scope from the branch name or converstation history.
-- Treat any pre-existing summary/context about a PR as unverified until confirmed by 'get_pr_metadata'.
+- `get_pr_files(prNumber)` — list changed files with stats
+- `get_pr_diff(prNumber)` — full PR diff in one call (risk of context overflow)
+- `get_file_diff(prNumber, path)` — single-file diff
 
-Call:
-
-`get_pr_metadata(prNumber)`
-
-Use the result to determine:
-
-- PR size
-- number of changed files
-- number of commits
-- total additions/deletions
-- base SHA and head SHA
-- high-level intent of the change
+Prefer `get_pr_content` over these for reviews — it provides server-managed pagination.
 
 ---
 
-## Step 2 — Retrieve changed files
+# Mandatory Review Workflow
+
+## Step 1 — Load metadata with pagination info
+
+- Before reviewing any PR, ALWAYS call `get_pr_metadata` first.
+- NEVER infer PR content, title, or scope from the branch name or conversation history.
+- Treat any pre-existing summary/context about a PR as unverified until confirmed by `get_pr_metadata`.
 
 Call:
 
-`get_pr_files(prNumber)`
+`get_pr_metadata(prNumber, modelName: "<your model>")`
 
-Use this to:
+Use the result to determine:
 
-- list all changed files
-- determine review order
-- identify files that will have their diffs skipped (binary, generated, deleted, renamed)
-- prioritize important source code
+- PR size and intent
+- number of changed files
+- base SHA and head SHA
+- **total pages** from `contentPaging.totalPages`
 
-Preferred review order:
+---
 
-1. source files
-2. configuration files
-3. test files
-4. documentation
+## Step 2 — Iterate through content pages
 
-Do not request diffs for files that are clearly binary or generated — the server will skip them automatically, but avoiding unnecessary calls saves time.
+Loop from page 1 to `totalPages`:
+
+```
+for pageNumber in 1..totalPages:
+    response = get_pr_content(prNumber, pageNumber, modelName: "<your model>")
+    review each file in response.files
+    check response.summary.hasMorePages to confirm continuation
+```
+
+For each file on the page:
+- analyze the diff hunks for issues
+- note files with `skipReason` — do not analyze their content
+- use `get_file_content_at_ref` only when the diff lacks sufficient context
 
 ---
 
@@ -175,78 +164,21 @@ The diff provider **automatically skips** diff generation for certain files. Whe
 - a `skipReason` field explaining why (e.g. `"file deleted"`, `"file renamed"`, `"binary file"`, `"generated file"`, `"full file rewrite"`)
 - an empty `hunks` array
 
-Example skipped file in the structured response:
-
-```json
-{
-  "path": "lib/tool.dll",
-  "changeType": "add",
-  "skipReason": "binary file",
-  "additions": 0,
-  "deletions": 0,
-  "hunks": []
-}
-```
-
 ## Skip categories
 
 | Category | skipReason | When it applies |
 |---|---|---|
-| File deletions | `file deleted` | File was removed. No content is fetched. |
-| File renames | `file renamed` | Pure rename. Content diff would be misleading. |
-| Binary files | `binary file` | Detected by extension (`.dll`, `.png`, `.zip`, `.pdf`, etc.). |
-| Generated files | `generated file` | Detected by path (`/obj/`, `/bin/`, `.g.cs`, `.designer.cs`, lock files, etc.). |
-| Full-file rewrites | `full file rewrite` | Both versions exist (≥10 lines each) but every line changed — indicates formatting rewrite or tooling output. |
+| File deletions | `file deleted` | File was removed |
+| File renames | `file renamed` | Pure rename |
+| Binary files | `binary file` | Detected by extension |
+| Generated files | `generated file` | Detected by path |
+| Full-file rewrites | `full file rewrite` | Every line changed — formatting rewrite |
 
 ## How to handle skipped diffs
 
-- **Do not** try to analyze the diff content of a skipped file.
-- **Acknowledge** the skip in the review notes (e.g. "File `/lib/tool.dll` skipped: binary file").
-- For deleted files, note the deletion but do not request full content.
-- For renamed files, note the rename.
-- For binary and generated files, skip entirely unless there is a specific concern.
-- For full-file rewrites, consider requesting full file content via `get_file_content_at_ref` only if the file appears to be important source code.
-
----
-
-# Review Strategy
-
-Choose the strategy depending on PR size.
-
----
-
-## Small PR
-
-If the PR contains only a few files and limited changes:
-
-- call `get_pr_diff(prNumber)` to retrieve all changes in a single call
-- only retrieve full file content when necessary
-
----
-
-## Medium PR
-
-If the PR contains a moderate number of files:
-
-- prioritize high-value files first
-- review file-by-file using `get_file_diff`
-- retrieve full file content only when the patch lacks context
-- use tests only as supporting evidence
-
----
-
-## Large PR
-
-If the PR is large:
-
-- do NOT load the entire PR into context
-- review iteratively file-by-file
-- start with high-priority files
-- retrieve only the diff for each file
-- retrieve full file content only when necessary
-- focus on high-risk logic changes first
-
-If the PR is extremely large, explain that the review focuses on the most critical files.
+- **Do not** analyze the diff content of a skipped file.
+- **Acknowledge** the skip in the review notes.
+- For full-file rewrites of important source code, consider `get_file_content_at_ref`.
 
 ---
 
@@ -257,11 +189,7 @@ When using `get_file_content_at_ref`:
 1. Prefer `head.sha` to inspect the current implementation.
 2. Use `base.sha` only if comparing previous behavior is necessary.
 3. Never retrieve full file content for all files automatically.
-4. Avoid retrieving full content for:
-   - documentation
-   - generated files
-   - binary files
-   - trivial changes
+4. Avoid retrieving full content for documentation, generated files, binary files, or trivial changes.
 
 ---
 
@@ -336,10 +264,10 @@ Optional improvements that are helpful but not critical.
 
 Briefly mention:
 
+- which pages were reviewed
 - which files were reviewed in detail
 - whether full file content was required
-- whether review scope was limited due to PR size
-- which files had their diffs skipped by the server and why (use the `skipReason` value)
+- which files had their diffs skipped by the server and why
 
 ---
 
