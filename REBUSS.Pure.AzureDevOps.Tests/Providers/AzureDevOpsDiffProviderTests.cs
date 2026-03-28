@@ -181,7 +181,7 @@ public class AzureDevOpsDiffProviderTests
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
-        await Assert.ThrowsAsync<OperationCanceledException>(
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
             () => _provider.GetDiffAsync(42, cts.Token));
     }
 
@@ -246,7 +246,7 @@ public class AzureDevOpsDiffProviderTests
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
-        await Assert.ThrowsAsync<OperationCanceledException>(
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
             () => _provider.GetFileDiffAsync(42, "/src/File.cs", cts.Token));
     }
 

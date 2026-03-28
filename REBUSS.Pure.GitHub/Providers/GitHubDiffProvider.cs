@@ -144,24 +144,28 @@ public class GitHubDiffProvider
 
     private static string NormalizePath(string path) => path.TrimStart('/');
 
+    internal const int MaxParallelDiffRequests = 15;
+
     private async Task BuildFileDiffsAsync(
         List<FileChange> files,
         string baseCommit,
         string headCommit,
         CancellationToken cancellationToken)
     {
-        foreach (var file in files)
+        if (string.IsNullOrEmpty(baseCommit) || string.IsNullOrEmpty(headCommit))
         {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            if (string.IsNullOrEmpty(baseCommit) || string.IsNullOrEmpty(headCommit))
+            foreach (var file in files)
             {
                 _logger.LogDebug(
                     "Skipping diff for '{FilePath}': commit SHAs not resolved (base={BaseCommit}, head={HeadCommit})",
                     file.Path, baseCommit ?? "<null>", headCommit ?? "<null>");
-                continue;
             }
+            return;
+        }
 
+        // Pre-filter skippable files synchronously (no I/O needed)
+        foreach (var file in files)
+        {
             var skipReason = GetSkipReason(file);
             if (skipReason is not null)
             {
@@ -169,39 +173,50 @@ public class GitHubDiffProvider
                 _logger.LogDebug(
                     "Skipping diff for '{FilePath}': {SkipReason}",
                     file.Path, skipReason);
-                continue;
             }
-
-            var fileSw = Stopwatch.StartNew();
-
-            var baseContentTask = _apiClient.GetFileContentAtRefAsync(baseCommit, file.Path, cancellationToken);
-            var headContentTask = _apiClient.GetFileContentAtRefAsync(headCommit, file.Path, cancellationToken);
-            await Task.WhenAll(baseContentTask, headContentTask);
-
-            var baseContent = await baseContentTask;
-            var headContent = await headContentTask;
-            file.Hunks = _diffBuilder.Build(file.Path, baseContent, headContent);
-
-            if (IsFullFileRewrite(baseContent, headContent, file.Hunks))
-            {
-                file.SkipReason = "full file rewrite";
-                file.Hunks = new List<DiffHunk>();
-                _logger.LogDebug(
-                    "Replaced diff for '{FilePath}': detected full file rewrite",
-                    file.Path);
-            }
-            else
-            {
-                file.Additions = file.Hunks.SelectMany(h => h.Lines).Count(l => l.Op == '+');
-                file.Deletions = file.Hunks.SelectMany(h => h.Lines).Count(l => l.Op == '-');
-            }
-
-            fileSw.Stop();
-
-            _logger.LogDebug(
-                "Built diff for '{FilePath}' ({ChangeType}): {HunkCount} hunk(s), {ElapsedMs}ms",
-                file.Path, file.ChangeType, file.Hunks.Count, fileSw.ElapsedMilliseconds);
         }
+
+        var filesToDiff = files.Where(f => f.SkipReason is null).ToList();
+
+        await Parallel.ForEachAsync(
+            filesToDiff,
+            new ParallelOptions
+            {
+                MaxDegreeOfParallelism = MaxParallelDiffRequests,
+                CancellationToken = cancellationToken
+            },
+            async (file, ct) =>
+            {
+                var fileSw = Stopwatch.StartNew();
+
+                var baseContentTask = _apiClient.GetFileContentAtRefAsync(baseCommit, file.Path, ct);
+                var headContentTask = _apiClient.GetFileContentAtRefAsync(headCommit, file.Path, ct);
+                await Task.WhenAll(baseContentTask, headContentTask);
+
+                var baseContent = await baseContentTask;
+                var headContent = await headContentTask;
+                file.Hunks = _diffBuilder.Build(file.Path, baseContent, headContent);
+
+                if (IsFullFileRewrite(baseContent, headContent, file.Hunks))
+                {
+                    file.SkipReason = "full file rewrite";
+                    file.Hunks = new List<DiffHunk>();
+                    _logger.LogDebug(
+                        "Replaced diff for '{FilePath}': detected full file rewrite",
+                        file.Path);
+                }
+                else
+                {
+                    file.Additions = file.Hunks.SelectMany(h => h.Lines).Count(l => l.Op == '+');
+                    file.Deletions = file.Hunks.SelectMany(h => h.Lines).Count(l => l.Op == '-');
+                }
+
+                fileSw.Stop();
+
+                _logger.LogDebug(
+                    "Built diff for '{FilePath}' ({ChangeType}): {HunkCount} hunk(s), {ElapsedMs}ms",
+                    file.Path, file.ChangeType, file.Hunks.Count, fileSw.ElapsedMilliseconds);
+            });
     }
 
     internal string? GetSkipReason(FileChange file)

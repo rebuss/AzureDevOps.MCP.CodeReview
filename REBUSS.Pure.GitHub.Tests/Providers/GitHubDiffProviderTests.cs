@@ -54,8 +54,8 @@ public class GitHubDiffProviderTests
     public async Task GetDiffAsync_ReturnsDiff_WithCorrectMetadata()
     {
         SetupStandardMocks();
-        _apiClient.GetFileContentAtRefAsync("bbb222", "src/File.cs").Returns("old line");
-        _apiClient.GetFileContentAtRefAsync("aaa111", "src/File.cs").Returns("new line");
+        _apiClient.GetFileContentAtRefAsync("bbb222", "src/File.cs", Arg.Any<CancellationToken>()).Returns("old line");
+        _apiClient.GetFileContentAtRefAsync("aaa111", "src/File.cs", Arg.Any<CancellationToken>()).Returns("new line");
 
         var result = await _provider.GetDiffAsync(42);
 
@@ -72,8 +72,8 @@ public class GitHubDiffProviderTests
     public async Task GetDiffAsync_GeneratesStructuredDiff_ForModifiedFile()
     {
         SetupStandardMocks();
-        _apiClient.GetFileContentAtRefAsync("bbb222", "src/File.cs").Returns("old line");
-        _apiClient.GetFileContentAtRefAsync("aaa111", "src/File.cs").Returns("new line");
+        _apiClient.GetFileContentAtRefAsync("bbb222", "src/File.cs", Arg.Any<CancellationToken>()).Returns("old line");
+        _apiClient.GetFileContentAtRefAsync("aaa111", "src/File.cs", Arg.Any<CancellationToken>()).Returns("new line");
 
         var result = await _provider.GetDiffAsync(42);
 
@@ -87,8 +87,8 @@ public class GitHubDiffProviderTests
     public async Task GetDiffAsync_SetsAdditionsAndDeletions()
     {
         SetupStandardMocks();
-        _apiClient.GetFileContentAtRefAsync("bbb222", "src/File.cs").Returns("old line");
-        _apiClient.GetFileContentAtRefAsync("aaa111", "src/File.cs").Returns("new line");
+        _apiClient.GetFileContentAtRefAsync("bbb222", "src/File.cs", Arg.Any<CancellationToken>()).Returns("old line");
+        _apiClient.GetFileContentAtRefAsync("aaa111", "src/File.cs", Arg.Any<CancellationToken>()).Returns("new line");
 
         var result = await _provider.GetDiffAsync(42);
 
@@ -126,7 +126,7 @@ public class GitHubDiffProviderTests
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
-        await Assert.ThrowsAsync<OperationCanceledException>(
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
             () => _provider.GetDiffAsync(42, cts.Token));
     }
 
@@ -136,8 +136,8 @@ public class GitHubDiffProviderTests
     public async Task GetFileDiffAsync_ReturnsDiff_ForMatchingFile()
     {
         SetupStandardMocks();
-        _apiClient.GetFileContentAtRefAsync("bbb222", "src/File.cs").Returns("old line");
-        _apiClient.GetFileContentAtRefAsync("aaa111", "src/File.cs").Returns("new line");
+        _apiClient.GetFileContentAtRefAsync("bbb222", "src/File.cs", Arg.Any<CancellationToken>()).Returns("old line");
+        _apiClient.GetFileContentAtRefAsync("aaa111", "src/File.cs", Arg.Any<CancellationToken>()).Returns("new line");
 
         var result = await _provider.GetFileDiffAsync(42, "src/File.cs");
 
@@ -172,8 +172,8 @@ public class GitHubDiffProviderTests
     public async Task GetFileDiffAsync_IsCaseInsensitive()
     {
         SetupStandardMocks();
-        _apiClient.GetFileContentAtRefAsync("bbb222", "src/File.cs").Returns("old");
-        _apiClient.GetFileContentAtRefAsync("aaa111", "src/File.cs").Returns("new");
+        _apiClient.GetFileContentAtRefAsync("bbb222", "src/File.cs", Arg.Any<CancellationToken>()).Returns("old");
+        _apiClient.GetFileContentAtRefAsync("aaa111", "src/File.cs", Arg.Any<CancellationToken>()).Returns("new");
 
         var result = await _provider.GetFileDiffAsync(42, "SRC/FILE.CS");
 
@@ -226,8 +226,8 @@ public class GitHubDiffProviderTests
 
         var oldContent = string.Join("\n", Enumerable.Range(1, 15).Select(i => $"old line {i}"));
         var newContent = string.Join("\n", Enumerable.Range(1, 15).Select(i => $"new line {i}"));
-        _apiClient.GetFileContentAtRefAsync("bbb222", "src/File.cs").Returns(oldContent);
-        _apiClient.GetFileContentAtRefAsync("aaa111", "src/File.cs").Returns(newContent);
+        _apiClient.GetFileContentAtRefAsync("bbb222", "src/File.cs", Arg.Any<CancellationToken>()).Returns(oldContent);
+        _apiClient.GetFileContentAtRefAsync("aaa111", "src/File.cs", Arg.Any<CancellationToken>()).Returns(newContent);
 
         var result = await _provider.GetDiffAsync(42);
 

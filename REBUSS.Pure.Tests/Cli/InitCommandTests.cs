@@ -626,7 +626,7 @@ public class InitCommandTests
 
             var selfReviewContent = await File.ReadAllTextAsync(selfReviewPath);
             Assert.Contains("Self-Review", selfReviewContent);
-            Assert.Contains("get_local_files", selfReviewContent);
+            Assert.Contains("get_local_content", selfReviewContent);
         }
         finally
         {
