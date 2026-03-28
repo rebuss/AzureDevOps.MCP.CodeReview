@@ -92,7 +92,7 @@ public class ToolsListProtocolTests
     }
 
     [Fact]
-    public async Task ToolsList_PrNumberToolsRequirePrNumber()
+    public async Task ToolsList_PrNumberToolsDeclarePrNumberProperty()
     {
         var response = await _fixture.Server.SendToolsListAsync();
         var tools = response.RootElement
@@ -109,14 +109,11 @@ public class ToolsListProtocolTests
             Assert.True(toolMap.ContainsKey(prTool), $"Tool '{prTool}' not found.");
 
             var schema = toolMap[prTool].GetProperty("inputSchema");
-            Assert.True(schema.TryGetProperty("required", out var required),
-                $"Tool '{prTool}' has no 'required' array in schema.");
+            Assert.True(schema.TryGetProperty("properties", out var props),
+                $"Tool '{prTool}' has no 'properties' in schema.");
 
-            var requiredProps = required.EnumerateArray()
-                .Select(r => r.GetString())
-                .ToList();
-
-            Assert.Contains("prNumber", requiredProps);
+            Assert.True(props.TryGetProperty("prNumber", out _),
+                $"Tool '{prTool}' is missing 'prNumber' property.");
         }
     }
 

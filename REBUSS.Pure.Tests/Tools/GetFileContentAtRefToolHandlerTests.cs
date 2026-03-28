@@ -77,21 +77,21 @@ public class GetFileContentAtRefToolHandlerTests
     // --- Validation errors ---
 
     [Fact]
-    public async Task ExecuteAsync_ThrowsArgumentException_WhenPathEmpty()
+    public async Task ExecuteAsync_ThrowsMcpException_WhenPathEmpty()
     {
-        var ex = await Assert.ThrowsAsync<ArgumentException>(
+        var ex = await Assert.ThrowsAsync<McpException>(
             () => _handler.ExecuteAsync("", "abc123"));
 
-        Assert.Contains("path parameter must not be empty", ex.Message);
+        Assert.Contains("Missing required parameter: path", ex.Message);
     }
 
     [Fact]
-    public async Task ExecuteAsync_ThrowsArgumentException_WhenRefEmpty()
+    public async Task ExecuteAsync_ThrowsMcpException_WhenRefEmpty()
     {
-        var ex = await Assert.ThrowsAsync<ArgumentException>(
+        var ex = await Assert.ThrowsAsync<McpException>(
             () => _handler.ExecuteAsync("src/File.cs", ""));
 
-        Assert.Contains("ref parameter must not be empty", ex.Message);
+        Assert.Contains("Missing required parameter: ref", ex.Message);
     }
 
     // --- Provider exceptions ---

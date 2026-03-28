@@ -79,30 +79,30 @@ public class GetFileDiffToolHandlerTests
     // --- Validation errors ---
 
     [Fact]
-    public async Task ExecuteAsync_ThrowsArgumentException_WhenPrNumberZero()
+    public async Task ExecuteAsync_ThrowsMcpException_WhenPrNumberZero()
     {
-        var ex = await Assert.ThrowsAsync<ArgumentException>(
+        var ex = await Assert.ThrowsAsync<McpException>(
             () => _handler.ExecuteAsync(0, "/src/A.cs"));
 
         Assert.Contains("greater than 0", ex.Message);
     }
 
     [Fact]
-    public async Task ExecuteAsync_ThrowsArgumentException_WhenPrNumberNegative()
+    public async Task ExecuteAsync_ThrowsMcpException_WhenPrNumberNegative()
     {
-        var ex = await Assert.ThrowsAsync<ArgumentException>(
+        var ex = await Assert.ThrowsAsync<McpException>(
             () => _handler.ExecuteAsync(-5, "/src/A.cs"));
 
         Assert.Contains("greater than 0", ex.Message);
     }
 
     [Fact]
-    public async Task ExecuteAsync_ThrowsArgumentException_WhenPathEmpty()
+    public async Task ExecuteAsync_ThrowsMcpException_WhenPathEmpty()
     {
-        var ex = await Assert.ThrowsAsync<ArgumentException>(
+        var ex = await Assert.ThrowsAsync<McpException>(
             () => _handler.ExecuteAsync(42, ""));
 
-        Assert.Contains("path parameter must not be empty", ex.Message);
+        Assert.Contains("Missing required parameter: path", ex.Message);
     }
 
     // --- Provider exceptions ---

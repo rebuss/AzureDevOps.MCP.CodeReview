@@ -42,16 +42,16 @@ namespace REBUSS.Pure.Tools
             "Use this to fetch the complete file without requiring a local clone or checkout. " +
             "Typical usage: call with a commit SHA from the PR base or head to get the file before or after a change.")]
         public async Task<string> ExecuteAsync(
-            [Description("The repository-relative path of the file (e.g. 'src/Cache/CacheService.cs')")] string path,
+            [Description("The repository-relative path of the file (e.g. 'src/Cache/CacheService.cs')")] string? path = null,
             [Description("The Git ref to fetch the file at: a commit SHA (e.g. 'abc123def456'), " +
-                         "a branch name (e.g. 'main'), or a tag name (e.g. 'refs/tags/v1.0')")] string @ref,
+                         "a branch name (e.g. 'main'), or a tag name (e.g. 'refs/tags/v1.0')")] string? @ref = null,
             CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrWhiteSpace(path))
-                throw new ArgumentException("path parameter must not be empty", nameof(path));
+                throw new McpException("Missing required parameter: path");
 
             if (string.IsNullOrWhiteSpace(@ref))
-                throw new ArgumentException("ref parameter must not be empty", nameof(@ref));
+                throw new McpException("Missing required parameter: ref");
 
             try
             {

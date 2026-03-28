@@ -58,7 +58,7 @@ namespace REBUSS.Pure.Tools
             "for files you want to inspect in detail. " +
             "Supported scopes match get_local_files: 'working-tree' (default), 'staged', or a base branch/ref.")]
         public async Task<string> ExecuteAsync(
-            [Description("Repository-relative path of the file to diff (e.g. 'src/Service.cs')")] string path,
+            [Description("Repository-relative path of the file to diff (e.g. 'src/Service.cs')")] string? path = null,
             [Description("The change scope. " +
                         "'working-tree' (default): all uncommitted changes vs HEAD. " +
                         "'staged': only staged changes vs HEAD. " +
@@ -68,7 +68,7 @@ namespace REBUSS.Pure.Tools
             CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrWhiteSpace(path))
-                throw new ArgumentException("path parameter must not be empty", nameof(path));
+                throw new McpException("Missing required parameter: path");
 
             try
             {

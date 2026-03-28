@@ -44,19 +44,22 @@ namespace REBUSS.Pure.Tools
             "Returns a JSON object with PR details including title, author, state, " +
             "branches, stats, commit SHAs, and description.")]
         public async Task<string> ExecuteAsync(
-            [Description("The Pull Request number/ID to retrieve metadata for")] int prNumber,
+            [Description("The Pull Request number/ID to retrieve metadata for")] int? prNumber = null,
             CancellationToken cancellationToken = default)
         {
-            if (prNumber <= 0)
-                throw new ArgumentException("prNumber must be greater than 0", nameof(prNumber));
+            if (prNumber != null && prNumber <= 0)
+                throw new McpException("prNumber must be greater than 0");
+
+            if (prNumber == null)
+                throw new McpException("Missing required parameter: prNumber");
 
             try
             {
                 _logger.LogInformation("[get_pr_metadata] Entry: PR #{PrNumber}", prNumber);
                 var sw = Stopwatch.StartNew();
 
-                var metadata = await _metadataProvider.GetMetadataAsync(prNumber, cancellationToken);
-                var result = BuildMetadataResult(prNumber, metadata);
+                var metadata = await _metadataProvider.GetMetadataAsync(prNumber.Value, cancellationToken);
+                var result = BuildMetadataResult(prNumber.Value, metadata);
 
                 var json = JsonSerializer.Serialize(result, JsonOptions);
                 sw.Stop();

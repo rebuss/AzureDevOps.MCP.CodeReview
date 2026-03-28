@@ -41,15 +41,18 @@ namespace REBUSS.Pure.Tools
             "Retrieves the diff for a single file in a specific Pull Request. " +
             "Returns a structured JSON object with the file diff including hunks optimized for AI code review.")]
         public async Task<string> ExecuteAsync(
-            [Description("The Pull Request number/ID to retrieve the diff for")] int prNumber,
-            [Description("The repository-relative path of the file (e.g. 'src/Cache/CacheService.cs')")] string path,
+            [Description("The Pull Request number/ID to retrieve the diff for")] int? prNumber = null,
+            [Description("The repository-relative path of the file (e.g. 'src/Cache/CacheService.cs')")] string? path = null,
             CancellationToken cancellationToken = default)
         {
-            if (prNumber <= 0)
-                throw new ArgumentException("prNumber must be greater than 0", nameof(prNumber));
+            if (prNumber != null && prNumber <= 0)
+                throw new McpException("prNumber must be greater than 0");
+
+            if (prNumber == null)
+                throw new McpException("Missing required parameter: prNumber");
 
             if (string.IsNullOrWhiteSpace(path))
-                throw new ArgumentException("path parameter must not be empty", nameof(path));
+                throw new McpException("Missing required parameter: path");
 
             try
             {
@@ -57,9 +60,9 @@ namespace REBUSS.Pure.Tools
                     prNumber, path);
                 var sw = Stopwatch.StartNew();
 
-                var diff = await _diffProvider.GetFileDiffAsync(prNumber, path, cancellationToken);
+                var diff = await _diffProvider.GetFileDiffAsync(prNumber.Value, path, cancellationToken);
 
-                var json = BuildStructuredResult(prNumber, diff);
+                var json = BuildStructuredResult(prNumber.Value, diff);
 
                 sw.Stop();
 

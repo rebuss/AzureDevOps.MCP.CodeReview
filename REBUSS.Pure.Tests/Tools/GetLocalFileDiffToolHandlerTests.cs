@@ -128,12 +128,12 @@ public class GetLocalFileDiffToolHandlerTests
     // --- Validation errors ---
 
     [Fact]
-    public async Task ExecuteAsync_ThrowsArgumentException_WhenPathEmpty()
+    public async Task ExecuteAsync_ThrowsMcpException_WhenPathEmpty()
     {
-        var ex = await Assert.ThrowsAsync<ArgumentException>(
+        var ex = await Assert.ThrowsAsync<McpException>(
             () => _handler.ExecuteAsync(""));
 
-        Assert.Contains("path parameter must not be empty", ex.Message);
+        Assert.Contains("Missing required parameter: path", ex.Message);
     }
 
     // --- Provider exceptions ---
