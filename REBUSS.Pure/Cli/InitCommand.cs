@@ -1,5 +1,8 @@
 using System.Diagnostics;
 using System.Reflection;
+using REBUSS.Pure.Properties;
+using AzureDevOpsNames = REBUSS.Pure.AzureDevOps.Names;
+using GitHubNames = REBUSS.Pure.GitHub.Names;
 
 namespace REBUSS.Pure.Cli;
 
@@ -27,7 +30,7 @@ public class InitCommand : ICliCommand
     private const string VsCodeDir = ".vscode";
     private const string VisualStudioDir = ".vs";
     private const string McpConfigFileName = "mcp.json";
-    private const string ResourcePrefix = "REBUSS.Pure.Cli.Prompts.";
+    private const string ResourcePrefix = AppConstants.ServerName + ".Cli.Prompts.";
 
     private static readonly string[] PromptFileNames =
     {
@@ -87,7 +90,7 @@ public class InitCommand : ICliCommand
         var gitRoot = FindGitRepositoryRoot(_workingDirectory);
         if (gitRoot is null)
         {
-            await _output.WriteLineAsync("Error: Not inside a Git repository. Run this command from a Git repository root.");
+            await _output.WriteLineAsync(Resources.ErrorNotInsideGitRepository);
             return 1;
         }
 
@@ -111,13 +114,13 @@ public class InitCommand : ICliCommand
                 var existing = await File.ReadAllTextAsync(target.ConfigPath, cancellationToken);
                 newContent = MergeConfigContent(existing, _executablePath, gitRoot, _pat);
                 await File.WriteAllTextAsync(target.ConfigPath, newContent, cancellationToken);
-                await _output.WriteLineAsync($"Updated MCP configuration ({target.IdeName}): {target.ConfigPath}");
+                await _output.WriteLineAsync(string.Format(Resources.MsgUpdatedMcpConfiguration, target.IdeName, target.ConfigPath));
             }
             else
             {
                 newContent = BuildConfigContent(normalizedExePath, normalizedRepoPath, _pat);
                 await File.WriteAllTextAsync(target.ConfigPath, newContent, cancellationToken);
-                await _output.WriteLineAsync($"Created MCP configuration ({target.IdeName}): {target.ConfigPath}");
+                await _output.WriteLineAsync(string.Format(Resources.MsgCreatedMcpConfiguration, target.IdeName, target.ConfigPath));
             }
         }
 
@@ -131,8 +134,8 @@ public class InitCommand : ICliCommand
         }
 
         await _output.WriteLineAsync();
-        await _output.WriteLineAsync("The MCP server will be launched with --repo pointing to your workspace.");
-        await _output.WriteLineAsync("Restart your IDE or reload the MCP client to pick up the new configuration.");
+        await _output.WriteLineAsync(Resources.MsgMcpServerRepoHint);
+        await _output.WriteLineAsync(Resources.MsgRestartIdeHint);
 
         return 0;
     }
@@ -145,7 +148,7 @@ public class InitCommand : ICliCommand
     {
         var provider = _detectedProvider ?? DetectProviderFromGitRemote(_workingDirectory);
 
-        if (string.Equals(provider, "GitHub", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(provider, GitHubNames.Provider, StringComparison.OrdinalIgnoreCase))
             return new GitHubCliAuthFlow(_output, _input, _processRunner);
 
         return new AzureDevOpsCliAuthFlow(_output, _input, _processRunner);
@@ -160,12 +163,12 @@ public class InitCommand : ICliCommand
         try
         {
             var gitRoot = FindGitRepositoryRoot(workingDirectory);
-            if (gitRoot is null) return "AzureDevOps";
+            if (gitRoot is null) return AzureDevOpsNames.Provider;
 
             var psi = new ProcessStartInfo
             {
-                FileName = "git",
-                Arguments = "remote get-url origin",
+                FileName = Resources.GitExecutable,
+                Arguments = Resources.GitRemoteGetUrlArgs,
                 WorkingDirectory = gitRoot,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
@@ -174,22 +177,22 @@ public class InitCommand : ICliCommand
             };
 
             using var process = Process.Start(psi);
-            if (process is null) return "AzureDevOps";
+            if (process is null) return AzureDevOpsNames.Provider;
 
             var output = process.StandardOutput.ReadToEnd();
             process.WaitForExit(TimeSpan.FromSeconds(5));
 
-            if (process.ExitCode != 0) return "AzureDevOps";
+            if (process.ExitCode != 0) return AzureDevOpsNames.Provider;
 
-            if (output.Contains("github.com", StringComparison.OrdinalIgnoreCase))
-                return "GitHub";
+            if (output.Contains(GitHubNames.Domain, StringComparison.OrdinalIgnoreCase))
+                return GitHubNames.Provider;
         }
         catch
         {
             // Ignore detection errors — fall back to Azure DevOps
         }
 
-        return "AzureDevOps";
+        return AzureDevOpsNames.Provider;
     }
 
     internal static async Task<(int ExitCode, string StdOut, string StdErr)> RunProcessAsync(
@@ -209,7 +212,7 @@ public class InitCommand : ICliCommand
 
             using var process = Process.Start(psi);
             if (process is null)
-                return (-1, string.Empty, "Failed to start process");
+                return (-1, string.Empty, Resources.ErrorFailedToStartProcess);
 
             var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
             var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
@@ -491,7 +494,7 @@ public class InitCommand : ICliCommand
 
             if (resourceName is null)
             {
-                await _output.WriteLineAsync($"Warning: Embedded prompt resource not found: {promptFileName}");
+                await _output.WriteLineAsync(string.Format(Resources.WarnEmbeddedPromptResourceNotFound, promptFileName));
                 continue;
             }
 
@@ -512,10 +515,10 @@ public class InitCommand : ICliCommand
         }
 
         if (promptsWritten > 0)
-            await _output.WriteLineAsync($"Copied {promptsWritten} prompt file(s) to {promptsTargetDir}");
+            await _output.WriteLineAsync(string.Format(Resources.MsgCopiedPrompts, promptsWritten, promptsTargetDir));
 
         if (instructionsWritten > 0)
-            await _output.WriteLineAsync($"Copied {instructionsWritten} instruction file(s) to {instructionsTargetDir}");
+            await _output.WriteLineAsync(string.Format(Resources.MsgCopiedInstructions, instructionsWritten, instructionsTargetDir));
     }
 
     /// <summary>

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using REBUSS.Pure.AzureDevOps.Api;
 using REBUSS.Pure.AzureDevOps.Parsers;
+using REBUSS.Pure.AzureDevOps.Properties;
 using REBUSS.Pure.Core.Exceptions;
 using REBUSS.Pure.Core.Models;
 using REBUSS.Pure.Core.Shared;
@@ -76,7 +77,7 @@ namespace REBUSS.Pure.AzureDevOps.Providers
             catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
                 _logger.LogWarning("Pull Request #{PrNumber} not found", prNumber);
-                throw new PullRequestNotFoundException($"Pull Request #{prNumber} not found", ex);
+                throw new PullRequestNotFoundException(string.Format(Resources.ErrorPullRequestNotFound, prNumber), ex);
             }
             catch (Exception ex)
             {
@@ -103,7 +104,7 @@ namespace REBUSS.Pure.AzureDevOps.Providers
                 {
                     _logger.LogWarning("File '{Path}' not found in PR #{PrNumber}", path, prNumber);
                     throw new FileNotFoundInPullRequestException(
-                        $"File '{path}' not found in Pull Request #{prNumber}");
+                            string.Format(Resources.ErrorFileNotFoundInPullRequest, path, prNumber));
                 }
 
                 await BuildFileDiffsAsync(matchingFiles, baseCommit, targetCommit, cancellationToken);
@@ -121,7 +122,7 @@ namespace REBUSS.Pure.AzureDevOps.Providers
             catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
                 _logger.LogWarning("Pull Request #{PrNumber} not found", prNumber);
-                throw new PullRequestNotFoundException($"Pull Request #{prNumber} not found", ex);
+                throw new PullRequestNotFoundException(string.Format(Resources.ErrorPullRequestNotFound, prNumber), ex);
             }
             catch (FileNotFoundInPullRequestException)
             {
@@ -210,7 +211,7 @@ namespace REBUSS.Pure.AzureDevOps.Providers
 
                         if (IsFullFileRewrite(baseContent, targetContent, file.Hunks))
                         {
-                            file.SkipReason = "full file rewrite";
+                            file.SkipReason = Resources.SkipReasonFullFileRewrite;
                             file.Hunks = new List<DiffHunk>();
                             _logger.LogDebug(
                                 "Replaced diff for '{FilePath}': detected full file rewrite",
@@ -237,18 +238,18 @@ namespace REBUSS.Pure.AzureDevOps.Providers
         internal string? GetSkipReason(FileChange file)
         {
             if (string.Equals(file.ChangeType, "delete", StringComparison.OrdinalIgnoreCase))
-                return "file deleted";
+                return Resources.SkipReasonFileDeleted;
 
             if (string.Equals(file.ChangeType, "rename", StringComparison.OrdinalIgnoreCase))
-                return "file renamed";
+                return Resources.SkipReasonFileRenamed;
 
             var classification = _fileClassifier.Classify(file.Path);
 
             if (classification.IsBinary)
-                return "binary file";
+                return Resources.SkipReasonBinaryFile;
 
             if (classification.IsGenerated)
-                return "generated file";
+                return Resources.SkipReasonGeneratedFile;
 
             return null;
         }

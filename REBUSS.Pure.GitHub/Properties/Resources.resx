@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+
+  <data name="ApiBaseUrl" xml:space="preserve">
+    <value>https://api.github.com/</value>
+  </data>
+
+  <data name="AppDataDirectoryName" xml:space="preserve">
+    <value>REBUSS.Pure</value>
+  </data>
+
+  <data name="ErrorFileNotFoundAtRef" xml:space="preserve">
+    <value>File '{0}' not found at ref '{1}'</value>
+  </data>
+
+  <data name="ErrorFileNotFoundInPullRequest" xml:space="preserve">
+    <value>File '{0}' not found in Pull Request #{1}</value>
+  </data>
+
+  <data name="ErrorGitHubAuthRequired" xml:space="preserve">
+    <value>========================================
+AUTHENTICATION REQUIRED
+========================================
+
+REBUSS.Pure requires authentication to access GitHub.
+
+OPTION 1 — GitHub CLI (recommended, no PAT needed):
+
+  Install GitHub CLI: https://cli.github.com/
+  Then run:
+
+    gh auth login
+
+  After that, restart your IDE or run:
+
+    rebuss-pure init
+
+OPTION 2 — Personal Access Token (PAT):
+
+  1. Go to https://github.com/settings/tokens
+  2. Click 'Generate new token (classic)'
+  3. Select scope: repo (Full control of private repositories)
+  4. Copy the token
+
+  Then either pass it directly:
+
+    rebuss-pure init --pat &lt;your-token&gt;
+
+  Or create appsettings.Local.json in the tool directory with:
+
+    {
+      "GitHub": {
+        "PersonalAccessToken": "&lt;your-token&gt;"
+      }
+    }
+
+========================================
+</value>
+  </data>
+
+  <data name="ErrorPropertyMustNotContainSpaces" xml:space="preserve">
+    <value>{0} must not contain spaces</value>
+  </data>
+
+  <data name="ErrorPullRequestNotFound" xml:space="preserve">
+    <value>Pull Request #{0} not found</value>
+  </data>
+
+  <data name="GhCliAuthTokenArgs" xml:space="preserve">
+    <value>auth token</value>
+  </data>
+
+  <data name="GhCliExecutable" xml:space="preserve">
+    <value>gh</value>
+  </data>
+
+  <data name="GitExecutable" xml:space="preserve">
+    <value>git</value>
+  </data>
+
+  <data name="GitHubAcceptHeader" xml:space="preserve">
+    <value>application/vnd.github+json</value>
+  </data>
+
+  <data name="GitHubApiVersion" xml:space="preserve">
+    <value>2022-11-28</value>
+  </data>
+
+  <data name="GitHubApiVersionHeader" xml:space="preserve">
+    <value>X-GitHub-Api-Version</value>
+  </data>
+
+  <data name="GitHubConfigFileName" xml:space="preserve">
+    <value>github-config.json</value>
+  </data>
+
+  <data name="GitHubRateLimitRemainingHeader" xml:space="preserve">
+    <value>X-RateLimit-Remaining</value>
+  </data>
+
+  <data name="GitHubRawContentAcceptHeader" xml:space="preserve">
+    <value>application/vnd.github.raw+json</value>
+  </data>
+
+  <data name="GitRemoteGetUrlArgs" xml:space="preserve">
+    <value>remote get-url origin</value>
+  </data>
+
+  <data name="HttpUserAgentProduct" xml:space="preserve">
+    <value>REBUSS-Pure</value>
+  </data>
+
+  <data name="SkipReasonBinaryFile" xml:space="preserve">
+    <value>binary file</value>
+  </data>
+
+  <data name="SkipReasonFileDeleted" xml:space="preserve">
+    <value>file deleted</value>
+  </data>
+
+  <data name="SkipReasonFileRenamed" xml:space="preserve">
+    <value>file renamed</value>
+  </data>
+
+  <data name="SkipReasonFullFileRewrite" xml:space="preserve">
+    <value>full file rewrite</value>
+  </data>
+
+  <data name="SkipReasonGeneratedFile" xml:space="preserve">
+    <value>generated file</value>
+  </data>
+
+</root>

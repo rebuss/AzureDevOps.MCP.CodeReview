@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Options;
 using REBUSS.Pure.AzureDevOps.Configuration;
+using REBUSS.Pure.AzureDevOps.Properties;
 using REBUSS.Pure.AzureDevOps.Providers;
 using REBUSS.Pure.Core;
 using REBUSS.Pure.Core.Models;
@@ -20,7 +21,7 @@ public sealed class AzureDevOpsScmClient : IScmClient
     private readonly AzureDevOpsFileContentProvider _contentProvider;
     private readonly AzureDevOpsOptions _options;
 
-    public string ProviderName => "Azure DevOps";
+    public string ProviderName => Resources.ProviderDisplayName;
 
     public AzureDevOpsScmClient(
         AzureDevOpsDiffProvider diffProvider,
@@ -50,7 +51,7 @@ public sealed class AzureDevOpsScmClient : IScmClient
             $"{_options.OrganizationName}/{_options.ProjectName}/{_options.RepositoryName}";
 
         metadata.WebUrl =
-            $"https://dev.azure.com/{_options.OrganizationName}/{_options.ProjectName}" +
+            $"https://{Names.Domain}/{_options.OrganizationName}/{_options.ProjectName}" +
             $"/_git/{_options.RepositoryName}/pullrequest/{prNumber}";
 
         return metadata;

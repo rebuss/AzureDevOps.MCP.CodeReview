@@ -2,7 +2,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
+using REBUSS.Pure.AzureDevOps;
 using REBUSS.Pure.Core;
+using REBUSS.Pure.Properties;
 
 namespace REBUSS.Pure.Services
 {
@@ -42,9 +44,7 @@ namespace REBUSS.Pure.Services
         {
             if (IsUnexpandedVariable(path))
             {
-                _logger.LogWarning(
-                    "CLI --repo value '{Path}' looks like an unexpanded variable (e.g. from VS Code on a non-VS Code client). " +
-                    "Ignoring it — MCP roots or localRepoPath will be used instead.", path);
+                _logger.LogWarning(Resources.LogMcpWorkspaceRootProviderUnexpandedVariable, path);
                 return;
             }
 
@@ -153,7 +153,7 @@ namespace REBUSS.Pure.Services
             }
 
             // 3. Try localRepoPath fallback (read directly from IConfiguration to avoid circular dependency)
-            var localRepoPath = _configuration.GetSection("AzureDevOps")["LocalRepoPath"];
+            var localRepoPath = _configuration.GetSection(Names.Provider)["LocalRepoPath"];
             if (!string.IsNullOrWhiteSpace(localRepoPath))
             {
                 if (!Directory.Exists(localRepoPath))

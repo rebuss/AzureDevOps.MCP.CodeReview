@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using REBUSS.Pure.AzureDevOps.Properties;
 
 namespace REBUSS.Pure.AzureDevOps.Configuration;
 
@@ -12,9 +13,9 @@ public class LocalConfigStore : ILocalConfigStore
 {
     private static readonly string ConfigDirectory = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "REBUSS.Pure");
+        Resources.AppDataDirectoryName);
 
-    private static readonly string ConfigFilePath = Path.Combine(ConfigDirectory, "config.json");
+    private static readonly string ConfigFilePath = Path.Combine(ConfigDirectory, Resources.AzureDevOpsConfigFileName);
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {

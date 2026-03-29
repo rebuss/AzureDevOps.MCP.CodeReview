@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using REBUSS.Pure.AzureDevOps;
 using REBUSS.Pure.AzureDevOps.Configuration;
+using REBUSS.Pure.AzureDevOps.Properties;
 
 namespace REBUSS.Pure.AzureDevOps.Api
 {
@@ -26,7 +28,7 @@ namespace REBUSS.Pure.AzureDevOps.Api
 
             if (_httpClient.BaseAddress is null && !string.IsNullOrWhiteSpace(_options.OrganizationName))
             {
-                _httpClient.BaseAddress = new Uri($"https://dev.azure.com/{_options.OrganizationName}/");
+                _httpClient.BaseAddress = new Uri($"https://{Names.Domain}/{_options.OrganizationName}/");
             }
         }
 
@@ -229,8 +231,7 @@ namespace REBUSS.Pure.AzureDevOps.Api
                     endpointName, (int)response.StatusCode);
 
                 throw new HttpRequestException(
-                    $"Azure DevOps returned an authentication page instead of API data (HTTP {(int)response.StatusCode}). " +
-                    $"Your token is likely expired or invalid. Run 'rebuss-pure init' or 'az login' to re-authenticate.",
+                    string.Format(Resources.ErrorAuthPageInsteadOfApiData, (int)response.StatusCode),
                     inner: null,
                     statusCode: System.Net.HttpStatusCode.Unauthorized);
             }
@@ -250,7 +251,7 @@ namespace REBUSS.Pure.AzureDevOps.Api
         internal static bool IsHtmlResponse(HttpResponseMessage response, string body)
         {
             var contentType = response.Content.Headers.ContentType?.MediaType;
-            if (string.Equals(contentType, "text/html", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(contentType, Resources.ContentTypeHtml, StringComparison.OrdinalIgnoreCase))
                 return true;
 
             // Fallback: check body content for HTML markers when content-type is missing or ambiguous

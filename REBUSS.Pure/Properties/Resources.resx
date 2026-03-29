@@ -1,0 +1,363 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+
+  <data name="AppSettingsFileName" xml:space="preserve">
+    <value>appsettings.json</value>
+  </data>
+  <data name="AppSettingsLocalFileName" xml:space="preserve">
+    <value>appsettings.Local.json</value>
+  </data>
+  <data name="CliCommandInit" xml:space="preserve">
+    <value>init</value>
+  </data>
+  <data name="ConfigKeyProvider" xml:space="preserve">
+    <value>Provider</value>
+  </data>
+  <data name="ErrorFailedToStartProcess" xml:space="preserve">
+    <value>Failed to start process</value>
+  </data>
+  <data name="ErrorFatalMessage" xml:space="preserve">
+    <value>[{0}] FATAL: {1}: {2}</value>
+  </data>
+  <data name="ErrorFileNotFound" xml:space="preserve">
+    <value>File not found: {0}</value>
+  </data>
+  <data name="ErrorFileNotFoundAmongLocalChanges" xml:space="preserve">
+    <value>File '{0}' not found among local changes (scope: {1})</value>
+  </data>
+  <data name="ErrorFileNotFoundInLocalChanges" xml:space="preserve">
+    <value>File not found in local changes: {0}</value>
+  </data>
+  <data name="ErrorFileNotFoundInPullRequest" xml:space="preserve">
+    <value>File not found in Pull Request: {0}</value>
+  </data>
+  <data name="ErrorGitCommandFailed" xml:space="preserve">
+    <value>Git command failed: {0}</value>
+  </data>
+  <data name="ErrorGitExitedWithCode" xml:space="preserve">
+    <value>git exited with code {0}: {1}</value>
+  </data>
+  <data name="ErrorInnerMessage" xml:space="preserve">
+    <value>[{0}] INNER: {1}: {2}</value>
+  </data>
+  <data name="ErrorMissingRequiredPageNumber" xml:space="preserve">
+    <value>Missing required parameter: pageNumber</value>
+  </data>
+  <data name="ErrorMissingRequiredPath" xml:space="preserve">
+    <value>Missing required parameter: path</value>
+  </data>
+  <data name="ErrorMissingRequiredPrNumber" xml:space="preserve">
+    <value>Missing required parameter: prNumber</value>
+  </data>
+  <data name="ErrorMissingRequiredRef" xml:space="preserve">
+    <value>Missing required parameter: ref</value>
+  </data>
+  <data name="ErrorNoGitRepositoryRoot" xml:space="preserve">
+    <value>No git repository root could be resolved. Set a repository path via --repo, MCP roots, or the localRepoPath configuration.</value>
+  </data>
+  <data name="ErrorNotInsideGitRepository" xml:space="preserve">
+    <value>Error: Not inside a Git repository. Run this command from a Git repository root.</value>
+  </data>
+  <data name="ErrorPageNumberExceedsTotalPages" xml:space="preserve">
+    <value>pageNumber {0} exceeds total pages {1}</value>
+  </data>
+  <data name="ErrorPageNumberMustBePositive" xml:space="preserve">
+    <value>pageNumber must be >= 1</value>
+  </data>
+  <data name="ErrorPageNumberOutOfRange" xml:space="preserve">
+    <value>Page number {0} is out of range. Valid range: 1 to {1}.</value>
+  </data>
+  <data name="ErrorPartiallyIncludedHunks" xml:space="preserve">
+    <value>Partially included: {0}/{1} hunks fit within budget</value>
+  </data>
+  <data name="ErrorPrNumberMustBePositive" xml:space="preserve">
+    <value>prNumber must be greater than 0</value>
+  </data>
+  <data name="ErrorPullRequestNotFound" xml:space="preserve">
+    <value>Pull Request not found: {0}</value>
+  </data>
+  <data name="ErrorRepositoryNotFound" xml:space="preserve">
+    <value>Repository not found: {0}</value>
+  </data>
+  <data name="ErrorRetrievingFileDiff" xml:space="preserve">
+    <value>Error retrieving file diff: {0}</value>
+  </data>
+  <data name="ErrorRetrievingFileContent" xml:space="preserve">
+    <value>Error retrieving file content: {0}</value>
+  </data>
+  <data name="ErrorRetrievingLocalContent" xml:space="preserve">
+    <value>Error retrieving local content: {0}</value>
+  </data>
+  <data name="ErrorRetrievingLocalFileDiff" xml:space="preserve">
+    <value>Error retrieving local file diff: {0}</value>
+  </data>
+  <data name="ErrorRetrievingLocalFiles" xml:space="preserve">
+    <value>Error retrieving local files: {0}</value>
+  </data>
+  <data name="ErrorRetrievingPrContent" xml:space="preserve">
+    <value>Error retrieving PR content: {0}</value>
+  </data>
+  <data name="ErrorRetrievingPrDiff" xml:space="preserve">
+    <value>Error retrieving PR diff: {0}</value>
+  </data>
+  <data name="ErrorRetrievingPrFiles" xml:space="preserve">
+    <value>Error retrieving PR files: {0}</value>
+  </data>
+  <data name="ErrorRetrievingPrMetadata" xml:space="preserve">
+    <value>Error retrieving PR metadata: {0}</value>
+  </data>
+  <data name="ErrorUnknownCommand" xml:space="preserve">
+    <value>Unknown command: {0}</value>
+  </data>
+  <data name="GitExecutable" xml:space="preserve">
+    <value>git</value>
+  </data>
+  <data name="GitRemoteGetUrlArgs" xml:space="preserve">
+    <value>remote get-url origin</value>
+  </data>
+  <data name="GitRevParseAbbrevRefHead" xml:space="preserve">
+    <value>rev-parse --abbrev-ref HEAD</value>
+  </data>
+  <data name="LogGetFileContentAtRefCompleted" xml:space="preserve">
+    <value>[get_file_content_at_ref] Completed: path='{Path}', ref='{Ref}', {Size} bytes, binary={IsBinary}, {ResponseLength} chars, {ElapsedMs}ms</value>
+  </data>
+  <data name="LogGetFileContentAtRefEntry" xml:space="preserve">
+    <value>[get_file_content_at_ref] Entry: path='{Path}', ref='{Ref}'</value>
+  </data>
+  <data name="LogGetFileContentAtRefError" xml:space="preserve">
+    <value>[get_file_content_at_ref] Error (path='{Path}', ref='{Ref}')</value>
+  </data>
+  <data name="LogGetFileContentAtRefNotFound" xml:space="preserve">
+    <value>[get_file_content_at_ref] File content not found (path='{Path}', ref='{Ref}')</value>
+  </data>
+  <data name="LogGetFileDiffCompleted" xml:space="preserve">
+    <value>[get_file_diff] Completed: PR #{PrNumber}, path='{Path}', {ResponseLength} chars, {ElapsedMs}ms</value>
+  </data>
+  <data name="LogGetFileDiffEntry" xml:space="preserve">
+    <value>[get_file_diff] Entry: PR #{PrNumber}, path='{Path}'</value>
+  </data>
+  <data name="LogGetFileDiffError" xml:space="preserve">
+    <value>[get_file_diff] Error (prNumber={PrNumber}, path='{Path}')</value>
+  </data>
+  <data name="LogGetFileDiffFileNotFound" xml:space="preserve">
+    <value>[get_file_diff] File not found in pull request (prNumber={PrNumber}, path='{Path}')</value>
+  </data>
+  <data name="LogGetFileDiffPrNotFound" xml:space="preserve">
+    <value>[get_file_diff] Pull request not found (prNumber={PrNumber}, path='{Path}')</value>
+  </data>
+  <data name="LogGetLocalContentCompleted" xml:space="preserve">
+    <value>[get_local_content] Completed: page {Page}/{TotalPages}, {FileCount} files, {Chars} chars, {Ms}ms</value>
+  </data>
+  <data name="LogGetLocalContentEntry" xml:space="preserve">
+    <value>[get_local_content] Entry: page {PageNumber}, scope={Scope}</value>
+  </data>
+  <data name="LogGetLocalContentError" xml:space="preserve">
+    <value>[get_local_content] Error (pageNumber={PageNumber}, scope={Scope})</value>
+  </data>
+  <data name="LogGetLocalFileDiffCompleted" xml:space="preserve">
+    <value>[get_local_file_diff] Completed: path='{Path}', scope={Scope}, {ResponseLength} chars, {ElapsedMs}ms</value>
+  </data>
+  <data name="LogGetLocalFileDiffEntry" xml:space="preserve">
+    <value>[get_local_file_diff] Entry: path='{Path}', scope={Scope}</value>
+  </data>
+  <data name="LogGetLocalFileDiffError" xml:space="preserve">
+    <value>[get_local_file_diff] Error (path='{Path}')</value>
+  </data>
+  <data name="LogGetLocalFileDiffFileNotFound" xml:space="preserve">
+    <value>[get_local_file_diff] File not found in local changes (path='{Path}')</value>
+  </data>
+  <data name="LogGetLocalFileDiffGitCommandFailed" xml:space="preserve">
+    <value>[get_local_file_diff] Git command failed (path='{Path}')</value>
+  </data>
+  <data name="LogGetLocalFileDiffRepositoryNotFound" xml:space="preserve">
+    <value>[get_local_file_diff] Repository not found</value>
+  </data>
+  <data name="LogGetLocalFilesCompletedF003" xml:space="preserve">
+    <value>[get_local_files] Completed (F003): scope={Scope}, {FileCount} files, {ElapsedMs}ms</value>
+  </data>
+  <data name="LogGetLocalFilesCompletedF004" xml:space="preserve">
+    <value>[get_local_files] Completed (F004): scope={Scope}, page {Page}/{TotalPages}, {ElapsedMs}ms</value>
+  </data>
+  <data name="LogGetLocalFilesEntry" xml:space="preserve">
+    <value>[get_local_files] Entry: scope={Scope}</value>
+  </data>
+  <data name="LogGetLocalFilesError" xml:space="preserve">
+    <value>[get_local_files] Error</value>
+  </data>
+  <data name="LogGetLocalFilesGitCommandFailed" xml:space="preserve">
+    <value>[get_local_files] Git command failed</value>
+  </data>
+  <data name="LogGetLocalFilesRepositoryNotFound" xml:space="preserve">
+    <value>[get_local_files] Repository not found</value>
+  </data>
+  <data name="LogGetPrContentCompleted" xml:space="preserve">
+    <value>[get_pr_content] Completed: PR #{PrNumber}, page {Page}/{TotalPages}, {FileCount} files, {Chars} chars, {Ms}ms</value>
+  </data>
+  <data name="LogGetPrContentEntry" xml:space="preserve">
+    <value>[get_pr_content] Entry: PR #{PrNumber}, page {PageNumber}</value>
+  </data>
+  <data name="LogGetPrContentError" xml:space="preserve">
+    <value>[get_pr_content] Error (prNumber={PrNumber}, pageNumber={PageNumber})</value>
+  </data>
+  <data name="LogGetPrContentPrNotFound" xml:space="preserve">
+    <value>[get_pr_content] PR not found (prNumber={PrNumber})</value>
+  </data>
+  <data name="LogGetPrDiffCompletedF003" xml:space="preserve">
+    <value>[get_pr_diff] Completed (F003): PR #{PrNumber}, {FileCount} files, {ElapsedMs}ms</value>
+  </data>
+  <data name="LogGetPrDiffCompletedF004" xml:space="preserve">
+    <value>[get_pr_diff] Completed (F004): PR #{PrNumber}, page {Page}/{TotalPages}, {FileCount} files on page, {ElapsedMs}ms</value>
+  </data>
+  <data name="LogGetPrDiffEntry" xml:space="preserve">
+    <value>[get_pr_diff] Entry: PR #{PrNumber}, pageRef={HasRef}, pageNum={PageNum}</value>
+  </data>
+  <data name="LogGetPrDiffError" xml:space="preserve">
+    <value>[get_pr_diff] Error</value>
+  </data>
+  <data name="LogGetPrDiffMetadataFingerprintFailed" xml:space="preserve">
+    <value>[get_pr_diff] Could not fetch metadata for fingerprint</value>
+  </data>
+  <data name="LogGetPrDiffPrNotFound" xml:space="preserve">
+    <value>[get_pr_diff] Pull request not found</value>
+  </data>
+  <data name="LogGetPrFilesCompletedF003" xml:space="preserve">
+    <value>[get_pr_files] Completed (F003): PR #{PrNumber}, {FileCount} files, {ElapsedMs}ms</value>
+  </data>
+  <data name="LogGetPrFilesCompletedF004" xml:space="preserve">
+    <value>[get_pr_files] Completed (F004): PR #{PrNumber}, page {Page}/{TotalPages}, {ElapsedMs}ms</value>
+  </data>
+  <data name="LogGetPrFilesEntry" xml:space="preserve">
+    <value>[get_pr_files] Entry: PR #{PrNumber}</value>
+  </data>
+  <data name="LogGetPrFilesError" xml:space="preserve">
+    <value>[get_pr_files] Error</value>
+  </data>
+  <data name="LogGetPrFilesMetadataFingerprintFailed" xml:space="preserve">
+    <value>[get_pr_files] Could not fetch metadata for fingerprint</value>
+  </data>
+  <data name="LogGetPrFilesPrNotFound" xml:space="preserve">
+    <value>[get_pr_files] Pull request not found</value>
+  </data>
+  <data name="LogGetPrMetadataCompleted" xml:space="preserve">
+    <value>[get_pr_metadata] Completed: PR #{PrNumber}, {ResponseLength} chars, {ElapsedMs}ms</value>
+  </data>
+  <data name="LogGetPrMetadataEntry" xml:space="preserve">
+    <value>[get_pr_metadata] Entry: PR #{PrNumber}</value>
+  </data>
+  <data name="LogGetPrMetadataError" xml:space="preserve">
+    <value>[get_pr_metadata] Error (prNumber={PrNumber})</value>
+  </data>
+  <data name="LogGetPrMetadataNotFound" xml:space="preserve">
+    <value>[get_pr_metadata] Pull request not found (prNumber={PrNumber})</value>
+  </data>
+  <data name="LogLocalGitClientCouldNotDetermineBranch" xml:space="preserve">
+    <value>Could not determine current branch</value>
+  </data>
+  <data name="LogLocalGitClientFileNotFoundAtRef" xml:space="preserve">
+    <value>File '{Path}' not found at ref '{Ref}': {Error}</value>
+  </data>
+  <data name="LogLocalGitClientRunning" xml:space="preserve">
+    <value>Running: git {Args} (in {Root})</value>
+  </data>
+  <data name="LogLocalReviewProviderFetchingFileDiff" xml:space="preserve">
+    <value>Fetching local file diff: path='{Path}', scope={Scope}, root={Root}</value>
+  </data>
+  <data name="LogLocalReviewProviderFetchingFiles" xml:space="preserve">
+    <value>Fetching local files: scope={Scope}, root={Root}</value>
+  </data>
+  <data name="LogLocalReviewProviderFileDiffCompleted" xml:space="preserve">
+    <value>Local file diff completed: path='{Path}', scope={Scope}, {HunkCount} hunk(s), {ElapsedMs}ms</value>
+  </data>
+  <data name="LogLocalReviewProviderFileNotFound" xml:space="preserve">
+    <value>File '{Path}' not found in local changes (scope={Scope})</value>
+  </data>
+  <data name="LogLocalReviewProviderFilesCompleted" xml:space="preserve">
+    <value>Local files completed: scope={Scope}, {FileCount} file(s), {ElapsedMs}ms</value>
+  </data>
+  <data name="LogMcpWorkspaceRootProviderUnexpandedVariable" xml:space="preserve">
+    <value>CLI --repo value '{Path}' looks like an unexpanded variable (e.g. from VS Code on a non-VS Code client). Ignoring it — MCP roots or localRepoPath will be used instead.</value>
+  </data>
+  <data name="MsgCopiedInstructions" xml:space="preserve">
+    <value>Copied {0} instruction file(s) to {1}</value>
+  </data>
+  <data name="MsgCopiedPrompts" xml:space="preserve">
+    <value>Copied {0} prompt file(s) to {1}</value>
+  </data>
+  <data name="MsgCreatedMcpConfiguration" xml:space="preserve">
+    <value>Created MCP configuration ({0}): {1}</value>
+  </data>
+  <data name="MsgMcpServerRepoHint" xml:space="preserve">
+    <value>The MCP server will be launched with --repo pointing to your workspace.</value>
+  </data>
+  <data name="MsgRestartIdeHint" xml:space="preserve">
+    <value>Restart your IDE or reload the MCP client to pick up the new configuration.</value>
+  </data>
+  <data name="MsgUpdatedMcpConfiguration" xml:space="preserve">
+    <value>Updated MCP configuration ({0}): {1}</value>
+  </data>
+  <data name="ServerVersion" xml:space="preserve">
+    <value>1.0.0</value>
+  </data>
+  <data name="WarnEmbeddedPromptResourceNotFound" xml:space="preserve">
+    <value>Warning: Embedded prompt resource not found: {0}</value>
+  </data>
+
+</root>

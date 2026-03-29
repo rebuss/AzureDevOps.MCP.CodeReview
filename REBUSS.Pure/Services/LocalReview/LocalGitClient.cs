@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
+using REBUSS.Pure.Properties;
 
 namespace REBUSS.Pure.Services.LocalReview
 {
@@ -24,7 +25,7 @@ namespace REBUSS.Pure.Services.LocalReview
         {
             var (args, parseMode) = BuildStatusArgs(scope);
 
-            _logger.LogDebug("Running: git {Args} (in {Root})", args, repositoryRoot);
+            _logger.LogDebug(Resources.LogLocalGitClientRunning, args, repositoryRoot);
             var output = await RunGitAsync(repositoryRoot, args, cancellationToken);
 
             return parseMode == StatusParseMode.Porcelain
@@ -53,7 +54,7 @@ namespace REBUSS.Pure.Services.LocalReview
             // git show <ref>:<path> � works for HEAD, branch names, commit SHAs, and ":0" (index)
             var args = $"show {gitRef}:{normalizedPath}";
 
-            _logger.LogDebug("Running: git {Args} (in {Root})", args, repositoryRoot);
+            _logger.LogDebug(Resources.LogLocalGitClientRunning, args, repositoryRoot);
 
             try
             {
@@ -62,7 +63,7 @@ namespace REBUSS.Pure.Services.LocalReview
             catch (GitCommandException ex) when (ex.ExitCode != 0)
             {
                 // File does not exist at this ref (new file / deleted file)
-                _logger.LogDebug("File '{Path}' not found at ref '{Ref}': {Error}", filePath, gitRef, ex.StdErr);
+                _logger.LogDebug(Resources.LogLocalGitClientFileNotFoundAtRef, filePath, gitRef, ex.StdErr);
                 return null;
             }
         }
@@ -81,14 +82,14 @@ namespace REBUSS.Pure.Services.LocalReview
             {
                 var output = await RunGitAsync(
                     repositoryRoot,
-                    "rev-parse --abbrev-ref HEAD",
+                    Resources.GitRevParseAbbrevRefHead,
                     cancellationToken);
                 var branch = output.Trim();
                 return string.Equals(branch, "HEAD", StringComparison.Ordinal) ? null : branch;
             }
             catch (Exception ex)
             {
-                _logger.LogDebug(ex, "Could not determine current branch");
+                _logger.LogDebug(ex, Resources.LogLocalGitClientCouldNotDetermineBranch);
                 return null;
             }
         }
@@ -186,7 +187,7 @@ namespace REBUSS.Pure.Services.LocalReview
             {
                 StartInfo = new ProcessStartInfo
                 {
-                    FileName = "git",
+                    FileName = Resources.GitExecutable,
                     Arguments = arguments,
                     RedirectStandardInput = true,
                     RedirectStandardOutput = true,

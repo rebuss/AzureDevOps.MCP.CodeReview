@@ -1,3 +1,5 @@
+using REBUSS.Pure.Properties;
+
 namespace REBUSS.Pure.Services.LocalReview
 {
     /// <summary>
@@ -25,7 +27,7 @@ namespace REBUSS.Pure.Services.LocalReview
         public string StdErr { get; }
 
         public GitCommandException(int exitCode, string stdErr)
-            : base($"git exited with code {exitCode}: {stdErr}")
+            : base(string.Format(Resources.ErrorGitExitedWithCode, exitCode, stdErr))
         {
             ExitCode = exitCode;
             StdErr = stdErr;

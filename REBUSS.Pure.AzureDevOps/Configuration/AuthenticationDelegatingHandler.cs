@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using REBUSS.Pure.AzureDevOps.Properties;
 
 namespace REBUSS.Pure.AzureDevOps.Configuration;
 
@@ -61,7 +62,7 @@ public class AuthenticationDelegatingHandler : DelegatingHandler
             return false;
 
         var contentType = response.Content.Headers.ContentType?.MediaType;
-        return string.Equals(contentType, "text/html", StringComparison.OrdinalIgnoreCase);
+        return string.Equals(contentType, Resources.ContentTypeHtml, StringComparison.OrdinalIgnoreCase);
     }
 
     private static async Task<HttpRequestMessage> CloneRequestAsync(

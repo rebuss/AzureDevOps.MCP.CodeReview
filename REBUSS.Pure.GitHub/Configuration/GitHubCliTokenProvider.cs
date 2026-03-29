@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
+using REBUSS.Pure.GitHub.Properties;
 
 namespace REBUSS.Pure.GitHub.Configuration;
 
@@ -29,7 +30,7 @@ public class GitHubCliTokenProvider : IGitHubCliTokenProvider
     {
         try
         {
-            var output = await RunGhCliAsync("auth token", cancellationToken);
+            var output = await RunGhCliAsync(Resources.GhCliAuthTokenArgs, cancellationToken);
             return ParseTokenResponse(output);
         }
         catch (OperationCanceledException)

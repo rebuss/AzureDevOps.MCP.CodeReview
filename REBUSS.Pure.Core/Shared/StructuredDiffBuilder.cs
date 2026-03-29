@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using REBUSS.Pure.Core.Models;
+using REBUSS.Pure.Core.Properties;
 
 namespace REBUSS.Pure.Core.Shared;
 
@@ -37,13 +38,13 @@ public class StructuredDiffBuilder : IStructuredDiffBuilder
         sw.Stop();
 
         _logger.LogDebug(
-            "Diff for '{FilePath}': {HunkCount} hunk(s), old={OldLineCount} lines, new={NewLineCount} lines, {ElapsedMs}ms",
+            Resources.LogStructuredDiffBuilderDiffCompleted,
             aPath, hunks.Count, baseLines.Length, targetLines.Length, sw.ElapsedMilliseconds);
 
         if (hunks.Count > 50)
         {
             _logger.LogWarning(
-                "Suspicious diff for '{FilePath}': {HunkCount} hunks (possible generated/binary file)",
+                Resources.LogStructuredDiffBuilderSuspiciousDiff,
                 aPath, hunks.Count);
         }
 

@@ -10,6 +10,7 @@ using REBUSS.Pure.Core.Models;
 using REBUSS.Pure.Core.Models.Pagination;
 using REBUSS.Pure.Core.Models.ResponsePacking;
 using REBUSS.Pure.Core.Shared;
+using REBUSS.Pure.Properties;
 using REBUSS.Pure.Services.ResponsePacking;
 using REBUSS.Pure.Tools.Models;
 
@@ -65,17 +66,17 @@ namespace REBUSS.Pure.Tools
             CancellationToken cancellationToken = default)
         {
             if (prNumber == null)
-                throw new McpException("Missing required parameter: prNumber");
+                throw new McpException(Resources.ErrorMissingRequiredPrNumber);
             if (prNumber <= 0)
-                throw new McpException("prNumber must be greater than 0");
+                throw new McpException(Resources.ErrorPrNumberMustBePositive);
             if (pageNumber == null)
-                throw new McpException("Missing required parameter: pageNumber");
+                throw new McpException(Resources.ErrorMissingRequiredPageNumber);
             if (pageNumber < 1)
-                throw new McpException("pageNumber must be >= 1");
+                throw new McpException(Resources.ErrorPageNumberMustBePositive);
 
             try
             {
-                _logger.LogInformation("[get_pr_content] Entry: PR #{PrNumber}, page {PageNumber}",
+                _logger.LogInformation(Resources.LogGetPrContentEntry,
                     prNumber, pageNumber);
                 var sw = Stopwatch.StartNew();
 
@@ -91,7 +92,7 @@ namespace REBUSS.Pure.Tools
 
                 if (pageNumber > allocation.TotalPages)
                     throw new McpException(
-                        $"pageNumber {pageNumber} exceeds total pages {allocation.TotalPages}");
+                        string.Format(Resources.ErrorPageNumberExceedsTotalPages, pageNumber, allocation.TotalPages));
 
                 var pageSlice = allocation.Pages[pageNumber.Value - 1];
 
@@ -125,15 +126,15 @@ namespace REBUSS.Pure.Tools
                 sw.Stop();
 
                 _logger.LogInformation(
-                    "[get_pr_content] Completed: PR #{PrNumber}, page {Page}/{TotalPages}, {FileCount} files, {Chars} chars, {Ms}ms",
+                    Resources.LogGetPrContentCompleted,
                     prNumber, pageNumber, allocation.TotalPages, pageFiles.Count, json.Length, sw.ElapsedMilliseconds);
 
                 return json;
             }
             catch (PullRequestNotFoundException ex)
             {
-                _logger.LogWarning(ex, "[get_pr_content] PR not found (prNumber={PrNumber})", prNumber);
-                throw new McpException($"Pull Request not found: {ex.Message}");
+                _logger.LogWarning(ex, Resources.LogGetPrContentPrNotFound, prNumber);
+                throw new McpException(string.Format(Resources.ErrorPullRequestNotFound, ex.Message));
             }
             catch (McpException)
             {
@@ -141,9 +142,9 @@ namespace REBUSS.Pure.Tools
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "[get_pr_content] Error (prNumber={PrNumber}, pageNumber={PageNumber})",
+                _logger.LogError(ex, Resources.LogGetPrContentError,
                     prNumber, pageNumber);
-                throw new McpException($"Error retrieving PR content: {ex.Message}");
+                throw new McpException(string.Format(Resources.ErrorRetrievingPrContent, ex.Message));
             }
         }
 

@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using REBUSS.Pure.Core.Properties;
 
 namespace REBUSS.Pure.Core.Analysis;
 
@@ -45,7 +46,7 @@ public class ReviewContextOrchestrator
         {
             if (!analyzer.CanAnalyze(input))
             {
-                _logger.LogDebug("Skipping analyzer '{Name}': not applicable", analyzer.DisplayName);
+                _logger.LogDebug(Resources.LogReviewContextOrchestratorSkippingAnalyzer, analyzer.DisplayName);
                 continue;
             }
 
@@ -55,7 +56,7 @@ public class ReviewContextOrchestrator
             if (section is not null)
             {
                 sections[section.Key] = section;
-                _logger.LogInformation("Analyzer '{Name}' produced section '{Key}'",
+                _logger.LogInformation(Resources.LogReviewContextOrchestratorAnalyzerProducedSection,
                     analyzer.DisplayName, section.Key);
             }
         }

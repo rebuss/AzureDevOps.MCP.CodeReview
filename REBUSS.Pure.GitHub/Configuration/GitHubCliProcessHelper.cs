@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using REBUSS.Pure.GitHub.Properties;
 
 namespace REBUSS.Pure.GitHub.Configuration;
 
@@ -26,11 +27,11 @@ internal static class GitHubCliProcessHelper
     {
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
-            var ghCmd = ghPath is not null ? $"\"{ghPath}\"" : "gh";
+            var ghCmd = ghPath is not null ? $"\"{ghPath}\"" : Resources.GhCliExecutable;
             return ("cmd.exe", $"/c {ghCmd} {ghArguments}");
         }
 
-        return (ghPath ?? "gh", ghArguments);
+        return (ghPath ?? Resources.GhCliExecutable, ghArguments);
     }
 
     /// <summary>

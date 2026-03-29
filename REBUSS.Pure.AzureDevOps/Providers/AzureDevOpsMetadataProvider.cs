@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using REBUSS.Pure.AzureDevOps.Api;
 using REBUSS.Pure.AzureDevOps.Parsers;
+using REBUSS.Pure.AzureDevOps.Properties;
 using REBUSS.Pure.Core.Exceptions;
 using REBUSS.Pure.Core.Models;
 
@@ -75,7 +76,7 @@ namespace REBUSS.Pure.AzureDevOps.Providers
             catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
                 _logger.LogWarning("Pull Request #{PrNumber} not found", prNumber);
-                throw new PullRequestNotFoundException($"Pull Request #{prNumber} not found", ex);
+                throw new PullRequestNotFoundException(string.Format(Resources.ErrorPullRequestNotFound, prNumber), ex);
             }
             catch (Exception ex)
             {

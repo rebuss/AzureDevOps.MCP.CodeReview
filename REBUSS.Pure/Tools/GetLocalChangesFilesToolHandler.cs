@@ -8,6 +8,7 @@ using REBUSS.Pure.Core;
 using REBUSS.Pure.Core.Models.Pagination;
 using REBUSS.Pure.Core.Models.ResponsePacking;
 using REBUSS.Pure.Core.Shared;
+using REBUSS.Pure.Properties;
 using REBUSS.Pure.Services.LocalReview;
 using REBUSS.Pure.Services.Pagination;
 using REBUSS.Pure.Services.ResponsePacking;
@@ -110,7 +111,7 @@ namespace REBUSS.Pure.Tools
                 var parsedScope = LocalReviewScope.Parse(effectiveScope);
                 var effectiveBudget = resolution.ResolvedBudget;
 
-                _logger.LogInformation("[get_local_files] Entry: scope={Scope}", parsedScope);
+                _logger.LogInformation(Resources.LogGetLocalFilesEntry, parsedScope);
                 var sw = Stopwatch.StartNew();
 
                 var reviewFiles = await _reviewProvider.GetFilesAsync(parsedScope, cancellationToken);
@@ -142,7 +143,7 @@ namespace REBUSS.Pure.Tools
 
                     var json003 = JsonSerializer.Serialize(result003, JsonOptions);
                     sw.Stop();
-                    _logger.LogInformation("[get_local_files] Completed (F003): scope={Scope}, {FileCount} files, {ElapsedMs}ms",
+                    _logger.LogInformation(Resources.LogGetLocalFilesCompletedF003,
                         parsedScope, reviewFiles.Files.Count, sw.ElapsedMilliseconds);
                     return json003;
                 }
@@ -164,7 +165,7 @@ namespace REBUSS.Pure.Tools
 
                 var requestedPage = resolution.PageNumber;
                 if (requestedPage < 1 || requestedPage > allocation.TotalPages)
-                    throw new McpException($"Page number {requestedPage} is out of range. Valid range: 1 to {allocation.TotalPages}.");
+                    throw new McpException(string.Format(Resources.ErrorPageNumberOutOfRange, requestedPage, allocation.TotalPages));
 
                 var pageSlice = allocation.Pages[requestedPage - 1];
                 var packedFiles = ExtractPageFiles(fileItems, sortedCandidates, pageSlice);
@@ -193,26 +194,26 @@ namespace REBUSS.Pure.Tools
                 var json = JsonSerializer.Serialize(result, JsonOptions);
                 sw.Stop();
                 _logger.LogInformation(
-                    "[get_local_files] Completed (F004): scope={Scope}, page {Page}/{TotalPages}, {ElapsedMs}ms",
+                    Resources.LogGetLocalFilesCompletedF004,
                     parsedScope, requestedPage, allocation.TotalPages, sw.ElapsedMilliseconds);
 
                 return json;
             }
             catch (LocalRepositoryNotFoundException ex)
             {
-                _logger.LogWarning(ex, "[get_local_files] Repository not found");
-                throw new McpException($"Repository not found: {ex.Message}");
+                _logger.LogWarning(ex, Resources.LogGetLocalFilesRepositoryNotFound);
+                throw new McpException(string.Format(Resources.ErrorRepositoryNotFound, ex.Message));
             }
             catch (GitCommandException ex)
             {
-                _logger.LogWarning(ex, "[get_local_files] Git command failed");
-                throw new McpException($"Git command failed: {ex.Message}");
+                _logger.LogWarning(ex, Resources.LogGetLocalFilesGitCommandFailed);
+                throw new McpException(string.Format(Resources.ErrorGitCommandFailed, ex.Message));
             }
             catch (McpException) { throw; }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "[get_local_files] Error");
-                throw new McpException($"Error retrieving local files: {ex.Message}");
+                _logger.LogError(ex, Resources.LogGetLocalFilesError);
+                throw new McpException(string.Format(Resources.ErrorRetrievingLocalFiles, ex.Message));
             }
         }
 

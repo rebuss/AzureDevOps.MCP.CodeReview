@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using REBUSS.Pure.GitHub.Api;
 using REBUSS.Pure.GitHub.Parsers;
+using REBUSS.Pure.GitHub.Properties;
 using REBUSS.Pure.Core.Exceptions;
 using REBUSS.Pure.Core.Models;
 using REBUSS.Pure.Core.Shared;
@@ -72,7 +73,7 @@ public class GitHubDiffProvider
         catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
             _logger.LogWarning("Pull Request #{PrNumber} not found", prNumber);
-            throw new PullRequestNotFoundException($"Pull Request #{prNumber} not found", ex);
+            throw new PullRequestNotFoundException(string.Format(Resources.ErrorPullRequestNotFound, prNumber), ex);
         }
         catch (Exception ex)
         {
@@ -99,7 +100,7 @@ public class GitHubDiffProvider
             {
                 _logger.LogWarning("File '{Path}' not found in PR #{PrNumber}", path, prNumber);
                 throw new FileNotFoundInPullRequestException(
-                    $"File '{path}' not found in Pull Request #{prNumber}");
+                    string.Format(Resources.ErrorFileNotFoundInPullRequest, path, prNumber));
             }
 
             await BuildFileDiffsAsync(matchingFiles, baseCommit, headCommit, cancellationToken);
@@ -117,7 +118,7 @@ public class GitHubDiffProvider
         catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
             _logger.LogWarning("Pull Request #{PrNumber} not found", prNumber);
-            throw new PullRequestNotFoundException($"Pull Request #{prNumber} not found", ex);
+            throw new PullRequestNotFoundException(string.Format(Resources.ErrorPullRequestNotFound, prNumber), ex);
         }
         catch (FileNotFoundInPullRequestException)
         {
@@ -199,7 +200,7 @@ public class GitHubDiffProvider
 
                 if (IsFullFileRewrite(baseContent, headContent, file.Hunks))
                 {
-                    file.SkipReason = "full file rewrite";
+                    file.SkipReason = Resources.SkipReasonFullFileRewrite;
                     file.Hunks = new List<DiffHunk>();
                     _logger.LogDebug(
                         "Replaced diff for '{FilePath}': detected full file rewrite",
@@ -222,18 +223,18 @@ public class GitHubDiffProvider
     internal string? GetSkipReason(FileChange file)
     {
         if (string.Equals(file.ChangeType, "delete", StringComparison.OrdinalIgnoreCase))
-            return "file deleted";
+            return Resources.SkipReasonFileDeleted;
 
         if (string.Equals(file.ChangeType, "rename", StringComparison.OrdinalIgnoreCase))
-            return "file renamed";
+            return Resources.SkipReasonFileRenamed;
 
         var classification = _fileClassifier.Classify(file.Path);
 
         if (classification.IsBinary)
-            return "binary file";
+            return Resources.SkipReasonBinaryFile;
 
         if (classification.IsGenerated)
-            return "generated file";
+            return Resources.SkipReasonGeneratedFile;
 
         return null;
     }

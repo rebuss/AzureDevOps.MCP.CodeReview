@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Options;
+using REBUSS.Pure.GitHub.Properties;
 
 namespace REBUSS.Pure.GitHub.Configuration;
 
@@ -14,10 +15,10 @@ public class GitHubOptionsValidator : IValidateOptions<GitHubOptions>
         var failures = new List<string>();
 
         if (options.Owner is not null && options.Owner.Contains(' '))
-            failures.Add($"{nameof(GitHubOptions.Owner)} must not contain spaces");
+            failures.Add(string.Format(Resources.ErrorPropertyMustNotContainSpaces, nameof(GitHubOptions.Owner)));
 
         if (options.RepositoryName is not null && options.RepositoryName.Contains(' '))
-            failures.Add($"{nameof(GitHubOptions.RepositoryName)} must not contain spaces");
+            failures.Add(string.Format(Resources.ErrorPropertyMustNotContainSpaces, nameof(GitHubOptions.RepositoryName)));
 
         return failures.Count > 0
             ? ValidateOptionsResult.Fail(failures)

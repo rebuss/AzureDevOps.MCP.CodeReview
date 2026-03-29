@@ -2,7 +2,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using ModelContextProtocol.Server;
 using REBUSS.Pure.AzureDevOps;
 using REBUSS.Pure.AzureDevOps.Configuration;
 using REBUSS.Pure.Cli;
@@ -14,8 +13,11 @@ using REBUSS.Pure.Logging;
 using REBUSS.Pure.Services;
 using REBUSS.Pure.Services.ContextWindow;
 using REBUSS.Pure.Services.LocalReview;
+using AzureDevOpsNames = REBUSS.Pure.AzureDevOps.Names;
+using GitHubNames = REBUSS.Pure.GitHub.Names;
 using ResponsePacking = REBUSS.Pure.Services.ResponsePacking;
 using Pagination = REBUSS.Pure.Services.Pagination;
+using REBUSS.Pure.Properties;
 
 namespace REBUSS.Pure
 {
@@ -36,7 +38,7 @@ namespace REBUSS.Pure
         {
             ICliCommand command = parseResult.CommandName switch
             {
-                "init" => new InitCommand(
+                var cmd when cmd == Resources.CliCommandInit => new InitCommand(
                     Console.Error,
                     Console.In,
                     Environment.CurrentDirectory,
@@ -44,7 +46,7 @@ namespace REBUSS.Pure
                     parseResult.Pat,
                     parseResult.IsGlobal,
                     parseResult.Ide),
-                _ => throw new InvalidOperationException($"Unknown command: {parseResult.CommandName}")
+                _ => throw new InvalidOperationException(string.Format(Resources.ErrorUnknownCommand, parseResult.CommandName))
             };
 
             return await command.ExecuteAsync();
@@ -56,14 +58,14 @@ namespace REBUSS.Pure
             if (!string.IsNullOrEmpty(processPath))
                 return processPath;
 
-            return Path.Combine(AppContext.BaseDirectory, "REBUSS.Pure.exe");
+            return Path.Combine(AppContext.BaseDirectory, AppConstants.ExecutableName);
         }
 
         private static string GetLogDirectory()
         {
             var logDir = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "REBUSS.Pure");
+                AppConstants.ServerName);
             Directory.CreateDirectory(logDir);
             return logDir;
         }
@@ -76,8 +78,8 @@ namespace REBUSS.Pure
 
                 var configuration = new ConfigurationBuilder()
                     .SetBasePath(AppContext.BaseDirectory)
-                    .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
-                    .AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true)
+                    .AddJsonFile(Resources.AppSettingsFileName, optional: true, reloadOnChange: true)
+                    .AddJsonFile(Resources.AppSettingsLocalFileName, optional: true, reloadOnChange: true)
                     .AddEnvironmentVariables()
                     .AddInMemoryCollection(cliOverrides)
                     .Build();
@@ -103,7 +105,7 @@ namespace REBUSS.Pure
                 builder.Services
                     .AddMcpServer(options =>
                     {
-                        options.ServerInfo = new() { Name = "REBUSS.Pure", Version = "1.0.0" };
+                        options.ServerInfo = new() { Name = AppConstants.ServerName, Version = Resources.ServerVersion };
                     })
                     .WithStdioServerTransport()
                     .WithToolsFromAssembly();
@@ -128,9 +130,9 @@ namespace REBUSS.Pure
             }
             catch (Exception ex)
             {
-                await Console.Error.WriteLineAsync($"[REBUSS.Pure] FATAL: {ex.GetType().FullName}: {ex.Message}");
+                await Console.Error.WriteLineAsync(string.Format(Resources.ErrorFatalMessage, AppConstants.ServerName, ex.GetType().FullName, ex.Message));
                 if (ex.InnerException is not null)
-                    await Console.Error.WriteLineAsync($"[REBUSS.Pure] INNER: {ex.InnerException.GetType().FullName}: {ex.InnerException.Message}");
+                    await Console.Error.WriteLineAsync(string.Format(Resources.ErrorInnerMessage, AppConstants.ServerName, ex.InnerException.GetType().FullName, ex.InnerException.Message));
                 await Console.Error.WriteLineAsync(ex.StackTrace ?? string.Empty);
                 Environment.Exit(1);
             }
@@ -162,10 +164,10 @@ namespace REBUSS.Pure
             var provider = DetectProvider(configuration);
             switch (provider)
             {
-                case "GitHub":
+                case GitHubNames.Provider:
                     services.AddGitHubProvider(configuration);
                     break;
-                case "AzureDevOps":
+                case AzureDevOpsNames.Provider:
                 default:
                     services.AddAzureDevOpsProvider(configuration);
                     break;
@@ -181,16 +183,16 @@ namespace REBUSS.Pure
             var overrides = new Dictionary<string, string?>();
 
             if (!string.IsNullOrWhiteSpace(parseResult.Provider))
-                overrides["Provider"] = parseResult.Provider;
+                overrides[Resources.ConfigKeyProvider] = parseResult.Provider;
 
             // Determine which provider should receive the PAT based on CLI context
             var patTarget = ResolvePatTarget(parseResult);
 
             if (!string.IsNullOrWhiteSpace(parseResult.Pat))
             {
-                if (patTarget is null || string.Equals(patTarget, "AzureDevOps", StringComparison.OrdinalIgnoreCase))
+                if (patTarget is null || string.Equals(patTarget, AzureDevOpsNames.Provider, StringComparison.OrdinalIgnoreCase))
                     overrides[$"{AzureDevOpsOptions.SectionName}:{nameof(AzureDevOpsOptions.PersonalAccessToken)}"] = parseResult.Pat;
-                if (patTarget is null || string.Equals(patTarget, "GitHub", StringComparison.OrdinalIgnoreCase))
+                if (patTarget is null || string.Equals(patTarget, GitHubNames.Provider, StringComparison.OrdinalIgnoreCase))
                     overrides[$"{GitHubOptions.SectionName}:{nameof(GitHubOptions.PersonalAccessToken)}"] = parseResult.Pat;
             }
 
@@ -202,9 +204,9 @@ namespace REBUSS.Pure
 
             if (!string.IsNullOrWhiteSpace(parseResult.Repository))
             {
-                if (patTarget is null || string.Equals(patTarget, "AzureDevOps", StringComparison.OrdinalIgnoreCase))
+                if (patTarget is null || string.Equals(patTarget, AzureDevOpsNames.Provider, StringComparison.OrdinalIgnoreCase))
                     overrides[$"{AzureDevOpsOptions.SectionName}:{nameof(AzureDevOpsOptions.RepositoryName)}"] = parseResult.Repository;
-                if (patTarget is null || string.Equals(patTarget, "GitHub", StringComparison.OrdinalIgnoreCase))
+                if (patTarget is null || string.Equals(patTarget, GitHubNames.Provider, StringComparison.OrdinalIgnoreCase))
                     overrides[$"{GitHubOptions.SectionName}:{nameof(GitHubOptions.RepositoryName)}"] = parseResult.Repository;
             }
 
@@ -225,9 +227,9 @@ namespace REBUSS.Pure
             if (!string.IsNullOrWhiteSpace(parseResult.Provider))
                 return parseResult.Provider;
             if (!string.IsNullOrWhiteSpace(parseResult.Owner))
-                return "GitHub";
+                return GitHubNames.Provider;
             if (!string.IsNullOrWhiteSpace(parseResult.Organization))
-                return "AzureDevOps";
+                return AzureDevOpsNames.Provider;
             return null;
         }
 
@@ -238,39 +240,39 @@ namespace REBUSS.Pure
         internal static string DetectProvider(IConfiguration configuration)
         {
             // 1. Explicit provider setting (normalized to canonical casing)
-            var explicitProvider = configuration.GetValue<string>("Provider");
+            var explicitProvider = configuration.GetValue<string>(Resources.ConfigKeyProvider);
             if (!string.IsNullOrWhiteSpace(explicitProvider))
                 return explicitProvider.ToLowerInvariant() switch
                 {
-                    "github" => "GitHub",
-                    "azuredevops" => "AzureDevOps",
+                    GitHubNames.ProviderLower => GitHubNames.Provider,
+                    AzureDevOpsNames.ProviderLower => AzureDevOpsNames.Provider,
                     _ => explicitProvider
                 };
 
             // 2. Check if GitHub section has owner configured
             var githubOwner = configuration[$"{GitHubOptions.SectionName}:{nameof(GitHubOptions.Owner)}"];
             if (!string.IsNullOrWhiteSpace(githubOwner))
-                return "GitHub";
+                return GitHubNames.Provider;
 
             // 3. Check if AzureDevOps section has organization configured
             var adoOrg = configuration[$"{AzureDevOpsOptions.SectionName}:{nameof(AzureDevOpsOptions.OrganizationName)}"];
             if (!string.IsNullOrWhiteSpace(adoOrg))
-                return "AzureDevOps";
+                return AzureDevOpsNames.Provider;
 
             // 4. Auto-detect from git remote URL
             var remoteUrl = GetGitRemoteUrl();
             if (remoteUrl is not null)
             {
-                if (remoteUrl.Contains("github.com", StringComparison.OrdinalIgnoreCase))
-                    return "GitHub";
+                if (remoteUrl.Contains(GitHubNames.Domain, StringComparison.OrdinalIgnoreCase))
+                    return GitHubNames.Provider;
 
-                if (remoteUrl.Contains("dev.azure.com", StringComparison.OrdinalIgnoreCase) ||
-                    remoteUrl.Contains("visualstudio.com", StringComparison.OrdinalIgnoreCase))
-                    return "AzureDevOps";
+                if (remoteUrl.Contains(AzureDevOpsNames.Domain, StringComparison.OrdinalIgnoreCase) ||
+                    remoteUrl.Contains(AzureDevOpsNames.LegacyDomain, StringComparison.OrdinalIgnoreCase))
+                    return AzureDevOpsNames.Provider;
             }
 
             // 5. Default
-            return "AzureDevOps";
+            return AzureDevOpsNames.Provider;
         }
 
         private static string? GetGitRemoteUrl()
@@ -281,8 +283,8 @@ namespace REBUSS.Pure
                 {
                     StartInfo = new System.Diagnostics.ProcessStartInfo
                     {
-                        FileName = "git",
-                        Arguments = "remote get-url origin",
+                        FileName = Resources.GitExecutable,
+                        Arguments = Resources.GitRemoteGetUrlArgs,
                         RedirectStandardInput = true,
                         RedirectStandardOutput = true,
                         RedirectStandardError = true,

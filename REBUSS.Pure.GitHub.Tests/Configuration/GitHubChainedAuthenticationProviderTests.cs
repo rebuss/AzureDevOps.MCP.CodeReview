@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using REBUSS.Pure.GitHub.Configuration;
+using REBUSS.Pure.GitHub.Properties;
 
 namespace REBUSS.Pure.GitHub.Tests.Configuration;
 
@@ -202,7 +203,7 @@ public class GitHubChainedAuthenticationProviderTests
     [Fact]
     public void BuildAuthRequiredMessage_ContainsGhAuthLogin()
     {
-        var message = GitHubChainedAuthenticationProvider.BuildAuthRequiredMessage();
+        var message = Resources.ErrorGitHubAuthRequired;
 
         Assert.Contains("gh auth login", message);
     }
@@ -210,7 +211,7 @@ public class GitHubChainedAuthenticationProviderTests
     [Fact]
     public void BuildAuthRequiredMessage_ContainsPatInstructions()
     {
-        var message = GitHubChainedAuthenticationProvider.BuildAuthRequiredMessage();
+        var message = Resources.ErrorGitHubAuthRequired;
 
         Assert.Contains("PersonalAccessToken", message);
         Assert.Contains("github.com/settings/tokens", message);
@@ -219,7 +220,7 @@ public class GitHubChainedAuthenticationProviderTests
     [Fact]
     public void BuildAuthRequiredMessage_ContainsRebussPureInit()
     {
-        var message = GitHubChainedAuthenticationProvider.BuildAuthRequiredMessage();
+        var message = Resources.ErrorGitHubAuthRequired;
 
         Assert.Contains("rebuss-pure init", message);
     }

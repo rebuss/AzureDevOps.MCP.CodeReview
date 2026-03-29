@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Options;
+using REBUSS.Pure.AzureDevOps.Properties;
 
 namespace REBUSS.Pure.AzureDevOps.Configuration
 {
@@ -16,13 +17,13 @@ namespace REBUSS.Pure.AzureDevOps.Configuration
             var failures = new List<string>();
 
             if (options.OrganizationName is not null && options.OrganizationName.Contains(' '))
-                failures.Add($"{nameof(AzureDevOpsOptions.OrganizationName)} must not contain spaces");
+                failures.Add(string.Format(Resources.ErrorPropertyMustNotContainSpaces, nameof(AzureDevOpsOptions.OrganizationName)));
 
             if (options.ProjectName is not null && options.ProjectName.Contains(' '))
-                failures.Add($"{nameof(AzureDevOpsOptions.ProjectName)} must not contain spaces");
+                failures.Add(string.Format(Resources.ErrorPropertyMustNotContainSpaces, nameof(AzureDevOpsOptions.ProjectName)));
 
             if (options.RepositoryName is not null && options.RepositoryName.Contains(' '))
-                failures.Add($"{nameof(AzureDevOpsOptions.RepositoryName)} must not contain spaces");
+                failures.Add(string.Format(Resources.ErrorPropertyMustNotContainSpaces, nameof(AzureDevOpsOptions.RepositoryName)));
 
             return failures.Count > 0
                 ? ValidateOptionsResult.Fail(failures)

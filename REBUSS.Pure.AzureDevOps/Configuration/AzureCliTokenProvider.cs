@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using REBUSS.Pure.AzureDevOps.Properties;
 
 namespace REBUSS.Pure.AzureDevOps.Configuration;
 
@@ -31,7 +32,7 @@ public class AzureCliTokenProvider : IAzureCliTokenProvider
         try
         {
             var json = await RunAzCliAsync(
-                $"account get-access-token --resource {AzureDevOpsResourceId} --output json",
+                string.Format(Resources.AzCliGetTokenArgsTemplate, AzureDevOpsResourceId),
                 cancellationToken);
 
             if (string.IsNullOrWhiteSpace(json))

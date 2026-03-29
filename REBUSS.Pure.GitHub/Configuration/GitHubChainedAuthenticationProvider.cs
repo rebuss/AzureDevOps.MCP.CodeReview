@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using REBUSS.Pure.GitHub.Properties;
 
 namespace REBUSS.Pure.GitHub.Configuration;
 
@@ -66,7 +67,7 @@ public class GitHubChainedAuthenticationProvider : IGitHubAuthenticationProvider
 
         // 4. No authentication available — instruct user to run gh auth login or configure a PAT
         _logger.LogError("No GitHub authentication method available");
-        throw new InvalidOperationException(BuildAuthRequiredMessage());
+        throw new InvalidOperationException(Resources.ErrorGitHubAuthRequired);
     }
 
     public void InvalidateCachedToken()
@@ -103,50 +104,4 @@ public class GitHubChainedAuthenticationProvider : IGitHubAuthenticationProvider
         }
     }
 
-    /// <summary>
-    /// Builds a clear, actionable error message instructing the user to authenticate with GitHub.
-    /// </summary>
-    internal static string BuildAuthRequiredMessage()
-    {
-        return
-            """
-            ========================================
-            AUTHENTICATION REQUIRED
-            ========================================
-
-            REBUSS.Pure requires authentication to access GitHub.
-
-            OPTION 1 — GitHub CLI (recommended, no PAT needed):
-
-              Install GitHub CLI: https://cli.github.com/
-              Then run:
-
-                gh auth login
-
-              After that, restart your IDE or run:
-
-                rebuss-pure init
-
-            OPTION 2 — Personal Access Token (PAT):
-
-              1. Go to https://github.com/settings/tokens
-              2. Click 'Generate new token (classic)'
-              3. Select scope: repo (Full control of private repositories)
-              4. Copy the token
-
-              Then either pass it directly:
-
-                rebuss-pure init --pat <your-token>
-
-              Or create appsettings.Local.json in the tool directory with:
-
-                {
-                  "GitHub": {
-                    "PersonalAccessToken": "<your-token>"
-                  }
-                }
-
-            ========================================
-            """;
     }
-}

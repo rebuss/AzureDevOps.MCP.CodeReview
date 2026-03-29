@@ -8,6 +8,7 @@ using REBUSS.Pure.Core;
 using REBUSS.Pure.Core.Models;
 using REBUSS.Pure.Core.Models.ResponsePacking;
 using REBUSS.Pure.Core.Shared;
+using REBUSS.Pure.Properties;
 using REBUSS.Pure.Services.LocalReview;
 using REBUSS.Pure.Services.ResponsePacking;
 using REBUSS.Pure.Tools.Models;
@@ -64,14 +65,14 @@ namespace REBUSS.Pure.Tools
             CancellationToken cancellationToken = default)
         {
             if (pageNumber == null)
-                throw new McpException("Missing required parameter: pageNumber");
+                throw new McpException(Resources.ErrorMissingRequiredPageNumber);
             if (pageNumber < 1)
-                throw new McpException("pageNumber must be >= 1");
+                throw new McpException(Resources.ErrorPageNumberMustBePositive);
 
             try
             {
                 var parsedScope = LocalReviewScope.Parse(scope);
-                _logger.LogInformation("[get_local_content] Entry: page {PageNumber}, scope={Scope}",
+                _logger.LogInformation(Resources.LogGetLocalContentEntry,
                     pageNumber, parsedScope);
 
                 var sw = Stopwatch.StartNew();
@@ -88,7 +89,7 @@ namespace REBUSS.Pure.Tools
 
                 if (pageNumber > allocation.TotalPages)
                     throw new McpException(
-                        $"pageNumber {pageNumber} exceeds total pages {allocation.TotalPages}");
+                        string.Format(Resources.ErrorPageNumberExceedsTotalPages, pageNumber, allocation.TotalPages));
 
                 var pageSlice = allocation.Pages[pageNumber.Value - 1];
 
@@ -131,7 +132,7 @@ namespace REBUSS.Pure.Tools
                 sw.Stop();
 
                 _logger.LogInformation(
-                    "[get_local_content] Completed: page {Page}/{TotalPages}, {FileCount} files, {Chars} chars, {Ms}ms",
+                    Resources.LogGetLocalContentCompleted,
                     pageNumber, allocation.TotalPages, pageFiles.Count, json.Length, sw.ElapsedMilliseconds);
 
                 return json;
@@ -142,9 +143,9 @@ namespace REBUSS.Pure.Tools
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "[get_local_content] Error (pageNumber={PageNumber}, scope={Scope})",
+                _logger.LogError(ex, Resources.LogGetLocalContentError,
                     pageNumber, scope);
-                throw new McpException($"Error retrieving local content: {ex.Message}");
+                throw new McpException(string.Format(Resources.ErrorRetrievingLocalContent, ex.Message));
             }
         }
 

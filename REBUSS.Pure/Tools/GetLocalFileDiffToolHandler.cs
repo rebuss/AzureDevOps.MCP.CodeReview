@@ -6,6 +6,7 @@ using ModelContextProtocol.Server;
 using REBUSS.Pure.Core;
 using REBUSS.Pure.Core.Models.ResponsePacking;
 using REBUSS.Pure.Core.Shared;
+using REBUSS.Pure.Properties;
 using REBUSS.Pure.Services.LocalReview;
 using REBUSS.Pure.Tools.Models;
 using System.Text.Json;
@@ -68,13 +69,13 @@ namespace REBUSS.Pure.Tools
             CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrWhiteSpace(path))
-                throw new McpException("Missing required parameter: path");
+                throw new McpException(Resources.ErrorMissingRequiredPath);
 
             try
             {
                 var parsedScope = LocalReviewScope.Parse(scope);
 
-                _logger.LogInformation("[get_local_file_diff] Entry: path='{Path}', scope={Scope}",
+                _logger.LogInformation(Resources.LogGetLocalFileDiffEntry,
                     path, parsedScope);
                 var sw = Stopwatch.StartNew();
 
@@ -87,25 +88,25 @@ namespace REBUSS.Pure.Tools
                 sw.Stop();
 
                 _logger.LogInformation(
-                    "[get_local_file_diff] Completed: path='{Path}', scope={Scope}, {ResponseLength} chars, {ElapsedMs}ms",
+                    Resources.LogGetLocalFileDiffCompleted,
                     path, parsedScope, json.Length, sw.ElapsedMilliseconds);
 
                 return json;
             }
             catch (LocalRepositoryNotFoundException ex)
             {
-                _logger.LogWarning(ex, "[get_local_file_diff] Repository not found");
-                throw new McpException($"Repository not found: {ex.Message}");
+                _logger.LogWarning(ex, Resources.LogGetLocalFileDiffRepositoryNotFound);
+                throw new McpException(string.Format(Resources.ErrorRepositoryNotFound, ex.Message));
             }
             catch (LocalFileNotFoundException ex)
             {
-                _logger.LogWarning(ex, "[get_local_file_diff] File not found in local changes (path='{Path}')", path);
-                throw new McpException($"File not found in local changes: {ex.Message}");
+                _logger.LogWarning(ex, Resources.LogGetLocalFileDiffFileNotFound, path);
+                throw new McpException(string.Format(Resources.ErrorFileNotFoundInLocalChanges, ex.Message));
             }
             catch (GitCommandException ex)
             {
-                _logger.LogWarning(ex, "[get_local_file_diff] Git command failed (path='{Path}')", path);
-                throw new McpException($"Git command failed: {ex.Message}");
+                _logger.LogWarning(ex, Resources.LogGetLocalFileDiffGitCommandFailed, path);
+                throw new McpException(string.Format(Resources.ErrorGitCommandFailed, ex.Message));
             }
             catch (McpException)
             {
@@ -113,8 +114,8 @@ namespace REBUSS.Pure.Tools
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "[get_local_file_diff] Error (path='{Path}')", path);
-                throw new McpException($"Error retrieving local file diff: {ex.Message}");
+                _logger.LogError(ex, Resources.LogGetLocalFileDiffError, path);
+                throw new McpException(string.Format(Resources.ErrorRetrievingLocalFileDiff, ex.Message));
             }
         }
 
@@ -211,7 +212,7 @@ namespace REBUSS.Pure.Tools
 
             if (truncated.Hunks.Count < file.Hunks.Count)
             {
-                truncated.SkipReason = $"Partially included: {truncated.Hunks.Count}/{file.Hunks.Count} hunks fit within budget";
+                truncated.SkipReason = string.Format(Resources.ErrorPartiallyIncludedHunks, truncated.Hunks.Count, file.Hunks.Count);
             }
 
             return truncated;

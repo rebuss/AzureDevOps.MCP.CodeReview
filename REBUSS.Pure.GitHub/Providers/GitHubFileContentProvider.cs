@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using REBUSS.Pure.GitHub.Api;
+using REBUSS.Pure.GitHub.Properties;
 using REBUSS.Pure.Core.Exceptions;
 using REBUSS.Pure.Core.Models;
 
@@ -37,7 +38,7 @@ public class GitHubFileContentProvider
         if (content == null)
         {
             throw new FileContentNotFoundException(
-                $"File '{path}' not found at ref '{gitRef}'");
+                string.Format(Resources.ErrorFileNotFoundAtRef, path, gitRef));
         }
 
         var isBinary = IsBinaryContent(content);

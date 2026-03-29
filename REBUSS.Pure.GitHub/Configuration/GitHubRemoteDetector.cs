@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
+using REBUSS.Pure.GitHub.Properties;
 
 namespace REBUSS.Pure.GitHub.Configuration;
 
@@ -101,8 +102,8 @@ public partial class GitHubRemoteDetector : IGitHubRemoteDetector
         {
             StartInfo = new ProcessStartInfo
             {
-                FileName = "git",
-                Arguments = "remote get-url origin",
+                FileName = Resources.GitExecutable,
+                Arguments = Resources.GitRemoteGetUrlArgs,
                 RedirectStandardInput = true,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,

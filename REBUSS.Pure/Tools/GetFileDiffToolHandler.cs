@@ -6,6 +6,7 @@ using ModelContextProtocol.Server;
 using REBUSS.Pure.Core;
 using REBUSS.Pure.Core.Exceptions;
 using REBUSS.Pure.Core.Models;
+using REBUSS.Pure.Properties;
 using REBUSS.Pure.Tools.Models;
 using System.Text.Json;
 
@@ -46,17 +47,17 @@ namespace REBUSS.Pure.Tools
             CancellationToken cancellationToken = default)
         {
             if (prNumber != null && prNumber <= 0)
-                throw new McpException("prNumber must be greater than 0");
+                throw new McpException(Resources.ErrorPrNumberMustBePositive);
 
             if (prNumber == null)
-                throw new McpException("Missing required parameter: prNumber");
+                throw new McpException(Resources.ErrorMissingRequiredPrNumber);
 
             if (string.IsNullOrWhiteSpace(path))
-                throw new McpException("Missing required parameter: path");
+                throw new McpException(Resources.ErrorMissingRequiredPath);
 
             try
             {
-                _logger.LogInformation("[get_file_diff] Entry: PR #{PrNumber}, path='{Path}'",
+                _logger.LogInformation(Resources.LogGetFileDiffEntry,
                     prNumber, path);
                 var sw = Stopwatch.StartNew();
 
@@ -67,22 +68,22 @@ namespace REBUSS.Pure.Tools
                 sw.Stop();
 
                 _logger.LogInformation(
-                    "[get_file_diff] Completed: PR #{PrNumber}, path='{Path}', {ResponseLength} chars, {ElapsedMs}ms",
+                    Resources.LogGetFileDiffCompleted,
                     prNumber, path, json.Length, sw.ElapsedMilliseconds);
 
                 return json;
             }
             catch (PullRequestNotFoundException ex)
             {
-                _logger.LogWarning(ex, "[get_file_diff] Pull request not found (prNumber={PrNumber}, path='{Path}')",
+                _logger.LogWarning(ex, Resources.LogGetFileDiffPrNotFound,
                     prNumber, path);
-                throw new McpException($"Pull Request not found: {ex.Message}");
+                throw new McpException(string.Format(Resources.ErrorPullRequestNotFound, ex.Message));
             }
             catch (FileNotFoundInPullRequestException ex)
             {
-                _logger.LogWarning(ex, "[get_file_diff] File not found in pull request (prNumber={PrNumber}, path='{Path}')",
+                _logger.LogWarning(ex, Resources.LogGetFileDiffFileNotFound,
                     prNumber, path);
-                throw new McpException($"File not found in Pull Request: {ex.Message}");
+                throw new McpException(string.Format(Resources.ErrorFileNotFoundInPullRequest, ex.Message));
             }
             catch (McpException)
             {
@@ -90,9 +91,9 @@ namespace REBUSS.Pure.Tools
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "[get_file_diff] Error (prNumber={PrNumber}, path='{Path}')",
+                _logger.LogError(ex, Resources.LogGetFileDiffError,
                     prNumber, path);
-                throw new McpException($"Error retrieving file diff: {ex.Message}");
+                throw new McpException(string.Format(Resources.ErrorRetrievingFileDiff, ex.Message));
             }
         }
 

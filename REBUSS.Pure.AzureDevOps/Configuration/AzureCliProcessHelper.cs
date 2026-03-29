@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using REBUSS.Pure.AzureDevOps.Properties;
 
 namespace REBUSS.Pure.AzureDevOps.Configuration;
 
@@ -25,11 +26,11 @@ internal static class AzureCliProcessHelper
     {
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
-            var azCmd = azPath is not null ? $"\"{azPath}\"" : "az";
+            var azCmd = azPath is not null ? $"\"{azPath}\"" : Resources.AzCliExecutable;
             return ("cmd.exe", $"/c {azCmd} {azArguments}");
         }
 
-        return (azPath ?? "az", azArguments);
+        return (azPath ?? Resources.AzCliExecutable, azArguments);
     }
 
     /// <summary>

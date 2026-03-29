@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using REBUSS.Pure.AzureDevOps.Properties;
 
 namespace REBUSS.Pure.AzureDevOps.Configuration;
 
@@ -74,7 +75,7 @@ public class ChainedAuthenticationProvider : IAuthenticationProvider
 
         // 4. No authentication available — instruct user to run az login or configure a PAT
         _logger.LogError("No authentication method available");
-        throw new InvalidOperationException(BuildAuthRequiredMessage());
+        throw new InvalidOperationException(Resources.ErrorAzureDevOpsAuthRequired);
     }
 
     public void InvalidateCachedToken()
@@ -121,52 +122,4 @@ public class ChainedAuthenticationProvider : IAuthenticationProvider
         return new AuthenticationHeaderValue("Bearer", cached.AccessToken);
     }
 
-    /// <summary>
-    /// Builds a clear, actionable error message instructing the user to authenticate.
-    /// </summary>
-    internal static string BuildAuthRequiredMessage()
-    {
-        return
-            """
-            ========================================
-            AUTHENTICATION REQUIRED
-            ========================================
-
-            REBUSS.Pure requires authentication to access Azure DevOps.
-
-            OPTION 1 — Azure CLI (recommended, no PAT needed):
-
-              Run the following command to log in:
-
-                az login
-
-              The server will automatically acquire a token for Azure DevOps.
-              You can also run 'rebuss-pure init' (without --pat) to log in
-              during initialization.
-
-              If Azure CLI is not installed:
-                https://learn.microsoft.com/en-us/cli/azure/install-azure-cli
-
-            OPTION 2 — Personal Access Token (PAT):
-
-              Create a file named 'appsettings.Local.json' next to the server executable
-              (this file is excluded from Git via .gitignore):
-
-                {
-                  "AzureDevOps": {
-                    "PersonalAccessToken": "<your-pat-here>"
-                  }
-                }
-
-              To create a PAT:
-                1. Go to https://dev.azure.com/<your-org>/_usersSettings/tokens
-                2. Click '+ New Token'
-                3. Select scope: Code (Read)
-                4. Copy the generated token into the file above
-
-            After authenticating, restart Visual Studio (or your MCP client).
-
-            ========================================
-            """;
     }
-}

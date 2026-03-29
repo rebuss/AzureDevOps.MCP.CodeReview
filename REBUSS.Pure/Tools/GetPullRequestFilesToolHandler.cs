@@ -10,6 +10,7 @@ using REBUSS.Pure.Core.Models;
 using REBUSS.Pure.Core.Models.Pagination;
 using REBUSS.Pure.Core.Models.ResponsePacking;
 using REBUSS.Pure.Core.Shared;
+using REBUSS.Pure.Properties;
 using REBUSS.Pure.Services.Pagination;
 using REBUSS.Pure.Services.ResponsePacking;
 using REBUSS.Pure.Tools.Models;
@@ -80,14 +81,14 @@ namespace REBUSS.Pure.Tools
                     throw new McpException(mutualExclError);
 
                 if (prNumber != null && prNumber <= 0)
-                    throw new McpException("prNumber must be greater than 0");
+                    throw new McpException(Resources.ErrorPrNumberMustBePositive);
 
                 if (prNumber == null && pageReference == null)
-                    throw new McpException("Missing required parameter: prNumber");
+                    throw new McpException(Resources.ErrorMissingRequiredPrNumber);
 
                 var hasExplicitBudget = modelName != null || maxTokens != null;
 
-                _logger.LogInformation("[get_pr_files] Entry: PR #{PrNumber}", prNumber);
+                _logger.LogInformation(Resources.LogGetPrFilesEntry, prNumber);
                 var sw = Stopwatch.StartNew();
 
                 var budget = _budgetResolver.Resolve(maxTokens, modelName);
@@ -115,7 +116,7 @@ namespace REBUSS.Pure.Tools
                 }
 
                 if (effectivePrNumber == null || effectivePrNumber <= 0)
-                    throw new McpException("Missing required parameter: prNumber");
+                    throw new McpException(Resources.ErrorMissingRequiredPrNumber);
 
                 var effectiveBudget = resolution.ResolvedBudget;
 
@@ -131,7 +132,7 @@ namespace REBUSS.Pure.Tools
                     var result = BuildPackedResult(effectivePrNumber.Value, prFiles, budget.SafeBudgetTokens);
                     var json = JsonSerializer.Serialize(result, JsonOptions);
                     sw.Stop();
-                    _logger.LogInformation("[get_pr_files] Completed (F003): PR #{PrNumber}, {FileCount} files, {ElapsedMs}ms",
+                    _logger.LogInformation(Resources.LogGetPrFilesCompletedF003,
                         effectivePrNumber, prFiles.Files.Count, sw.ElapsedMilliseconds);
                     return json;
                 }
@@ -153,7 +154,7 @@ namespace REBUSS.Pure.Tools
 
                 var requestedPage = resolution.PageNumber;
                 if (requestedPage < 1 || requestedPage > allocation.TotalPages)
-                    throw new McpException($"Page number {requestedPage} is out of range. Valid range: 1 to {allocation.TotalPages}.");
+                    throw new McpException(string.Format(Resources.ErrorPageNumberOutOfRange, requestedPage, allocation.TotalPages));
 
                 var pageSlice = allocation.Pages[requestedPage - 1];
 
@@ -177,7 +178,7 @@ namespace REBUSS.Pure.Tools
                     }
                     catch
                     {
-                        _logger.LogDebug("[get_pr_files] Could not fetch metadata for fingerprint");
+                        _logger.LogDebug(Resources.LogGetPrFilesMetadataFingerprintFailed);
                     }
                 }
 
@@ -212,21 +213,21 @@ namespace REBUSS.Pure.Tools
                 var jsonResult = JsonSerializer.Serialize(paginatedResult, JsonOptions);
                 sw.Stop();
                 _logger.LogInformation(
-                    "[get_pr_files] Completed (F004): PR #{PrNumber}, page {Page}/{TotalPages}, {ElapsedMs}ms",
+                    Resources.LogGetPrFilesCompletedF004,
                     effectivePrNumber, requestedPage, allocation.TotalPages, sw.ElapsedMilliseconds);
 
                 return jsonResult;
             }
             catch (PullRequestNotFoundException ex)
             {
-                _logger.LogWarning(ex, "[get_pr_files] Pull request not found");
-                throw new McpException($"Pull Request not found: {ex.Message}");
+                _logger.LogWarning(ex, Resources.LogGetPrFilesPrNotFound);
+                throw new McpException(string.Format(Resources.ErrorPullRequestNotFound, ex.Message));
             }
             catch (McpException) { throw; }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "[get_pr_files] Error");
-                throw new McpException($"Error retrieving PR files: {ex.Message}");
+                _logger.LogError(ex, Resources.LogGetPrFilesError);
+                throw new McpException(string.Format(Resources.ErrorRetrievingPrFiles, ex.Message));
             }
         }
 

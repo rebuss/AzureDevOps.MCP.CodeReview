@@ -20,7 +20,7 @@ public sealed class GitHubScmClient : IScmClient
     private readonly GitHubFileContentProvider _contentProvider;
     private readonly GitHubOptions _options;
 
-    public string ProviderName => "GitHub";
+    public string ProviderName => GitHubOptions.SectionName;
 
     public GitHubScmClient(
         GitHubDiffProvider diffProvider,
@@ -48,7 +48,7 @@ public sealed class GitHubScmClient : IScmClient
 
         metadata.RepositoryFullName = $"{_options.Owner}/{_options.RepositoryName}";
 
-        metadata.WebUrl = $"https://github.com/{_options.Owner}/{_options.RepositoryName}/pull/{prNumber}";
+        metadata.WebUrl = $"https://{Names.Domain}/{_options.Owner}/{_options.RepositoryName}/pull/{prNumber}";
 
         return metadata;
     }

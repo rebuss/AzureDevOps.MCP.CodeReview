@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using REBUSS.Pure.AzureDevOps.Configuration;
+using REBUSS.Pure.AzureDevOps.Properties;
 
 namespace REBUSS.Pure.AzureDevOps.Tests.Configuration;
 
@@ -245,7 +246,7 @@ public class ChainedAuthenticationProviderTests
     [Fact]
     public void BuildAuthRequiredMessage_ContainsAzLoginAndPatInstructions()
     {
-        var message = ChainedAuthenticationProvider.BuildAuthRequiredMessage();
+        var message = Resources.ErrorAzureDevOpsAuthRequired;
 
         Assert.Contains("az login", message);
         Assert.Contains("appsettings.Local.json", message);

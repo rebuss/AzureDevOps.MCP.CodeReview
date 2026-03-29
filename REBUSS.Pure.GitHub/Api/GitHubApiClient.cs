@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using REBUSS.Pure.GitHub.Configuration;
+using REBUSS.Pure.GitHub.Properties;
 
 namespace REBUSS.Pure.GitHub.Api;
 
@@ -14,7 +15,6 @@ namespace REBUSS.Pure.GitHub.Api;
 /// </summary>
 public class GitHubApiClient : IGitHubApiClient
 {
-    private const string BaseUrl = "https://api.github.com/";
     private const int MaxPagesPerEndpoint = 10;
     private const int DefaultPerPage = 100;
 
@@ -32,7 +32,7 @@ public class GitHubApiClient : IGitHubApiClient
         _logger = logger;
 
         if (_httpClient.BaseAddress is null)
-            _httpClient.BaseAddress = new Uri(BaseUrl);
+            _httpClient.BaseAddress = new Uri(Resources.ApiBaseUrl);
     }
 
     public async Task<string> GetPullRequestDetailsAsync(int pullRequestNumber, CancellationToken cancellationToken = default)
@@ -70,7 +70,7 @@ public class GitHubApiClient : IGitHubApiClient
 
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
         request.Headers.Accept.Clear();
-        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github.raw+json"));
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(Resources.GitHubRawContentAcceptHeader));
 
         var response = await _httpClient.SendAsync(request, cancellationToken);
         sw.Stop();

@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using REBUSS.Pure.Core;
 using REBUSS.Pure.Core.Models;
 using REBUSS.Pure.Core.Shared;
+using REBUSS.Pure.Properties;
 
 namespace REBUSS.Pure.Services.LocalReview
 {
@@ -45,7 +46,7 @@ namespace REBUSS.Pure.Services.LocalReview
         {
             var repoRoot = ResolveRepositoryRootOrThrow();
 
-            _logger.LogInformation("Fetching local files: scope={Scope}, root={Root}", scope, repoRoot);
+            _logger.LogInformation(Resources.LogLocalReviewProviderFetchingFiles, scope, repoRoot);
             var sw = Stopwatch.StartNew();
 
             var currentBranch = await _gitClient.GetCurrentBranchAsync(repoRoot, cancellationToken);
@@ -66,7 +67,7 @@ namespace REBUSS.Pure.Services.LocalReview
             sw.Stop();
 
             _logger.LogInformation(
-                "Local files completed: scope={Scope}, {FileCount} file(s), {ElapsedMs}ms",
+                Resources.LogLocalReviewProviderFilesCompleted,
                 scope, files.Count, sw.ElapsedMilliseconds);
 
             return new LocalReviewFiles
@@ -87,7 +88,7 @@ namespace REBUSS.Pure.Services.LocalReview
             var repoRoot = ResolveRepositoryRootOrThrow();
 
             _logger.LogInformation(
-                "Fetching local file diff: path='{Path}', scope={Scope}, root={Root}",
+                Resources.LogLocalReviewProviderFetchingFileDiff,
                 filePath, scope, repoRoot);
             var sw = Stopwatch.StartNew();
 
@@ -99,16 +100,16 @@ namespace REBUSS.Pure.Services.LocalReview
 
             if (match is null)
             {
-                _logger.LogWarning("File '{Path}' not found in local changes (scope={Scope})", filePath, scope);
+                _logger.LogWarning(Resources.LogLocalReviewProviderFileNotFound, filePath, scope);
                 throw new LocalFileNotFoundException(
-                    $"File '{filePath}' not found among local changes (scope: {scope})");
+                    string.Format(Resources.ErrorFileNotFoundAmongLocalChanges, filePath, scope));
             }
 
             var fileChange = await BuildFileChangeAsync(repoRoot, match, scope, cancellationToken);
 
             sw.Stop();
             _logger.LogInformation(
-                "Local file diff completed: path='{Path}', scope={Scope}, {HunkCount} hunk(s), {ElapsedMs}ms",
+                Resources.LogLocalReviewProviderFileDiffCompleted,
                 filePath, scope, fileChange.Hunks.Count, sw.ElapsedMilliseconds);
 
             return new PullRequestDiff
@@ -130,9 +131,7 @@ namespace REBUSS.Pure.Services.LocalReview
             var root = _workspaceRootProvider.ResolveRepositoryRoot();
             if (root is null)
             {
-                throw new LocalRepositoryNotFoundException(
-                    "No git repository root could be resolved. " +
-                    "Set a repository path via --repo, MCP roots, or the localRepoPath configuration.");
+                throw new LocalRepositoryNotFoundException(Resources.ErrorNoGitRepositoryRoot);
             }
 
             return root;

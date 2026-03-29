@@ -1,8 +1,10 @@
+using REBUSS.Pure.AzureDevOps;
+
 namespace REBUSS.Pure.AzureDevOps.Configuration
 {
     public class AzureDevOpsOptions
     {
-        public const string SectionName = "AzureDevOps";
+        public const string SectionName = Names.Provider;
 
         public string OrganizationName { get; set; } = string.Empty;
         public string ProjectName { get; set; } = string.Empty;

@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="REBUSS.Pure.png" alt="REBUSS.Pure" />
+</p>
+
 # 🚀 REBUSS.Pure – AI Code Review That Focuses Only on What Matters
 
 **Stop sending irrelevant code to AI.**  

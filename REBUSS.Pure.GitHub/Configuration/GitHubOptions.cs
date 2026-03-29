@@ -1,8 +1,10 @@
+using REBUSS.Pure.GitHub;
+
 namespace REBUSS.Pure.GitHub.Configuration;
 
 public class GitHubOptions
 {
-    public const string SectionName = "GitHub";
+    public const string SectionName = Names.Provider;
 
     public string Owner { get; set; } = string.Empty;
     public string RepositoryName { get; set; } = string.Empty;

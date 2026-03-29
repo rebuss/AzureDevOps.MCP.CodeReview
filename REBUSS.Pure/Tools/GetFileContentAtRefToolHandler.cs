@@ -6,6 +6,7 @@ using ModelContextProtocol.Server;
 using REBUSS.Pure.Core;
 using REBUSS.Pure.Core.Exceptions;
 using REBUSS.Pure.Core.Models;
+using REBUSS.Pure.Properties;
 using REBUSS.Pure.Tools.Models;
 using System.Text.Json;
 
@@ -48,14 +49,14 @@ namespace REBUSS.Pure.Tools
             CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrWhiteSpace(path))
-                throw new McpException("Missing required parameter: path");
+                throw new McpException(Resources.ErrorMissingRequiredPath);
 
             if (string.IsNullOrWhiteSpace(@ref))
-                throw new McpException("Missing required parameter: ref");
+                throw new McpException(Resources.ErrorMissingRequiredRef);
 
             try
             {
-                _logger.LogInformation("[get_file_content_at_ref] Entry: path='{Path}', ref='{Ref}'", path, @ref);
+                _logger.LogInformation(Resources.LogGetFileContentAtRefEntry, path, @ref);
                 var sw = Stopwatch.StartNew();
 
                 var fileContent = await _fileContentProvider.GetFileContentAsync(path, @ref, cancellationToken);
@@ -74,16 +75,16 @@ namespace REBUSS.Pure.Tools
                 sw.Stop();
 
                 _logger.LogInformation(
-                    "[get_file_content_at_ref] Completed: path='{Path}', ref='{Ref}', {Size} bytes, binary={IsBinary}, {ResponseLength} chars, {ElapsedMs}ms",
+                    Resources.LogGetFileContentAtRefCompleted,
                     path, @ref, fileContent.Size, fileContent.IsBinary, json.Length, sw.ElapsedMilliseconds);
 
                 return json;
             }
             catch (FileContentNotFoundException ex)
             {
-                _logger.LogWarning(ex, "[get_file_content_at_ref] File content not found (path='{Path}', ref='{Ref}')",
+                _logger.LogWarning(ex, Resources.LogGetFileContentAtRefNotFound,
                     path, @ref);
-                throw new McpException($"File not found: {ex.Message}");
+                throw new McpException(string.Format(Resources.ErrorFileNotFound, ex.Message));
             }
             catch (McpException)
             {
@@ -91,9 +92,9 @@ namespace REBUSS.Pure.Tools
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "[get_file_content_at_ref] Error (path='{Path}', ref='{Ref}')",
+                _logger.LogError(ex, Resources.LogGetFileContentAtRefError,
                     path, @ref);
-                throw new McpException($"Error retrieving file content: {ex.Message}");
+                throw new McpException(string.Format(Resources.ErrorRetrievingFileContent, ex.Message));
             }
         }
     }

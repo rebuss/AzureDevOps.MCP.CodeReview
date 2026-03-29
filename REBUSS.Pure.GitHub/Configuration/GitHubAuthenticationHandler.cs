@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using Microsoft.Extensions.Logging;
+using REBUSS.Pure.GitHub.Properties;
 
 namespace REBUSS.Pure.GitHub.Configuration;
 
@@ -55,14 +56,14 @@ public class GitHubAuthenticationHandler : DelegatingHandler
 
     private static void SetGitHubHeaders(HttpRequestMessage request)
     {
-        if (!request.Headers.Accept.Contains(new MediaTypeWithQualityHeaderValue("application/vnd.github+json")))
-            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
+        if (!request.Headers.Accept.Contains(new MediaTypeWithQualityHeaderValue(Resources.GitHubAcceptHeader)))
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(Resources.GitHubAcceptHeader));
 
-        if (!request.Headers.Contains("X-GitHub-Api-Version"))
-            request.Headers.Add("X-GitHub-Api-Version", "2022-11-28");
+        if (!request.Headers.Contains(Resources.GitHubApiVersionHeader))
+            request.Headers.Add(Resources.GitHubApiVersionHeader, Resources.GitHubApiVersion);
 
         if (request.Headers.UserAgent.Count == 0)
-            request.Headers.UserAgent.Add(new ProductInfoHeaderValue("REBUSS-Pure", "1.0"));
+            request.Headers.UserAgent.Add(new ProductInfoHeaderValue(Resources.HttpUserAgentProduct, "1.0"));
     }
 
     /// <summary>
@@ -77,7 +78,7 @@ public class GitHubAuthenticationHandler : DelegatingHandler
 
         if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
         {
-            if (response.Headers.TryGetValues("X-RateLimit-Remaining", out var values) &&
+            if (response.Headers.TryGetValues(Resources.GitHubRateLimitRemainingHeader, out var values) &&
                 values.FirstOrDefault() == "0")
                 return false;
 

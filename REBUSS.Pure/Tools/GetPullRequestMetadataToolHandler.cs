@@ -8,6 +8,7 @@ using REBUSS.Pure.Core.Exceptions;
 using REBUSS.Pure.Core.Models;
 using REBUSS.Pure.Core.Models.ResponsePacking;
 using REBUSS.Pure.Core.Shared;
+using REBUSS.Pure.Properties;
 using REBUSS.Pure.Services.ResponsePacking;
 using REBUSS.Pure.Tools.Models;
 using System.Text.Json;
@@ -68,14 +69,14 @@ namespace REBUSS.Pure.Tools
             CancellationToken cancellationToken = default)
         {
             if (prNumber != null && prNumber <= 0)
-                throw new McpException("prNumber must be greater than 0");
+                throw new McpException(Resources.ErrorPrNumberMustBePositive);
 
             if (prNumber == null)
-                throw new McpException("Missing required parameter: prNumber");
+                throw new McpException(Resources.ErrorMissingRequiredPrNumber);
 
             try
             {
-                _logger.LogInformation("[get_pr_metadata] Entry: PR #{PrNumber}", prNumber);
+                _logger.LogInformation(Resources.LogGetPrMetadataEntry, prNumber);
                 var sw = Stopwatch.StartNew();
 
                 var metadata = await _metadataProvider.GetMetadataAsync(prNumber.Value, cancellationToken);
@@ -92,15 +93,15 @@ namespace REBUSS.Pure.Tools
                 var json = JsonSerializer.Serialize(result, JsonOptions);
                 sw.Stop();
 
-                _logger.LogInformation("[get_pr_metadata] Completed: PR #{PrNumber}, {ResponseLength} chars, {ElapsedMs}ms",
+                _logger.LogInformation(Resources.LogGetPrMetadataCompleted,
                     prNumber, json.Length, sw.ElapsedMilliseconds);
 
                 return json;
             }
             catch (PullRequestNotFoundException ex)
             {
-                _logger.LogWarning(ex, "[get_pr_metadata] Pull request not found (prNumber={PrNumber})", prNumber);
-                throw new McpException($"Pull Request not found: {ex.Message}");
+                _logger.LogWarning(ex, Resources.LogGetPrMetadataNotFound, prNumber);
+                throw new McpException(string.Format(Resources.ErrorPullRequestNotFound, ex.Message));
             }
             catch (McpException)
             {
@@ -108,8 +109,8 @@ namespace REBUSS.Pure.Tools
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "[get_pr_metadata] Error (prNumber={PrNumber})", prNumber);
-                throw new McpException($"Error retrieving PR metadata: {ex.Message}");
+                _logger.LogError(ex, Resources.LogGetPrMetadataError, prNumber);
+                throw new McpException(string.Format(Resources.ErrorRetrievingPrMetadata, ex.Message));
             }
         }
 

@@ -1,4 +1,5 @@
 using REBUSS.Pure.Core.Models;
+using REBUSS.Pure.Core.Properties;
 
 namespace REBUSS.Pure.Core.Shared;
 
@@ -110,12 +111,12 @@ public class FileClassifier : IFileClassifier
 
     private static string DetermineReviewPriority(FileCategory category) => category switch
     {
-        FileCategory.Source => "high",
-        FileCategory.Test => "medium",
-        FileCategory.Config => "medium",
-        FileCategory.Docs => "low",
-        FileCategory.Binary => "low",
-        FileCategory.Generated => "low",
-        _ => "medium"
+        FileCategory.Source => Resources.ReviewPriorityHigh,
+        FileCategory.Test => Resources.ReviewPriorityMedium,
+        FileCategory.Config => Resources.ReviewPriorityMedium,
+        FileCategory.Docs => Resources.ReviewPriorityLow,
+        FileCategory.Binary => Resources.ReviewPriorityLow,
+        FileCategory.Generated => Resources.ReviewPriorityLow,
+        _ => Resources.ReviewPriorityMedium
     };
 }
