@@ -230,4 +230,38 @@ public class GetPullRequestMetadataToolHandlerTests
         Assert.True(desc.GetProperty("isTruncated").GetBoolean());
         Assert.Equal(800, desc.GetProperty("returnedLength").GetInt32());
     }
+
+    [Fact]
+    public async Task ExecuteAsync_WithPaging_ZeroLineCounts_UsesFallbackEstimate()
+    {
+        // Simulate Azure DevOps provider: all files have Changes == 0
+        var filesWithZeroCounts = new PullRequestFiles
+        {
+            Files = new List<PullRequestFileInfo>
+            {
+                new() { Path = "src/A.cs", Additions = 0, Deletions = 0, Changes = 0, Extension = ".cs" },
+                new() { Path = "src/B.cs", Additions = 0, Deletions = 0, Changes = 0, Extension = ".cs" }
+            }
+        };
+        _dataProvider.GetFilesAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(filesWithZeroCounts);
+
+        await _handler.ExecuteAsync(prNumber: 42, modelName: "gpt-4o");
+
+        // EstimateFromStats must NOT be called when Changes == 0;
+        // the handler should use the fallback constant instead.
+        _tokenEstimator.DidNotReceive().EstimateFromStats(Arg.Any<int>(), Arg.Any<int>());
+
+        // The allocator must still receive candidates — one per file.
+        _pageAllocator.Received(1).Allocate(
+            Arg.Is<IReadOnlyList<PackingCandidate>>(list => list.Count == 2),
+            Arg.Any<int>());
+
+        // Each candidate's EstimatedTokens must equal the fallback (300), not the
+        // PerFileOverhead-only result of EstimateFromStats(0,0) == 50.
+        _pageAllocator.Received(1).Allocate(
+            Arg.Is<IReadOnlyList<PackingCandidate>>(list =>
+                list.All(c => c.EstimatedTokens == 300)),
+            Arg.Any<int>());
+    }
 }

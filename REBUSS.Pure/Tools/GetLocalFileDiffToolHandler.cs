@@ -181,7 +181,7 @@ namespace REBUSS.Pure.Tools
             {
                 PrNumber = null,
                 Files = packedFiles,
-                Manifest = MapManifest(decision.Manifest)
+                Manifest = ContentManifestResult.From(decision.Manifest)
             };
         }
 
@@ -218,29 +218,5 @@ namespace REBUSS.Pure.Tools
             return truncated;
         }
 
-        private static ContentManifestResult MapManifest(ContentManifest manifest)
-        {
-            return new ContentManifestResult
-            {
-                Items = manifest.Items.Select(e => new ManifestEntryResult
-                {
-                    Path = e.Path,
-                    EstimatedTokens = e.EstimatedTokens,
-                    Status = e.Status.ToString(),
-                    PriorityTier = e.PriorityTier
-                }).ToList(),
-                Summary = new ManifestSummaryResult
-                {
-                    TotalItems = manifest.Summary.TotalItems,
-                    IncludedCount = manifest.Summary.IncludedCount,
-                    PartialCount = manifest.Summary.PartialCount,
-                    DeferredCount = manifest.Summary.DeferredCount,
-                    TotalBudgetTokens = manifest.Summary.TotalBudgetTokens,
-                    BudgetUsed = manifest.Summary.BudgetUsed,
-                    BudgetRemaining = manifest.Summary.BudgetRemaining,
-                    UtilizationPercent = manifest.Summary.UtilizationPercent
-                }
-            };
+            }
         }
-    }
-}

@@ -300,7 +300,7 @@ public class GetPullRequestDiffToolHandlerTests
             .Returns(new BudgetResolutionResult(200, 100, BudgetSource.Explicit, Array.Empty<string>()));
 
         _pageAllocator.Allocate(Arg.Any<IReadOnlyList<PackingCandidate>>(), Arg.Any<int>())
-            .Throws(new InvalidOperationException("Token budget (100) is too small for pagination."));
+            .Throws(new BudgetTooSmallException("Token budget (100) is too small for pagination."));
 
         var ex = await Assert.ThrowsAsync<McpException>(() =>
             _handler.ExecuteAsync(prNumber: 42, maxTokens: 200));

@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using REBUSS.Pure.Core.Exceptions;
 using REBUSS.Pure.Core.Models;
 using REBUSS.Pure.Core.Models.Pagination;
 using REBUSS.Pure.Core.Models.ResponsePacking;
@@ -258,14 +259,14 @@ public class PageAllocatorTests
     // --- Budget too small ---
 
     [Fact]
-    public void Allocate_BudgetTooSmall_ThrowsInvalidOperation()
+    public void Allocate_BudgetTooSmall_ThrowsBudgetTooSmallException()
     {
         var candidates = new List<PackingCandidate>
         {
             new("a.cs", 100, FileCategory.Source, 10)
         };
 
-        var ex = Assert.Throws<InvalidOperationException>(
+        var ex = Assert.Throws<BudgetTooSmallException>(
             () => _allocator.Allocate(candidates, 200));
         Assert.Contains("too small", ex.Message);
     }

@@ -33,6 +33,12 @@ namespace REBUSS.Pure.Tools
 
         private const int MaxDescriptionLength = 800;
 
+        // Conservative per-file token estimate used when line counts are unavailable
+        // (e.g. the Azure DevOps iteration-changes API does not return additions/deletions).
+        // Chosen to be meaningfully larger than the PerFileOverhead-only result of
+        // EstimateFromStats(0, 0) = 50, so pagination planning stays realistic.
+        private const int FallbackEstimateWhenLinecountsUnknown = 300;
+
         private static readonly JsonSerializerOptions JsonOptions = new()
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -145,7 +151,9 @@ namespace REBUSS.Pure.Tools
             var candidates = new List<PackingCandidate>(files.Count);
             foreach (var file in files)
             {
-                var estimatedTokens = _tokenEstimator.EstimateFromStats(file.Additions, file.Deletions);
+                var estimatedTokens = file.Changes > 0
+                    ? _tokenEstimator.EstimateFromStats(file.Additions, file.Deletions)
+                    : FallbackEstimateWhenLinecountsUnknown;
                 var classification = _fileClassifier.Classify(file.Path);
                 candidates.Add(new PackingCandidate(
                     file.Path,

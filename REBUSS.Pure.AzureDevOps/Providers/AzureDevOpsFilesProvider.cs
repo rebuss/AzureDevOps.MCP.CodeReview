@@ -11,7 +11,14 @@ namespace REBUSS.Pure.AzureDevOps.Providers
     /// Fetches the list of changed files for a pull request, classifies each file,
     /// and builds a category summary. Calls the Azure DevOps API directly to retrieve
     /// file metadata from iteration changes without fetching individual file contents.
-    /// Line counts are zero (the Azure DevOps iteration changes API does not provide them).
+    /// <para>
+    /// <b>Line-count limitation:</b> <see cref="Core.Models.PullRequestFileInfo.Additions"/>,
+    /// <see cref="Core.Models.PullRequestFileInfo.Deletions"/>, and
+    /// <see cref="Core.Models.PullRequestFileInfo.Changes"/> are always zero because the Azure DevOps
+    /// iteration-changes API does not include per-file line counts. Consumers must treat these
+    /// zero values as "unavailable" rather than "no lines changed" (see
+    /// <see cref="Core.IPullRequestDataProvider.GetFilesAsync"/> remarks).
+    /// </para>
     /// </summary>
     public class AzureDevOpsFilesProvider
     {

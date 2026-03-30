@@ -6,6 +6,7 @@ using NSubstitute.ExceptionExtensions;
 using REBUSS.Pure.Core;
 using REBUSS.Pure.Core.Exceptions;
 using REBUSS.Pure.Core.Models;
+using REBUSS.Pure.Core.Models.ResponsePacking;
 using REBUSS.Pure.Core.Shared;
 using REBUSS.Pure.Services.ResponsePacking;
 using REBUSS.Pure.Tools;
@@ -173,6 +174,22 @@ public class GetPullRequestFilesToolHandlerTests
         var ex = await Assert.ThrowsAsync<McpException>(() => _handler.ExecuteAsync(prNumber: 42));
 
         Assert.Contains("Something broke", ex.Message);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_BudgetTooSmallForPagination_ThrowsError()
+    {
+        _filesProvider.GetFilesAsync(42, Arg.Any<CancellationToken>()).Returns(SampleFiles);
+        _budgetResolver.Resolve(Arg.Any<int?>(), Arg.Any<string?>())
+            .Returns(new BudgetResolutionResult(200, 100, BudgetSource.Explicit, Array.Empty<string>()));
+
+        _pageAllocator.Allocate(Arg.Any<IReadOnlyList<PackingCandidate>>(), Arg.Any<int>())
+            .Throws(new BudgetTooSmallException("Token budget (100) is too small for pagination."));
+
+        var ex = await Assert.ThrowsAsync<McpException>(() =>
+            _handler.ExecuteAsync(prNumber: 42, maxTokens: 200));
+
+        Assert.Contains("too small", ex.Message);
     }
 
     // --- Packing integration ---

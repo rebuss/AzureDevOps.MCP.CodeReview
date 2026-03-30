@@ -51,9 +51,28 @@ public sealed class ContextBudgetResolver : IContextBudgetResolver
         // Priority 2: Model registry lookup
         if (!string.IsNullOrWhiteSpace(modelIdentifier))
         {
-            var normalized = modelIdentifier.Trim();
-            if (opts.ModelRegistry.TryGetValue(normalized, out var registryTokens) && registryTokens > 0)
-                return (registryTokens, BudgetSource.Registry);
+            var normalized = NormalizeModelId(modelIdentifier.Trim());
+            int bestTokens = 0;
+            int bestMatchLen = -1;
+
+            foreach (var entry in opts.ModelRegistry)
+            {
+                if (entry.Value <= 0) continue;
+                var normalizedKey = NormalizeModelId(entry.Key);
+
+                if (normalizedKey == normalized)
+                    return (entry.Value, BudgetSource.Registry);
+
+                if (normalizedKey.Length > bestMatchLen
+                    && normalized.StartsWith(normalizedKey + "-", StringComparison.Ordinal))
+                {
+                    bestMatchLen = normalizedKey.Length;
+                    bestTokens = entry.Value;
+                }
+            }
+
+            if (bestMatchLen >= 0)
+                return (bestTokens, BudgetSource.Registry);
 
             warnings.Add($"Model '{modelIdentifier.Trim()}' not found in registry; using default budget");
         }
@@ -104,5 +123,28 @@ public sealed class ContextBudgetResolver : IContextBudgetResolver
     {
         var min = opts.MinBudgetTokens > 0 ? opts.MinBudgetTokens : 4_000;
         return opts.DefaultBudgetTokens >= min ? opts.DefaultBudgetTokens : min;
+    }
+
+    // Canonical slug: lowercase, spaces/dots/underscores/hyphens → single hyphen, trailing hyphens stripped.
+    // "Claude Sonnet 4.6" → "claude-sonnet-4-6", "gpt-4.1-mini" → "gpt-4-1-mini"
+    private static string NormalizeModelId(string s)
+    {
+        var chars = new char[s.Length];
+        int len = 0;
+        bool prevWasSep = false;
+        foreach (char c in s)
+        {
+            if (c is ' ' or '.' or '_' or '-')
+            {
+                if (!prevWasSep) { chars[len++] = '-'; prevWasSep = true; }
+            }
+            else
+            {
+                chars[len++] = char.ToLowerInvariant(c);
+                prevWasSep = false;
+            }
+        }
+        while (len > 0 && chars[len - 1] == '-') len--;
+        return new string(chars, 0, len);
     }
 }

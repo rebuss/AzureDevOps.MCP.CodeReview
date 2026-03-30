@@ -4,7 +4,9 @@ using ModelContextProtocol;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using REBUSS.Pure.Core;
+using REBUSS.Pure.Core.Exceptions;
 using REBUSS.Pure.Core.Models;
+using REBUSS.Pure.Core.Models.ResponsePacking;
 using REBUSS.Pure.Core.Shared;
 using REBUSS.Pure.Services.LocalReview;
 using REBUSS.Pure.Services.ResponsePacking;
@@ -152,6 +154,23 @@ public class GetLocalChangesFilesToolHandlerTests
         var ex = await Assert.ThrowsAsync<McpException>(() => _handler.ExecuteAsync());
 
         Assert.Contains("boom", ex.Message);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_BudgetTooSmallForPagination_ThrowsError()
+    {
+        _reviewProvider.GetFilesAsync(Arg.Any<LocalReviewScope>(), Arg.Any<CancellationToken>())
+            .Returns(SampleFiles(2));
+        _budgetResolver.Resolve(Arg.Any<int?>(), Arg.Any<string?>())
+            .Returns(new BudgetResolutionResult(200, 100, BudgetSource.Explicit, Array.Empty<string>()));
+
+        _pageAllocator.Allocate(Arg.Any<IReadOnlyList<PackingCandidate>>(), Arg.Any<int>())
+            .Throws(new BudgetTooSmallException("Token budget (100) is too small for pagination."));
+
+        var ex = await Assert.ThrowsAsync<McpException>(() =>
+            _handler.ExecuteAsync(maxTokens: 200));
+
+        Assert.Contains("too small", ex.Message);
     }
 
     [Fact]

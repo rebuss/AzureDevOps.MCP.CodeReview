@@ -34,6 +34,13 @@ public interface IPullRequestDataProvider
     Task<FullPullRequestMetadata> GetMetadataAsync(int prNumber, CancellationToken ct = default);
 
     /// <exception cref="Exceptions.PullRequestNotFoundException">Thrown when PR is not found.</exception>
+    /// <remarks>
+    /// <see cref="Models.PullRequestFileInfo.Additions"/>, <see cref="Models.PullRequestFileInfo.Deletions"/>,
+    /// and <see cref="Models.PullRequestFileInfo.Changes"/> may be zero when the underlying provider
+    /// cannot compute line counts without fetching full file diffs
+    /// (e.g. the Azure DevOps iteration-changes API). Consumers must treat zero values
+    /// as "unavailable" rather than "no lines changed".
+    /// </remarks>
     Task<PullRequestFiles> GetFilesAsync(int prNumber, CancellationToken ct = default);
 }
 

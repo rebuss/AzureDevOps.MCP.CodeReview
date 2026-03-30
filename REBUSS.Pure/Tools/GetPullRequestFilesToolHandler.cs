@@ -147,7 +147,7 @@ namespace REBUSS.Pure.Tools
                 {
                     allocation = _pageAllocator.Allocate(sortedCandidates, effectiveBudget);
                 }
-                catch (InvalidOperationException ex) when (ex.Message.Contains("too small"))
+                catch (BudgetTooSmallException ex)
                 {
                     throw new McpException(ex.Message);
                 }
@@ -176,9 +176,9 @@ namespace REBUSS.Pure.Tools
                         var meta = await _filesProvider.GetMetadataAsync(effectivePrNumber.Value, cancellationToken);
                         currentFingerprint = meta.LastMergeSourceCommitId;
                     }
-                    catch
+                    catch (Exception ex)
                     {
-                        _logger.LogDebug(Resources.LogGetPrFilesMetadataFingerprintFailed);
+                        _logger.LogDebug(ex, Resources.LogGetPrFilesMetadataFingerprintFailed);
                     }
                 }
 
@@ -281,12 +281,12 @@ namespace REBUSS.Pure.Tools
             List<PackingCandidate> candidates,
             PageSlice pageSlice)
         {
-            var pageFiles = new List<PullRequestFileItem>();
+            var filesByPath = allFiles.ToDictionary(f => f.Path);
+            var pageFiles = new List<PullRequestFileItem>(pageSlice.Items.Count);
             foreach (var item in pageSlice.Items)
             {
                 var candidate = candidates[item.OriginalIndex];
-                var fileItem = allFiles.FirstOrDefault(f => f.Path == candidate.Path);
-                if (fileItem != null)
+                if (filesByPath.TryGetValue(candidate.Path, out var fileItem))
                     pageFiles.Add(fileItem);
             }
             return pageFiles;
@@ -347,33 +347,9 @@ namespace REBUSS.Pure.Tools
                     GeneratedFiles = prFiles.Summary.GeneratedFiles,
                     HighPriorityFiles = prFiles.Summary.HighPriorityFiles
                 },
-                Manifest = MapManifest(decision.Manifest)
+                Manifest = ContentManifestResult.From(decision.Manifest)
             };
         }
 
-        private static ContentManifestResult MapManifest(ContentManifest manifest)
-        {
-            return new ContentManifestResult
-            {
-                Items = manifest.Items.Select(e => new ManifestEntryResult
-                {
-                    Path = e.Path,
-                    EstimatedTokens = e.EstimatedTokens,
-                    Status = e.Status.ToString(),
-                    PriorityTier = e.PriorityTier
-                }).ToList(),
-                Summary = new ManifestSummaryResult
-                {
-                    TotalItems = manifest.Summary.TotalItems,
-                    IncludedCount = manifest.Summary.IncludedCount,
-                    PartialCount = manifest.Summary.PartialCount,
-                    DeferredCount = manifest.Summary.DeferredCount,
-                    TotalBudgetTokens = manifest.Summary.TotalBudgetTokens,
-                    BudgetUsed = manifest.Summary.BudgetUsed,
-                    BudgetRemaining = manifest.Summary.BudgetRemaining,
-                    UtilizationPercent = manifest.Summary.UtilizationPercent
-                }
-            };
+            }
         }
-    }
-}

@@ -145,7 +145,7 @@ namespace REBUSS.Pure.Tools
                 {
                     allocation = _pageAllocator.Allocate(sortedCandidates, effectiveBudget);
                 }
-                catch (InvalidOperationException ex) when (ex.Message.Contains("too small"))
+                catch (BudgetTooSmallException ex)
                 {
                     throw new McpException(ex.Message);
                 }
@@ -174,9 +174,9 @@ namespace REBUSS.Pure.Tools
                         var meta = await _diffProvider.GetMetadataAsync(effectivePrNumber.Value, cancellationToken);
                         currentFingerprint = meta.LastMergeSourceCommitId;
                     }
-                    catch
+                    catch (Exception ex)
                     {
-                        _logger.LogDebug(Resources.LogGetPrDiffMetadataFingerprintFailed);
+                        _logger.LogDebug(ex, Resources.LogGetPrDiffMetadataFingerprintFailed);
                     }
                 }
 
@@ -277,12 +277,13 @@ namespace REBUSS.Pure.Tools
             PageSlice pageSlice,
             int safeBudgetTokens)
         {
-            var pageFiles = new List<StructuredFileChange>();
+            var filesByPath = allFiles.ToDictionary(f => f.Path);
+            var pageFiles = new List<StructuredFileChange>(pageSlice.Items.Count);
             foreach (var item in pageSlice.Items)
             {
                 var candidate = candidates[item.OriginalIndex];
-                var fileChange = allFiles.FirstOrDefault(f => f.Path == candidate.Path);
-                if (fileChange == null) continue;
+                if (!filesByPath.TryGetValue(candidate.Path, out var fileChange))
+                    continue;
 
                 if (item.Status == PackingItemStatus.Partial)
                 {
@@ -356,7 +357,7 @@ namespace REBUSS.Pure.Tools
             {
                 PrNumber = prNumber,
                 Files = packedFiles,
-                Manifest = MapManifest(decision.Manifest)
+                Manifest = ContentManifestResult.From(decision.Manifest)
             };
 
             return JsonSerializer.Serialize(structured, JsonOptions);
@@ -395,29 +396,5 @@ namespace REBUSS.Pure.Tools
             return truncated;
         }
 
-        private static ContentManifestResult MapManifest(ContentManifest manifest)
-        {
-            return new ContentManifestResult
-            {
-                Items = manifest.Items.Select(e => new ManifestEntryResult
-                {
-                    Path = e.Path,
-                    EstimatedTokens = e.EstimatedTokens,
-                    Status = e.Status.ToString(),
-                    PriorityTier = e.PriorityTier
-                }).ToList(),
-                Summary = new ManifestSummaryResult
-                {
-                    TotalItems = manifest.Summary.TotalItems,
-                    IncludedCount = manifest.Summary.IncludedCount,
-                    PartialCount = manifest.Summary.PartialCount,
-                    DeferredCount = manifest.Summary.DeferredCount,
-                    TotalBudgetTokens = manifest.Summary.TotalBudgetTokens,
-                    BudgetUsed = manifest.Summary.BudgetUsed,
-                    BudgetRemaining = manifest.Summary.BudgetRemaining,
-                    UtilizationPercent = manifest.Summary.UtilizationPercent
-                }
-            };
+            }
         }
-    }
-}

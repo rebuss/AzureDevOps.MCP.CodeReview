@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using REBUSS.Pure.Core;
+using REBUSS.Pure.Core.Exceptions;
 using REBUSS.Pure.Core.Models.Pagination;
 using REBUSS.Pure.Core.Models.ResponsePacking;
 
@@ -34,7 +35,7 @@ public sealed class PageAllocator : IPageAllocator
             _logger.LogWarning(
                 "[PageAllocator] Budget {Budget} below minimum {Minimum}",
                 safeBudgetTokens, PaginationConstants.MinimumBudgetForPagination);
-            throw new InvalidOperationException(
+            throw new BudgetTooSmallException(
                 $"Token budget ({safeBudgetTokens}) is too small for pagination. " +
                 $"Minimum required: {PaginationConstants.MinimumBudgetForPagination} tokens " +
                 "(pagination overhead + manifest overhead).");

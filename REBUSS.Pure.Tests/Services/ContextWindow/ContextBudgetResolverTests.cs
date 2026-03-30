@@ -30,7 +30,10 @@ public class ContextBudgetResolverTests
     private static Dictionary<string, int> DefaultRegistry() => new(StringComparer.OrdinalIgnoreCase)
     {
         ["claude-sonnet-4"] = 200_000,
+        ["claude-sonnet-3.5"] = 200_000,
         ["gpt-4o"] = 128_000,
+        ["gpt-4.1"] = 1_048_576,
+        ["gpt-4.1-mini"] = 1_048_576,
         ["gemini-2.5-pro"] = 1_048_576
     };
 
@@ -274,5 +277,106 @@ public class ContextBudgetResolverTests
         Assert.Equal(128_000, result.TotalBudgetTokens);
         Assert.Equal(BudgetSource.Registry, result.Source);
         Assert.Contains(result.Warnings, w => w.Contains("Invalid explicit budget"));
+    }
+
+    // ──────────────────────────────────────────────
+    // Model normalization and prefix matching
+    // ──────────────────────────────────────────────
+
+    [Fact]
+    public void ContextBudgetResolver_Resolve_FreeFormSpaceSeparated_NormalizesToExactMatch()
+    {
+        // "Claude Sonnet 4" normalizes to "claude-sonnet-4" — exact registry hit
+        var resolver = CreateResolver(modelRegistry: DefaultRegistry());
+
+        var result = resolver.Resolve(explicitTokens: null, modelIdentifier: "Claude Sonnet 4");
+
+        Assert.Equal(200_000, result.TotalBudgetTokens);
+        Assert.Equal(BudgetSource.Registry, result.Source);
+        Assert.Empty(result.Warnings);
+    }
+
+    [Fact]
+    public void ContextBudgetResolver_Resolve_FreeFormWithMinorVersion_PrefixMatchesRegistryKey()
+    {
+        // "Claude Sonnet 4.6" normalizes to "claude-sonnet-4-6";
+        // prefix-matches registry key "claude-sonnet-4" → 200 K
+        var resolver = CreateResolver(modelRegistry: DefaultRegistry());
+
+        var result = resolver.Resolve(explicitTokens: null, modelIdentifier: "Claude Sonnet 4.6");
+
+        Assert.Equal(200_000, result.TotalBudgetTokens);
+        Assert.Equal(BudgetSource.Registry, result.Source);
+        Assert.Empty(result.Warnings);
+    }
+
+    [Fact]
+    public void ContextBudgetResolver_Resolve_DotVersionKeyInRegistry_NormalizedExactMatch()
+    {
+        // "claude-sonnet-3.5" normalizes to "claude-sonnet-3-5";
+        // registry key "claude-sonnet-3.5" also normalizes to "claude-sonnet-3-5" → exact match
+        var resolver = CreateResolver(modelRegistry: DefaultRegistry());
+
+        var result = resolver.Resolve(explicitTokens: null, modelIdentifier: "claude-sonnet-3.5");
+
+        Assert.Equal(200_000, result.TotalBudgetTokens);
+        Assert.Equal(BudgetSource.Registry, result.Source);
+        Assert.Empty(result.Warnings);
+    }
+
+    [Fact]
+    public void ContextBudgetResolver_Resolve_FreeFormWithMinorVersionDot_NormalizesToExactMatch()
+    {
+        // "Claude Sonnet 3.5" normalizes to "claude-sonnet-3-5" → exact match on "claude-sonnet-3.5"
+        var resolver = CreateResolver(modelRegistry: DefaultRegistry());
+
+        var result = resolver.Resolve(explicitTokens: null, modelIdentifier: "Claude Sonnet 3.5");
+
+        Assert.Equal(200_000, result.TotalBudgetTokens);
+        Assert.Equal(BudgetSource.Registry, result.Source);
+        Assert.Empty(result.Warnings);
+    }
+
+    [Fact]
+    public void ContextBudgetResolver_Resolve_ExactKeyBeatsPrefix_WhenBothCouldMatch()
+    {
+        // "gpt-4.1-mini" normalizes to "gpt-4-1-mini" → exact match on "gpt-4.1-mini",
+        // even though "gpt-4.1" would also be a prefix candidate
+        var resolver = CreateResolver(modelRegistry: DefaultRegistry());
+
+        var result = resolver.Resolve(explicitTokens: null, modelIdentifier: "gpt-4.1-mini");
+
+        Assert.Equal(1_048_576, result.TotalBudgetTokens);
+        Assert.Equal(BudgetSource.Registry, result.Source);
+        Assert.Empty(result.Warnings);
+    }
+
+    [Fact]
+    public void ContextBudgetResolver_Resolve_PrefixMatchPrefersLongestKey()
+    {
+        // "gpt-4.1-mini-2025" normalizes to "gpt-4-1-mini-2025";
+        // both "gpt-4.1" ("gpt-4-1") and "gpt-4.1-mini" ("gpt-4-1-mini") are prefix candidates;
+        // longest normalized key wins → "gpt-4.1-mini" → 1 048 576
+        var resolver = CreateResolver(modelRegistry: DefaultRegistry());
+
+        var result = resolver.Resolve(explicitTokens: null, modelIdentifier: "gpt-4.1-mini-2025");
+
+        Assert.Equal(1_048_576, result.TotalBudgetTokens);
+        Assert.Equal(BudgetSource.Registry, result.Source);
+        Assert.Empty(result.Warnings);
+    }
+
+    [Fact]
+    public void ContextBudgetResolver_Resolve_NormalizationDoesNotCrossModelFamily()
+    {
+        // "claude-sonnet-40" normalizes to "claude-sonnet-40";
+        // must NOT prefix-match "claude-sonnet-4" ("claude-sonnet-4") because the next
+        // char after the key segment is '0', not '-'
+        var resolver = CreateResolver(modelRegistry: DefaultRegistry());
+
+        var result = resolver.Resolve(explicitTokens: null, modelIdentifier: "claude-sonnet-40");
+
+        Assert.Equal(BudgetSource.Default, result.Source);
+        Assert.Contains(result.Warnings, w => w.Contains("'claude-sonnet-40' not found in registry"));
     }
 }
