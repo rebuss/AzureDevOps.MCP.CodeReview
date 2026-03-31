@@ -21,3 +21,6 @@ REBUSS.Pure.SmokeTests/obj/
 speckit*.md
 .specify/
 specs/
+.github/instructions/review-pr.instructions.md
+.github/instructions/self-review.instructions.md
+.vscode/mcp.json

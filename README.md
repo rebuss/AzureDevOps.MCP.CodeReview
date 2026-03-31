@@ -177,3 +177,29 @@ Where `123` is the Azure DevOps or GitHub Pull Request number.
 ```
 
 Works **offline** — no Azure DevOps connection required.
+
+---
+
+## ⚙️ Gateway Token Limit
+
+By default, REBUSS.Pure ships with `GatewayMaxTokens` set to **128 000** in `appsettings.json`. This hard cap matches the context window limit imposed by **GitHub Copilot's proxy** and prevents `model_max_prompt_tokens_exceeded` errors — even when the model's native context window is larger (e.g. Claude's 200K).
+
+**If you use Claude Code, Anthropic API directly, or any other client without a gateway limit**, remove or disable this cap so you can use the model's full context window:
+
+In `appsettings.Local.json` (next to the server executable):
+
+```json
+{
+  "ContextWindow": {
+    "GatewayMaxTokens": null
+  }
+}
+```
+
+Or via environment variable:
+
+```
+ContextWindow__GatewayMaxTokens=0
+```
+
+When `GatewayMaxTokens` is `null` or `0`, the limit is disabled and the full model-native context window from the `ModelRegistry` is used.

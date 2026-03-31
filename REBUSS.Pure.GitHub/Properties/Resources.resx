@@ -156,6 +156,14 @@ OPTION 2 — Personal Access Token (PAT):
     <value>X-RateLimit-Remaining</value>
   </data>
 
+  <data name="GitHubRateLimitLimitHeader" xml:space="preserve">
+    <value>X-RateLimit-Limit</value>
+  </data>
+
+  <data name="GitHubRetryAfterHeader" xml:space="preserve">
+    <value>Retry-After</value>
+  </data>
+
   <data name="GitHubRawContentAcceptHeader" xml:space="preserve">
     <value>application/vnd.github.raw+json</value>
   </data>

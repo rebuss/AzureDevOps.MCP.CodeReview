@@ -253,6 +253,31 @@ GitHub__PersonalAccessToken=mytoken
 
 When provider-specific fields are not configured, the server automatically detects them from the `origin` Git remote URL. Both HTTPS and SSH remote formats are supported for Azure DevOps and GitHub repositories.
 
+### Context Window — Gateway Cap
+
+The `ContextWindow` section in `appsettings.json` includes a `GatewayMaxTokens` setting — a hard cap on the resolved token budget imposed **before** the safety margin is applied. This accounts for API gateways (e.g. GitHub Copilot proxy) that enforce a context window limit lower than the model's native capacity.
+
+**Default: `128000`** — matches GitHub Copilot's proxy limit.
+
+| Platform | Recommended `GatewayMaxTokens` |
+|---|---|
+| GitHub Copilot (VS Code / Visual Studio) | `128000` (default) |
+| Claude Code / Anthropic API | `null` (disabled) |
+| Cursor | `128000` (verify with your setup) |
+| Direct API access | `null` (disabled) |
+
+To disable the gateway cap, add to `appsettings.Local.json`:
+
+```json
+{
+  "ContextWindow": {
+    "GatewayMaxTokens": null
+  }
+}
+```
+
+Or via environment variable: `ContextWindow__GatewayMaxTokens=0`
+
 ---
 
 ## MCP Tools Reference

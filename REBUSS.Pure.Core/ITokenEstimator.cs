@@ -27,4 +27,12 @@ public interface ITokenEstimator
     /// <param name="deletions">Number of deleted lines (clamped to 0 if negative).</param>
     /// <returns>Estimated token count (always ≥ PerFileOverhead).</returns>
     int EstimateFromStats(int additions, int deletions);
+
+    /// <summary>
+    /// Estimates the token count of the given serialized content
+    /// using the configured chars-per-token ratio.
+    /// </summary>
+    /// <param name="serializedContent">The serialized JSON string to measure.</param>
+    /// <returns>Estimated token count, or 0 for null/empty input.</returns>
+    int EstimateTokenCount(string serializedContent);
 }

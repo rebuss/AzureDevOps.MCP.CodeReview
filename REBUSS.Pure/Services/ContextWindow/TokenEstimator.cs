@@ -55,4 +55,16 @@ public sealed class TokenEstimator : ITokenEstimator
         var lineCount = Math.Max(0, additions) + Math.Max(0, deletions);
         return lineCount * AvgTokensPerLine + PerFileOverhead;
     }
+
+    public int EstimateTokenCount(string serializedContent)
+    {
+        if (string.IsNullOrEmpty(serializedContent))
+            return 0;
+
+        var charsPerToken = _options.Value.CharsPerToken;
+        if (charsPerToken <= 0)
+            charsPerToken = DefaultCharsPerToken;
+
+        return (int)Math.Ceiling(serializedContent.Length / charsPerToken);
+    }
 }

@@ -15,22 +15,12 @@ namespace REBUSS.Pure.Tests.Tools;
 
 public class GetPullRequestContentToolHandlerTests
 {
-    private readonly IPullRequestDataProvider _dataProvider = Substitute.For<IPullRequestDataProvider>();
+    private readonly IPullRequestDiffCache _diffCache = Substitute.For<IPullRequestDiffCache>();
     private readonly IContextBudgetResolver _budgetResolver = Substitute.For<IContextBudgetResolver>();
     private readonly ITokenEstimator _tokenEstimator = Substitute.For<ITokenEstimator>();
     private readonly IFileClassifier _fileClassifier = Substitute.For<IFileClassifier>();
     private readonly IPageAllocator _pageAllocator = Substitute.For<IPageAllocator>();
     private readonly GetPullRequestContentToolHandler _handler;
-
-    private static readonly PullRequestFiles SampleFiles = new()
-    {
-        Files = new List<PullRequestFileInfo>
-        {
-            new() { Path = "src/A.cs", Additions = 30, Deletions = 5, Changes = 35, Extension = ".cs" },
-            new() { Path = "src/B.cs", Additions = 20, Deletions = 5, Changes = 25, Extension = ".cs" },
-            new() { Path = "docs/README.md", Additions = 3, Deletions = 1, Changes = 4, Extension = ".md" }
-        }
-    };
 
     private static readonly PullRequestDiff SampleDiff = new()
     {
@@ -81,14 +71,12 @@ public class GetPullRequestContentToolHandlerTests
 
     public GetPullRequestContentToolHandlerTests()
     {
-        _dataProvider.GetFilesAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns(SampleFiles);
-        _dataProvider.GetDiffAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
+        _diffCache.GetOrFetchDiffAsync(Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Returns(SampleDiff);
 
         _budgetResolver.Resolve(Arg.Any<int?>(), Arg.Any<string?>())
             .Returns(new BudgetResolutionResult(200000, 140000, BudgetSource.Default, Array.Empty<string>()));
-        _tokenEstimator.EstimateFromStats(Arg.Any<int>(), Arg.Any<int>())
+        _tokenEstimator.EstimateTokenCount(Arg.Any<string>())
             .Returns(500);
         _fileClassifier.Classify(Arg.Any<string>())
             .Returns(new FileClassification { Category = FileCategory.Source });
@@ -106,7 +94,7 @@ public class GetPullRequestContentToolHandlerTests
             .Returns(new PageAllocation(new[] { pageSlice }, 1, 3));
 
         _handler = new GetPullRequestContentToolHandler(
-            _dataProvider,
+            _diffCache,
             _budgetResolver,
             _tokenEstimator,
             _fileClassifier,
@@ -248,7 +236,7 @@ public class GetPullRequestContentToolHandlerTests
     [Fact]
     public async Task ExecuteAsync_PrNotFound_ThrowsMcpException()
     {
-        _dataProvider.GetFilesAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
+        _diffCache.GetOrFetchDiffAsync(Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .ThrowsAsync(new PullRequestNotFoundException("Not found"));
 
         var ex = await Assert.ThrowsAsync<McpException>(
@@ -264,5 +252,23 @@ public class GetPullRequestContentToolHandlerTests
         await _handler.ExecuteAsync(prNumber: 42, pageNumber: 1, modelName: "gpt-4o", maxTokens: 50000);
 
         _budgetResolver.Received(1).Resolve(50000, "gpt-4o");
+    }
+
+    // --- Diff-based measurement ---
+
+    [Fact]
+    public async Task ExecuteAsync_UsesDiffCacheForFileData()
+    {
+        await _handler.ExecuteAsync(prNumber: 42, pageNumber: 1);
+
+        await _diffCache.Received(1).GetOrFetchDiffAsync(42, Arg.Any<string?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_CallsEstimateTokenCountForEachFile()
+    {
+        await _handler.ExecuteAsync(prNumber: 42, pageNumber: 1);
+
+        _tokenEstimator.Received(3).EstimateTokenCount(Arg.Any<string>());
     }
 }

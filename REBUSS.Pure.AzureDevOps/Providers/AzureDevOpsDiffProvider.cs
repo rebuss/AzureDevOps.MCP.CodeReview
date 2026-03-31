@@ -64,7 +64,7 @@ namespace REBUSS.Pure.AzureDevOps.Providers
 
                 await BuildFileDiffsAsync(files, baseCommit, targetCommit, cancellationToken);
 
-                var result = BuildDiff(metadata, files);
+                var result = BuildDiff(metadata, files, targetCommit);
                 sw.Stop();
 
                 var totalHunks = result.Files.Sum(f => f.Hunks.Count);
@@ -109,7 +109,7 @@ namespace REBUSS.Pure.AzureDevOps.Providers
 
                 await BuildFileDiffsAsync(matchingFiles, baseCommit, targetCommit, cancellationToken);
 
-                var result = BuildDiff(metadata, matchingFiles);
+                var result = BuildDiff(metadata, matchingFiles, targetCommit);
                 sw.Stop();
 
                 var totalHunks = result.Files.Sum(f => f.Hunks.Count);
@@ -277,7 +277,8 @@ namespace REBUSS.Pure.AzureDevOps.Providers
 
         private static PullRequestDiff BuildDiff(
             PullRequestMetadata metadata,
-            List<FileChange> files)
+            List<FileChange> files,
+            string? sourceCommitId)
         {
             return new PullRequestDiff
             {
@@ -287,7 +288,8 @@ namespace REBUSS.Pure.AzureDevOps.Providers
                 TargetBranch  = metadata.TargetBranch,
                 SourceRefName = metadata.SourceRefName,
                 TargetRefName = metadata.TargetRefName,
-                Files         = files
+                Files         = files,
+                LastSourceCommitId = sourceCommitId
             };
         }
     }

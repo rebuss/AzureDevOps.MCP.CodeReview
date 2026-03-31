@@ -12,6 +12,12 @@ namespace REBUSS.Pure.Core.Models
         public string SourceRefName { get; set; } = string.Empty;
         public string TargetRefName { get; set; } = string.Empty;
         public List<FileChange> Files { get; set; } = new();
+
+        /// <summary>
+        /// The commit SHA of the PR's source (head) branch at the time this diff was fetched.
+        /// Used by <see cref="IPullRequestDiffCache"/> for staleness detection.
+        /// </summary>
+        public string? LastSourceCommitId { get; set; }
     }
 
     /// <summary>

@@ -28,4 +28,14 @@ internal static class PaginationConstants
     /// Any budget below this cannot deliver even one manifest entry with pagination metadata.
     /// </summary>
     public const int MinimumBudgetForPagination = PaginationOverhead + BaseManifestOverhead + PerItemManifestOverhead; // 265
+
+    /// <summary>
+    /// Conservative per-file token estimate used when line counts are unavailable
+    /// (e.g. Azure DevOps iteration-changes API does not return additions/deletions).
+    /// Chosen to be meaningfully larger than the PerFileOverhead-only result of
+    /// <c>EstimateFromStats(0, 0) = 50</c>, so pagination planning stays realistic.
+    /// All handlers that build stat-based candidates MUST use this constant to guarantee
+    /// consistent page boundaries across metadata and content tools.
+    /// </summary>
+    public const int FallbackEstimateWhenLinecountsUnknown = 300;
 }

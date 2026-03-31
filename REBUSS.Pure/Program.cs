@@ -27,7 +27,6 @@ namespace REBUSS.Pure
         static async Task<int> Main(string[] args)
         {
             var parseResult = CliArgumentParser.Parse(args);
-
             if (!parseResult.IsServerMode)
                 return await RunCliCommandAsync(parseResult);
 
@@ -164,6 +163,9 @@ namespace REBUSS.Pure
             // Deterministic Pagination (Feature 004)
             services.AddSingleton<IPageAllocator, Pagination.PageAllocator>();
             services.AddSingleton<IPageReferenceCodec, Pagination.PageReferenceCodec>();
+
+            // PR diff cache (eliminates duplicate API calls between metadata and content)
+            services.AddSingleton<IPullRequestDiffCache, PullRequestDiffCache>();
 
             // Provider selection: explicit config > auto-detection from git remote
             var provider = DetectProvider(configuration, repoPath);

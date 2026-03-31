@@ -215,7 +215,25 @@ namespace REBUSS.Pure.GitHub.Properties {
                 return ResourceManager.GetString("GitHubRateLimitRemainingHeader", resourceCulture);
             }
         }
-        
+
+        /// <summary>
+        ///   Looks up a localized string similar to X-RateLimit-Limit.
+        /// </summary>
+        internal static string GitHubRateLimitLimitHeader {
+            get {
+                return ResourceManager.GetString("GitHubRateLimitLimitHeader", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Retry-After.
+        /// </summary>
+        internal static string GitHubRetryAfterHeader {
+            get {
+                return ResourceManager.GetString("GitHubRetryAfterHeader", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to application/vnd.github.raw+json.
         /// </summary>

@@ -13,18 +13,19 @@ using REBUSS.Pure.Core.Shared;
 using REBUSS.Pure.Properties;
 using REBUSS.Pure.Services.ResponsePacking;
 using REBUSS.Pure.Tools.Models;
+using REBUSS.Pure.Tools.Shared;
 
 namespace REBUSS.Pure.Tools
 {
     /// <summary>
     /// Handles the <c>get_pr_content</c> MCP tool.
     /// Returns diff content for a single page of a pull request review.
-    /// Pages are computed via stat-based token estimation and deterministic page allocation.
+    /// Pages are computed via diff-based token measurement and deterministic page allocation.
     /// </summary>
     [McpServerToolType]
     public class GetPullRequestContentToolHandler
     {
-        private readonly IPullRequestDataProvider _dataProvider;
+        private readonly IPullRequestDiffCache _diffCache;
         private readonly IContextBudgetResolver _budgetResolver;
         private readonly ITokenEstimator _tokenEstimator;
         private readonly IFileClassifier _fileClassifier;
@@ -39,14 +40,14 @@ namespace REBUSS.Pure.Tools
         };
 
         public GetPullRequestContentToolHandler(
-            IPullRequestDataProvider dataProvider,
+            IPullRequestDiffCache diffCache,
             IContextBudgetResolver budgetResolver,
             ITokenEstimator tokenEstimator,
             IFileClassifier fileClassifier,
             IPageAllocator pageAllocator,
             ILogger<GetPullRequestContentToolHandler> logger)
         {
-            _dataProvider = dataProvider;
+            _diffCache = diffCache;
             _budgetResolver = budgetResolver;
             _tokenEstimator = tokenEstimator;
             _fileClassifier = fileClassifier;
@@ -56,7 +57,7 @@ namespace REBUSS.Pure.Tools
 
         [McpServerTool(Name = "get_pr_content"), Description(
             "Returns the diff content for a specific page of a pull request review. " +
-            "Pages are determined by stat-based token estimation and the provided budget. " +
+            "Pages are determined by diff-based token measurement and the provided budget. " +
             "Use get_pr_metadata with modelName/maxTokens to discover the total page count first.")]
         public async Task<string> ExecuteAsync(
             [Description("The Pull Request number/ID")] int? prNumber = null,
@@ -83,9 +84,9 @@ namespace REBUSS.Pure.Tools
                 var budget = _budgetResolver.Resolve(maxTokens, modelName);
                 var safeBudget = budget.SafeBudgetTokens;
 
-                // 1. Fetch lightweight file list and build page allocation
-                var files = await _dataProvider.GetFilesAsync(prNumber.Value, cancellationToken);
-                var candidates = BuildStatBasedCandidates(files.Files);
+                // 1. Fetch diff (cache hit from metadata, or cache miss + fetch)
+                var diff = await _diffCache.GetOrFetchDiffAsync(prNumber.Value, ct: cancellationToken);
+                var candidates = FileTokenMeasurement.BuildCandidatesFromDiff(diff, _tokenEstimator, _fileClassifier);
                 candidates.Sort(PackingPriorityComparer.Instance);
 
                 var allocation = _pageAllocator.Allocate(candidates, safeBudget);
@@ -101,9 +102,11 @@ namespace REBUSS.Pure.Tools
                 foreach (var item in pageSlice.Items)
                     pageFilePaths.Add(candidates[item.OriginalIndex].Path);
 
-                // 3. Fetch full diff and filter to page files
-                var diff = await _dataProvider.GetDiffAsync(prNumber.Value, cancellationToken);
-                var pageFiles = BuildPageFileChanges(diff, pageFilePaths);
+                // 3. Filter cached diff to page files and map to structured output
+                var pageFiles = diff.Files
+                    .Where(f => pageFilePaths.Contains(f.Path))
+                    .Select(f => FileTokenMeasurement.MapToStructured(f))
+                    .ToList();
 
                 // 4. Build category breakdown
                 var categories = BuildCategoryBreakdown(pageFilePaths, candidates);
@@ -149,49 +152,6 @@ namespace REBUSS.Pure.Tools
         }
 
         // --- Helpers ---------------------------------------------------------------
-
-        private List<PackingCandidate> BuildStatBasedCandidates(List<PullRequestFileInfo> files)
-        {
-            var candidates = new List<PackingCandidate>(files.Count);
-            foreach (var file in files)
-            {
-                var estimatedTokens = _tokenEstimator.EstimateFromStats(file.Additions, file.Deletions);
-                var classification = _fileClassifier.Classify(file.Path);
-                candidates.Add(new PackingCandidate(
-                    file.Path,
-                    estimatedTokens,
-                    classification.Category,
-                    file.Additions + file.Deletions));
-            }
-            return candidates;
-        }
-
-        private static List<StructuredFileChange> BuildPageFileChanges(
-            PullRequestDiff diff, HashSet<string> pageFilePaths)
-        {
-            return diff.Files
-                .Where(f => pageFilePaths.Contains(f.Path))
-                .Select(f => new StructuredFileChange
-                {
-                    Path = f.Path,
-                    ChangeType = f.ChangeType,
-                    SkipReason = f.SkipReason,
-                    Additions = f.Additions,
-                    Deletions = f.Deletions,
-                    Hunks = f.Hunks.Select(h => new StructuredHunk
-                    {
-                        OldStart = h.OldStart,
-                        OldCount = h.OldCount,
-                        NewStart = h.NewStart,
-                        NewCount = h.NewCount,
-                        Lines = h.Lines.Select(l => new StructuredLine
-                        {
-                            Op = l.Op.ToString(),
-                            Text = l.Text
-                        }).ToList()
-                    }).ToList()
-                }).ToList();
-        }
 
         private static Dictionary<string, int> BuildCategoryBreakdown(
             HashSet<string> pageFilePaths, List<PackingCandidate> candidates)

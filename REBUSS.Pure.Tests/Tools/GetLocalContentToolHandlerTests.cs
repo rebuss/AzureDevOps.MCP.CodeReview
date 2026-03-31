@@ -232,4 +232,48 @@ public class GetLocalContentToolHandlerTests
 
         _budgetResolver.Received(1).Resolve(50000, "gpt-4o");
     }
+
+    // --- Fallback estimate for unknown line counts ---
+
+    [Fact]
+    public async Task ExecuteAsync_FileWithZeroChanges_UsesFallbackTokenEstimate()
+    {
+        // Arrange: file with Changes == 0 (e.g. rename without content change)
+        var filesWithZeroCounts = new LocalReviewFiles
+        {
+            RepositoryRoot = "C:\\Projects\\MyRepo",
+            CurrentBranch = "feature/my-branch",
+            Scope = "working-tree",
+            Files = new List<PullRequestFileInfo>
+            {
+                new() { Path = "src/A.cs", Additions = 0, Deletions = 0, Changes = 0, Extension = ".cs" }
+            }
+        };
+        _localProvider.GetFilesAsync(Arg.Any<LocalReviewScope>(), Arg.Any<CancellationToken>())
+            .Returns(filesWithZeroCounts);
+        _localProvider.GetFileDiffAsync("src/A.cs", Arg.Any<LocalReviewScope>(), Arg.Any<CancellationToken>())
+            .Returns(MakeFileDiff("src/A.cs", 0, 0));
+
+        _pageAllocator.Allocate(
+            Arg.Any<IReadOnlyList<PackingCandidate>>(), Arg.Any<int>())
+            .Returns(call =>
+            {
+                var candidates = call.Arg<IReadOnlyList<PackingCandidate>>();
+                var slice = new PageSlice(1, 0, 1,
+                    new[] { new PageSliceItem(0, PackingItemStatus.Included, candidates[0].EstimatedTokens) },
+                    candidates[0].EstimatedTokens, 139700);
+                return new PageAllocation(new[] { slice }, 1, 1);
+            });
+
+        // Act
+        await _handler.ExecuteAsync(pageNumber: 1);
+
+        // Assert: candidate must use fallback (300), not EstimateFromStats(0,0) = 50
+        _pageAllocator.Received(1).Allocate(
+            Arg.Is<IReadOnlyList<PackingCandidate>>(list =>
+                list.Count == 1 && list[0].EstimatedTokens == 300),
+            Arg.Any<int>());
+
+        _tokenEstimator.DidNotReceive().EstimateFromStats(0, 0);
+    }
 }

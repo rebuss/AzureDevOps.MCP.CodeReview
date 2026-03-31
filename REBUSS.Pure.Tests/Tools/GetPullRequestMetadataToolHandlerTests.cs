@@ -20,6 +20,7 @@ public class GetPullRequestMetadataToolHandlerTests
     private readonly ITokenEstimator _tokenEstimator = Substitute.For<ITokenEstimator>();
     private readonly IFileClassifier _fileClassifier = Substitute.For<IFileClassifier>();
     private readonly IPageAllocator _pageAllocator = Substitute.For<IPageAllocator>();
+    private readonly IPullRequestDiffCache _diffCache = Substitute.For<IPullRequestDiffCache>();
     private readonly GetPullRequestMetadataToolHandler _handler;
 
     private static readonly FullPullRequestMetadata SampleMetadata = new()
@@ -46,12 +47,38 @@ public class GetPullRequestMetadataToolHandlerTests
         WebUrl = "https://example.com/pr/42"
     };
 
-    private static readonly PullRequestFiles SampleFiles = new()
+    private static readonly PullRequestDiff SampleDiff = new()
     {
-        Files = new List<PullRequestFileInfo>
+        Title = "Fix the bug",
+        Status = "active",
+        SourceBranch = "feature/x",
+        TargetBranch = "main",
+        Files = new List<FileChange>
         {
-            new() { Path = "src/A.cs", Additions = 30, Deletions = 5, Changes = 35, Extension = ".cs" },
-            new() { Path = "src/B.cs", Additions = 20, Deletions = 5, Changes = 25, Extension = ".cs" }
+            new()
+            {
+                Path = "src/A.cs", ChangeType = "edit", Additions = 30, Deletions = 5,
+                Hunks = new List<DiffHunk>
+                {
+                    new()
+                    {
+                        OldStart = 1, OldCount = 5, NewStart = 1, NewCount = 10,
+                        Lines = new List<DiffLine> { new() { Op = '+', Text = "new line" } }
+                    }
+                }
+            },
+            new()
+            {
+                Path = "src/B.cs", ChangeType = "edit", Additions = 20, Deletions = 5,
+                Hunks = new List<DiffHunk>
+                {
+                    new()
+                    {
+                        OldStart = 1, OldCount = 5, NewStart = 1, NewCount = 10,
+                        Lines = new List<DiffLine> { new() { Op = '+', Text = "another line" } }
+                    }
+                }
+            }
         }
     };
 
@@ -59,12 +86,13 @@ public class GetPullRequestMetadataToolHandlerTests
     {
         _dataProvider.GetMetadataAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns(SampleMetadata);
-        _dataProvider.GetFilesAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns(SampleFiles);
+
+        _diffCache.GetOrFetchDiffAsync(Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+            .Returns(SampleDiff);
 
         _budgetResolver.Resolve(Arg.Any<int?>(), Arg.Any<string?>())
             .Returns(new BudgetResolutionResult(200000, 140000, BudgetSource.Default, Array.Empty<string>()));
-        _tokenEstimator.EstimateFromStats(Arg.Any<int>(), Arg.Any<int>())
+        _tokenEstimator.EstimateTokenCount(Arg.Any<string>())
             .Returns(500);
         _fileClassifier.Classify(Arg.Any<string>())
             .Returns(new FileClassification { Category = FileCategory.Source });
@@ -81,6 +109,7 @@ public class GetPullRequestMetadataToolHandlerTests
             _tokenEstimator,
             _fileClassifier,
             _pageAllocator,
+            _diffCache,
             NullLogger<GetPullRequestMetadataToolHandler>.Instance);
     }
 
@@ -110,7 +139,7 @@ public class GetPullRequestMetadataToolHandlerTests
         Assert.Equal(3, doc.RootElement.GetProperty("stats").GetProperty("changedFiles").GetInt32());
     }
 
-    // --- Pagination info (new behavior) ---
+    // --- Pagination info (diff-based measurement) ---
 
     [Fact]
     public async Task ExecuteAsync_WithModelName_ReturnsContentPaging()
@@ -175,11 +204,19 @@ public class GetPullRequestMetadataToolHandlerTests
     }
 
     [Fact]
-    public async Task ExecuteAsync_WithPaging_CallsEstimateFromStatsForEachFile()
+    public async Task ExecuteAsync_WithPaging_CallsEstimateTokenCountForEachFile()
     {
         await _handler.ExecuteAsync(prNumber: 42, modelName: "gpt-4o");
 
-        _tokenEstimator.Received(2).EstimateFromStats(Arg.Any<int>(), Arg.Any<int>());
+        _tokenEstimator.Received(2).EstimateTokenCount(Arg.Any<string>());
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WithPaging_UsesDiffCacheNotFilesApi()
+    {
+        await _handler.ExecuteAsync(prNumber: 42, modelName: "gpt-4o");
+
+        await _diffCache.Received(1).GetOrFetchDiffAsync(42, Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
     // --- Error handling ---
@@ -232,36 +269,27 @@ public class GetPullRequestMetadataToolHandlerTests
     }
 
     [Fact]
-    public async Task ExecuteAsync_WithPaging_ZeroLineCounts_UsesFallbackEstimate()
+    public async Task ExecuteAsync_WithPaging_EmptyDiffFiles_ProducesEmptyPaging()
     {
-        // Simulate Azure DevOps provider: all files have Changes == 0
-        var filesWithZeroCounts = new PullRequestFiles
+        var emptyDiff = new PullRequestDiff
         {
-            Files = new List<PullRequestFileInfo>
-            {
-                new() { Path = "src/A.cs", Additions = 0, Deletions = 0, Changes = 0, Extension = ".cs" },
-                new() { Path = "src/B.cs", Additions = 0, Deletions = 0, Changes = 0, Extension = ".cs" }
-            }
+            Title = "Empty",
+            Status = "active",
+            SourceBranch = "feature/empty",
+            TargetBranch = "main",
+            Files = new List<FileChange>()
         };
-        _dataProvider.GetFilesAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns(filesWithZeroCounts);
+        _diffCache.GetOrFetchDiffAsync(Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+            .Returns(emptyDiff);
 
-        await _handler.ExecuteAsync(prNumber: 42, modelName: "gpt-4o");
+        _pageAllocator.Allocate(Arg.Any<IReadOnlyList<PackingCandidate>>(), Arg.Any<int>())
+            .Returns(new PageAllocation(Array.Empty<PageSlice>(), 0, 0));
 
-        // EstimateFromStats must NOT be called when Changes == 0;
-        // the handler should use the fallback constant instead.
-        _tokenEstimator.DidNotReceive().EstimateFromStats(Arg.Any<int>(), Arg.Any<int>());
+        var json = await _handler.ExecuteAsync(prNumber: 42, modelName: "gpt-4o");
 
-        // The allocator must still receive candidates — one per file.
-        _pageAllocator.Received(1).Allocate(
-            Arg.Is<IReadOnlyList<PackingCandidate>>(list => list.Count == 2),
-            Arg.Any<int>());
-
-        // Each candidate's EstimatedTokens must equal the fallback (300), not the
-        // PerFileOverhead-only result of EstimateFromStats(0,0) == 50.
-        _pageAllocator.Received(1).Allocate(
-            Arg.Is<IReadOnlyList<PackingCandidate>>(list =>
-                list.All(c => c.EstimatedTokens == 300)),
-            Arg.Any<int>());
+        var doc = JsonDocument.Parse(json);
+        var paging = doc.RootElement.GetProperty("contentPaging");
+        Assert.Equal(0, paging.GetProperty("totalPages").GetInt32());
+        Assert.Equal(0, paging.GetProperty("totalFiles").GetInt32());
     }
 }

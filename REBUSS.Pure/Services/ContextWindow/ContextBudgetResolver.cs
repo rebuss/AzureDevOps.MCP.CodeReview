@@ -8,7 +8,7 @@ namespace REBUSS.Pure.Services.ContextWindow;
 /// <summary>
 /// Resolves the token budget for an MCP request using a three-tier resolution chain:
 /// explicit token count → model registry lookup → safe default fallback.
-/// Applies min/max guardrails and a configurable safety margin.
+/// Applies gateway cap, min/max guardrails and a configurable safety margin.
 /// </summary>
 public sealed class ContextBudgetResolver : IContextBudgetResolver
 {
@@ -27,6 +27,10 @@ public sealed class ContextBudgetResolver : IContextBudgetResolver
         var warnings = new List<string>();
 
         var (totalBudget, source) = ResolveTotalBudget(explicitTokens, modelIdentifier, opts, warnings);
+        totalBudget = ApplyGatewayCap(totalBudget, opts, warnings);
+
+        _logger.LogDebug($"GatewayMaxTokens={opts.GatewayMaxTokens}, totalBudget={totalBudget}");
+
         totalBudget = ApplyGuardrails(totalBudget, source, opts, warnings);
 
         var safetyMargin = GetValidSafetyMargin(opts, warnings);
@@ -81,6 +85,19 @@ public sealed class ContextBudgetResolver : IContextBudgetResolver
         var defaultBudget = GetValidDefault(opts);
         warnings.Add($"No context window declared; using default budget of {defaultBudget} tokens");
         return (defaultBudget, BudgetSource.Default);
+    }
+
+    private static int ApplyGatewayCap(int totalBudget, ContextWindowOptions opts, List<string> warnings)
+    {
+        if (opts.GatewayMaxTokens is not > 0)
+            return totalBudget;
+
+        var cap = opts.GatewayMaxTokens.Value;
+        if (totalBudget <= cap)
+            return totalBudget;
+
+        warnings.Add($"Budget {totalBudget} exceeds gateway cap {cap}; clamped to gateway limit");
+        return cap;
     }
 
     private static int ApplyGuardrails(

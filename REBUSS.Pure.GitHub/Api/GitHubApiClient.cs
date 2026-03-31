@@ -75,6 +75,8 @@ public class GitHubApiClient : IGitHubApiClient
         var response = await _httpClient.SendAsync(request, cancellationToken);
         sw.Stop();
 
+        LogRateLimitHeaders(response, filePath);
+
         if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
             _logger.LogDebug(
@@ -86,19 +88,42 @@ public class GitHubApiClient : IGitHubApiClient
         if (!response.IsSuccessStatusCode)
         {
             var error = await response.Content.ReadAsStringAsync(cancellationToken);
-                _logger.LogWarning(
-                    "Contents API returned {StatusCode} for {FilePath}@{GitRef} in {ElapsedMs}ms: {Error}",
-                    (int)response.StatusCode, filePath, gitRef, sw.ElapsedMilliseconds, error);
-                response.EnsureSuccessStatusCode();
-            }
+            _logger.LogWarning(
+                "Contents API returned {StatusCode} for {FilePath}@{GitRef} in {ElapsedMs}ms: {Error}",
+                (int)response.StatusCode, filePath, gitRef, sw.ElapsedMilliseconds, error);
+            response.EnsureSuccessStatusCode();
+        }
 
-            var content = await response.Content.ReadAsStringAsync(cancellationToken);
+        var content = await response.Content.ReadAsStringAsync(cancellationToken);
 
         _logger.LogDebug(
             "GetFileContentAtRef {FilePath}@{GitRef} completed: {StatusCode}, {ResponseLength} chars, {ElapsedMs}ms",
             filePath, gitRef, (int)response.StatusCode, content.Length, sw.ElapsedMilliseconds);
 
         return content;
+    }
+
+    private void LogRateLimitHeaders(HttpResponseMessage response, string context)
+    {
+        var remaining = response.Headers.TryGetValues(Resources.GitHubRateLimitRemainingHeader, out var remValues)
+            ? remValues.FirstOrDefault() : null;
+        var limit = response.Headers.TryGetValues(Resources.GitHubRateLimitLimitHeader, out var limValues)
+            ? limValues.FirstOrDefault() : null;
+        var retryAfter = response.Headers.TryGetValues(Resources.GitHubRetryAfterHeader, out var raValues)
+            ? raValues.FirstOrDefault() : null;
+
+        if (retryAfter is not null)
+        {
+            _logger.LogWarning(
+                "Rate limit hit for {Context}: Retry-After={RetryAfter}s, Remaining={Remaining}/{Limit}, Status={StatusCode}",
+                context, retryAfter, remaining ?? "?", limit ?? "?", (int)response.StatusCode);
+        }
+        else if (remaining is not null && int.TryParse(remaining, out var rem) && rem < 100)
+        {
+            _logger.LogWarning(
+                "Rate limit low for {Context}: Remaining={Remaining}/{Limit}",
+                context, remaining, limit ?? "?");
+        }
     }
 
     private async Task<string> GetStringAsync(string url, string operationName, CancellationToken cancellationToken)

@@ -193,4 +193,60 @@ public class TokenEstimatorTests
 
         Assert.Equal(22_550, result);
     }
+
+    // --- EstimateTokenCount tests -------------------------------------------------
+
+    [Fact]
+    public void EstimateTokenCount_NullInput_ReturnsZero()
+    {
+        var estimator = CreateEstimator();
+
+        Assert.Equal(0, estimator.EstimateTokenCount(null!));
+    }
+
+    [Fact]
+    public void EstimateTokenCount_EmptyString_ReturnsZero()
+    {
+        var estimator = CreateEstimator();
+
+        Assert.Equal(0, estimator.EstimateTokenCount(string.Empty));
+    }
+
+    [Fact]
+    public void EstimateTokenCount_TypicalContent_ReturnsCorrectCount()
+    {
+        var estimator = CreateEstimator(charsPerToken: 4.0);
+        var content = new string('x', 400); // 400 / 4.0 = 100
+
+        Assert.Equal(100, estimator.EstimateTokenCount(content));
+    }
+
+    [Fact]
+    public void EstimateTokenCount_RoundsUp_WhenNotExactlyDivisible()
+    {
+        var estimator = CreateEstimator(charsPerToken: 4.0);
+        var content = new string('x', 401); // 401 / 4.0 = 100.25 → ceil = 101
+
+        Assert.Equal(101, estimator.EstimateTokenCount(content));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1.0)]
+    public void EstimateTokenCount_InvalidCharsPerToken_FallsBackToDefault(double invalidRatio)
+    {
+        var estimator = CreateEstimator(charsPerToken: invalidRatio);
+        var content = new string('x', 400); // 400 / default 4.0 = 100
+
+        Assert.Equal(100, estimator.EstimateTokenCount(content));
+    }
+
+    [Fact]
+    public void EstimateTokenCount_CustomRatio_AppliedCorrectly()
+    {
+        var estimator = CreateEstimator(charsPerToken: 2.0);
+        var content = new string('x', 400); // 400 / 2.0 = 200
+
+        Assert.Equal(200, estimator.EstimateTokenCount(content));
+    }
 }

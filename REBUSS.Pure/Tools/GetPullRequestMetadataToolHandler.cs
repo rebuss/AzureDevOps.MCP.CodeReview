@@ -11,6 +11,7 @@ using REBUSS.Pure.Core.Shared;
 using REBUSS.Pure.Properties;
 using REBUSS.Pure.Services.ResponsePacking;
 using REBUSS.Pure.Tools.Models;
+using REBUSS.Pure.Tools.Shared;
 using System.Text.Json;
 
 namespace REBUSS.Pure.Tools
@@ -29,15 +30,10 @@ namespace REBUSS.Pure.Tools
         private readonly ITokenEstimator _tokenEstimator;
         private readonly IFileClassifier _fileClassifier;
         private readonly IPageAllocator _pageAllocator;
+        private readonly IPullRequestDiffCache _diffCache;
         private readonly ILogger<GetPullRequestMetadataToolHandler> _logger;
 
         private const int MaxDescriptionLength = 800;
-
-        // Conservative per-file token estimate used when line counts are unavailable
-        // (e.g. the Azure DevOps iteration-changes API does not return additions/deletions).
-        // Chosen to be meaningfully larger than the PerFileOverhead-only result of
-        // EstimateFromStats(0, 0) = 50, so pagination planning stays realistic.
-        private const int FallbackEstimateWhenLinecountsUnknown = 300;
 
         private static readonly JsonSerializerOptions JsonOptions = new()
         {
@@ -52,6 +48,7 @@ namespace REBUSS.Pure.Tools
             ITokenEstimator tokenEstimator,
             IFileClassifier fileClassifier,
             IPageAllocator pageAllocator,
+            IPullRequestDiffCache diffCache,
             ILogger<GetPullRequestMetadataToolHandler> logger)
         {
             _metadataProvider = metadataProvider;
@@ -59,6 +56,7 @@ namespace REBUSS.Pure.Tools
             _tokenEstimator = tokenEstimator;
             _fileClassifier = fileClassifier;
             _pageAllocator = pageAllocator;
+            _diffCache = diffCache;
             _logger = logger;
         }
 
@@ -92,7 +90,7 @@ namespace REBUSS.Pure.Tools
                 if (modelName != null || maxTokens != null)
                 {
                     var pagingInfo = await BuildContentPagingInfoAsync(
-                        prNumber.Value, modelName, maxTokens, cancellationToken);
+                        prNumber.Value, metadata.LastMergeSourceCommitId, modelName, maxTokens, cancellationToken);
                     result.ContentPaging = pagingInfo;
                 }
 
@@ -123,14 +121,14 @@ namespace REBUSS.Pure.Tools
         // --- Pagination info builder -----------------------------------------------
 
         private async Task<ContentPagingInfo> BuildContentPagingInfoAsync(
-            int prNumber, string? modelName, int? maxTokens, CancellationToken ct)
+            int prNumber, string? knownHeadCommitId, string? modelName, int? maxTokens, CancellationToken ct)
         {
-            var files = await _metadataProvider.GetFilesAsync(prNumber, ct);
+            var diff = await _diffCache.GetOrFetchDiffAsync(prNumber, knownHeadCommitId, ct);
 
             var budget = _budgetResolver.Resolve(maxTokens, modelName);
             var safeBudget = budget.SafeBudgetTokens;
 
-            var candidates = BuildStatBasedCandidates(files.Files);
+            var candidates = FileTokenMeasurement.BuildCandidatesFromDiff(diff, _tokenEstimator, _fileClassifier);
             candidates.Sort(PackingPriorityComparer.Instance);
 
             var allocation = _pageAllocator.Allocate(candidates, safeBudget);
@@ -144,24 +142,6 @@ namespace REBUSS.Pure.Tools
                 TotalFiles: allocation.TotalItems,
                 BudgetPerPageTokens: safeBudget,
                 FilesByPage: filesByPage);
-        }
-
-        private List<PackingCandidate> BuildStatBasedCandidates(List<PullRequestFileInfo> files)
-        {
-            var candidates = new List<PackingCandidate>(files.Count);
-            foreach (var file in files)
-            {
-                var estimatedTokens = file.Changes > 0
-                    ? _tokenEstimator.EstimateFromStats(file.Additions, file.Deletions)
-                    : FallbackEstimateWhenLinecountsUnknown;
-                var classification = _fileClassifier.Classify(file.Path);
-                candidates.Add(new PackingCandidate(
-                    file.Path,
-                    estimatedTokens,
-                    classification.Category,
-                    file.Additions + file.Deletions));
-            }
-            return candidates;
         }
 
         // --- Result builder -------------------------------------------------------

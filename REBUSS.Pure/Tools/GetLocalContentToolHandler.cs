@@ -10,6 +10,7 @@ using REBUSS.Pure.Core.Models.ResponsePacking;
 using REBUSS.Pure.Core.Shared;
 using REBUSS.Pure.Properties;
 using REBUSS.Pure.Services.LocalReview;
+using REBUSS.Pure.Services.Pagination;
 using REBUSS.Pure.Services.ResponsePacking;
 using REBUSS.Pure.Tools.Models;
 
@@ -156,7 +157,9 @@ namespace REBUSS.Pure.Tools
             var candidates = new List<PackingCandidate>(files.Count);
             foreach (var file in files)
             {
-                var estimatedTokens = _tokenEstimator.EstimateFromStats(file.Additions, file.Deletions);
+                var estimatedTokens = file.Changes > 0
+                    ? _tokenEstimator.EstimateFromStats(file.Additions, file.Deletions)
+                    : PaginationConstants.FallbackEstimateWhenLinecountsUnknown;
                 var classification = _fileClassifier.Classify(file.Path);
                 candidates.Add(new PackingCandidate(
                     file.Path,

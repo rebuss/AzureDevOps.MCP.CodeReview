@@ -68,8 +68,9 @@ public class GitHubAuthenticationHandler : DelegatingHandler
 
     /// <summary>
     /// Detects an authentication failure (HTTP 401 Unauthorized or 403 Forbidden).
-    /// GitHub returns 403 with <c>X-RateLimit-Remaining: 0</c> for rate limits —
-    /// retrying with a fresh token would not help in that case.
+    /// GitHub returns 403 with <c>X-RateLimit-Remaining: 0</c> for primary rate limits,
+    /// and 403 with <c>Retry-After</c> header for secondary rate limits —
+    /// retrying with a fresh token would not help in either case.
     /// </summary>
     private static bool IsAuthFailureResponse(HttpResponseMessage response)
     {
@@ -78,8 +79,13 @@ public class GitHubAuthenticationHandler : DelegatingHandler
 
         if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
         {
+            // Primary rate limit: X-RateLimit-Remaining: 0
             if (response.Headers.TryGetValues(Resources.GitHubRateLimitRemainingHeader, out var values) &&
                 values.FirstOrDefault() == "0")
+                return false;
+
+            // Secondary rate limit: Retry-After header present
+            if (response.Headers.Contains(Resources.GitHubRetryAfterHeader))
                 return false;
 
             return true;

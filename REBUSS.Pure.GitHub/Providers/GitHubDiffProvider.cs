@@ -60,7 +60,7 @@ public class GitHubDiffProvider
 
             await BuildFileDiffsAsync(files, baseCommit, headCommit, cancellationToken);
 
-            var result = BuildDiff(metadata, files);
+            var result = BuildDiff(metadata, files, headCommit);
             sw.Stop();
 
             var totalHunks = result.Files.Sum(f => f.Hunks.Count);
@@ -105,7 +105,7 @@ public class GitHubDiffProvider
 
             await BuildFileDiffsAsync(matchingFiles, baseCommit, headCommit, cancellationToken);
 
-            var result = BuildDiff(metadata, matchingFiles);
+            var result = BuildDiff(metadata, matchingFiles, headCommit);
             sw.Stop();
 
             var totalHunks = result.Files.Sum(f => f.Hunks.Count);
@@ -145,7 +145,7 @@ public class GitHubDiffProvider
 
     private static string NormalizePath(string path) => path.TrimStart('/');
 
-    internal const int MaxParallelDiffRequests = 15;
+    internal const int MaxParallelDiffRequests = 5;
 
     private async Task BuildFileDiffsAsync(
         List<FileChange> files,
@@ -258,7 +258,8 @@ public class GitHubDiffProvider
 
     private static PullRequestDiff BuildDiff(
         PullRequestMetadata metadata,
-        List<FileChange> files)
+        List<FileChange> files,
+        string? sourceCommitId)
     {
         return new PullRequestDiff
         {
@@ -268,7 +269,8 @@ public class GitHubDiffProvider
             TargetBranch = metadata.TargetBranch,
             SourceRefName = metadata.SourceRefName,
             TargetRefName = metadata.TargetRefName,
-            Files = files
+            Files = files,
+            LastSourceCommitId = sourceCommitId
         };
     }
 }

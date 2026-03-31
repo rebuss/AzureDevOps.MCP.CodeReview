@@ -13,6 +13,7 @@ public class ContextBudgetResolverTests
         int defaultBudgetTokens = 128_000,
         int minBudgetTokens = 4_000,
         int maxBudgetTokens = 2_000_000,
+        int? gatewayMaxTokens = null,
         Dictionary<string, int>? modelRegistry = null,
         ILogger<ContextBudgetResolver>? logger = null)
     {
@@ -22,6 +23,7 @@ public class ContextBudgetResolverTests
             DefaultBudgetTokens = defaultBudgetTokens,
             MinBudgetTokens = minBudgetTokens,
             MaxBudgetTokens = maxBudgetTokens,
+            GatewayMaxTokens = gatewayMaxTokens,
             ModelRegistry = modelRegistry ?? new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
         });
         return new ContextBudgetResolver(options, logger ?? Substitute.For<ILogger<ContextBudgetResolver>>());
@@ -378,5 +380,82 @@ public class ContextBudgetResolverTests
 
         Assert.Equal(BudgetSource.Default, result.Source);
         Assert.Contains(result.Warnings, w => w.Contains("'claude-sonnet-40' not found in registry"));
+    }
+
+    // ──────────────────────────────────────────────────
+    // Gateway cap
+    // ──────────────────────────────────────────────────
+
+    [Fact]
+    public void ContextBudgetResolver_Resolve_GatewayCap_ClampsRegistryBudget()
+    {
+        // Registry says 200K for Claude, but gateway caps at 128K
+        var resolver = CreateResolver(gatewayMaxTokens: 128_000, modelRegistry: DefaultRegistry());
+
+        var result = resolver.Resolve(explicitTokens: null, modelIdentifier: "claude-sonnet-4");
+
+        Assert.Equal(128_000, result.TotalBudgetTokens);
+        Assert.Equal(89_600, result.SafeBudgetTokens); // 128000 * 0.70
+        Assert.Equal(BudgetSource.Registry, result.Source);
+        Assert.Contains(result.Warnings, w => w.Contains("gateway cap"));
+    }
+
+    [Fact]
+    public void ContextBudgetResolver_Resolve_GatewayCap_ClampsExplicitBudget()
+    {
+        var resolver = CreateResolver(gatewayMaxTokens: 128_000);
+
+        var result = resolver.Resolve(explicitTokens: 200_000, modelIdentifier: null);
+
+        Assert.Equal(128_000, result.TotalBudgetTokens);
+        Assert.Equal(BudgetSource.Explicit, result.Source);
+        Assert.Contains(result.Warnings, w => w.Contains("gateway cap"));
+    }
+
+    [Fact]
+    public void ContextBudgetResolver_Resolve_GatewayCap_NoClamping_WhenBudgetBelowCap()
+    {
+        var resolver = CreateResolver(gatewayMaxTokens: 128_000, modelRegistry: DefaultRegistry());
+
+        var result = resolver.Resolve(explicitTokens: null, modelIdentifier: "gpt-4o");
+
+        Assert.Equal(128_000, result.TotalBudgetTokens);
+        Assert.DoesNotContain(result.Warnings, w => w.Contains("gateway cap"));
+    }
+
+    [Fact]
+    public void ContextBudgetResolver_Resolve_GatewayCap_Null_DoesNotClamp()
+    {
+        // Null gateway cap = disabled (e.g. Claude Code or direct API)
+        var resolver = CreateResolver(gatewayMaxTokens: null, modelRegistry: DefaultRegistry());
+
+        var result = resolver.Resolve(explicitTokens: null, modelIdentifier: "claude-sonnet-4");
+
+        Assert.Equal(200_000, result.TotalBudgetTokens);
+        Assert.Equal(140_000, result.SafeBudgetTokens);
+        Assert.DoesNotContain(result.Warnings, w => w.Contains("gateway cap"));
+    }
+
+    [Fact]
+    public void ContextBudgetResolver_Resolve_GatewayCap_Zero_DoesNotClamp()
+    {
+        // Zero gateway cap = disabled
+        var resolver = CreateResolver(gatewayMaxTokens: 0, modelRegistry: DefaultRegistry());
+
+        var result = resolver.Resolve(explicitTokens: null, modelIdentifier: "claude-sonnet-4");
+
+        Assert.Equal(200_000, result.TotalBudgetTokens);
+        Assert.DoesNotContain(result.Warnings, w => w.Contains("gateway cap"));
+    }
+
+    [Fact]
+    public void ContextBudgetResolver_Resolve_GatewayCap_ClampsDefaultFallback()
+    {
+        var resolver = CreateResolver(defaultBudgetTokens: 200_000, gatewayMaxTokens: 128_000);
+
+        var result = resolver.Resolve(explicitTokens: null, modelIdentifier: null);
+
+        Assert.Equal(128_000, result.TotalBudgetTokens);
+        Assert.Contains(result.Warnings, w => w.Contains("gateway cap"));
     }
 }
