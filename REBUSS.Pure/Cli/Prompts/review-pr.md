@@ -94,3 +94,12 @@ Pages reviewed so far, skipped files, and any full-file retrieval done.
 - Label uncertain findings as potential risks.
 - Prefer fewer strong findings over many weak ones.
 - Minimize context usage.
+
+# STRICT: No Repository Exploration
+You are **absolutely forbidden** from exploring, cloning, checking out, or browsing the repository in any way.
+- Do **NOT** use terminal commands (git, ls, find, cat, etc.) to access the repository.
+- Do **NOT** use IDE tools, file search, code search, symbol search, or any workspace-level tool to browse the codebase.
+- Do **NOT** read files from disk or the local workspace — even if you have tools that could do so.
+- The **only** way you may obtain code or PR data is by calling the MCP tools provided by REBUSS.Pure: `get_pr_metadata`, `get_pr_content`, `get_pr_files`, `get_pr_diff`, `get_file_diff`, and `get_file_content_at_ref`.
+- Your entire review must be based **exclusively** on the content returned by these MCP tools. No exceptions.
+- If the MCP tools do not provide enough information to assess something, state that explicitly — do **not** attempt to obtain it through other means.
