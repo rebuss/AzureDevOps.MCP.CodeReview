@@ -183,6 +183,10 @@ namespace REBUSS.Pure.Services.LocalReview
         {
             // For deleted files, targetRef content will be null (git show returns nothing).
             // LocalGitClient.WorkingTreeRef is a sentinel that causes a filesystem read.
+            //
+            // No-HEAD safety: when the repository has no commits, GetFileContentAtRefAsync
+            // with "HEAD" catches the GitCommandException and returns null (base is empty).
+            // This is correct for new repos — all files are new additions.
             return scope.Kind switch
             {
                 LocalReviewScopeKind.Staged      => ("HEAD", ":0"),

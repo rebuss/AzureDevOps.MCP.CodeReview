@@ -224,7 +224,7 @@ Full codebase context is included below (file-role map, dependency graph, DI reg
 | File | Role | Depends on |
 |---|---|---|
 | `REBUSS.Pure\Services\LocalReview\ILocalGitClient.cs` | Interface: local git operations; defines `LocalFileStatus` record | � |
-| `REBUSS.Pure\Services\LocalReview\LocalGitClient.cs` | Runs git child processes; uses `diff --name-status` for all scopes; exposes `WorkingTreeRef` sentinel for filesystem reads. Redirects stdin on child processes to prevent MCP stdio deadlocks. | `ILocalGitClient` |
+| `REBUSS.Pure\Services\LocalReview\LocalGitClient.cs` | Runs git child processes; uses `diff --name-status` for all scopes; exposes `WorkingTreeRef` sentinel for filesystem reads. Handles repos without HEAD (no commits) via optimistic catch-and-retry: tries HEAD-based commands first, verifies HEAD absence with `rev-parse --verify HEAD` only on failure, then falls back to `diff --cached` (staged) or `status --porcelain` (working-tree); BranchDiff throws `GitCommandException` when no HEAD. Eliminates the extra `rev-parse` process in the common case. Redirects stdin on child processes to prevent MCP stdio deadlocks. | `ILocalGitClient` |
 | `REBUSS.Pure\Services\LocalReview\LocalReviewScope.cs` | Value type: `WorkingTree`, `Staged`, `BranchDiff(base)` + `Parse(string?)` | � |
 | `REBUSS.Pure\Services\LocalReview\ILocalReviewProvider.cs` | Interface: lists local files + diffs; defines `LocalReviewFiles` model | `PullRequestDiff`, `PullRequestFileInfo`, `PullRequestFilesSummary` |
 | `REBUSS.Pure\Services\LocalReview\LocalReviewProvider.cs` | Orchestrates git client + diff builder + file classifier | `IWorkspaceRootProvider` (from Core), `ILocalGitClient`, `IStructuredDiffBuilder`, `IFileClassifier`, domain models |
@@ -373,7 +373,7 @@ global mode writes to `~/.mcp.json` (Visual Studio) and `%APPDATA%\Code\User\mcp
 
 | File | Role |
 |---|---|
-| `REBUSS.Pure\Properties\Resources.resx` | Central string resource file for `Program.cs` literals: `AppSettingsFileName`, `AppSettingsLocalFileName`, `CliCommandInit`, `ConfigKeyProvider`, `ErrorUnknownCommand`, `GitExecutable`, `GitRemoteGetUrlArgs`, `ServerVersion` |
+| `REBUSS.Pure\Properties\Resources.resx` | Central string resource file for `Program.cs` literals: `AppSettingsFileName`, `AppSettingsLocalFileName`, `CliCommandInit`, `ConfigKeyProvider`, `ErrorBranchDiffRequiresCommits`, `ErrorUnknownCommand`, `GitExecutable`, `GitRemoteGetUrlArgs`, `GitRevParseVerifyHead`, `ServerVersion` |
 | `REBUSS.Pure\Properties\Resources.Designer.cs` | Strongly-typed accessor class (`REBUSS.Pure.Properties.Resources`); `ResourceManager` manifest name `REBUSS.Pure.Properties.Resources`; 8 `internal static string` properties using `GetString()` with null-forgiving operator |
 
 ### Documentation
@@ -437,7 +437,7 @@ global mode writes to `~/.mcp.json` (Visual Studio) and `%APPDATA%\Code\User\mcp
 | `REBUSS.Pure.Tests\Tools\GetPullRequestContentToolHandlerTests.cs` | `GetPullRequestContentToolHandler` — structured JSON output, validation (McpException), pagination (page filtering, category breakdown, multi-page, out-of-range), PR not found error; Feature 005: replaced `_dataProvider` with `_diffCache` mock, diff-based token measurement via `EstimateTokenCount`, diff-cache and token-estimation verification tests |
 | `REBUSS.Pure.Tests\Tools\GetLocalContentToolHandlerTests.cs` | `GetLocalContentToolHandler` — structured JSON output, validation (McpException), pagination (per-file diff fetch, category breakdown, scope routing, multi-page, out-of-range) |
 | `REBUSS.Pure.Tests\Services\LocalReview\LocalReviewScopeTests.cs` | `LocalReviewScope.Parse` — all scope kinds, ToString |
-| `REBUSS.Pure.Tests\Services\LocalReview\LocalGitClientParseTests.cs` | `LocalGitClient` porcelain/name-status parsing — via reflection on internal static methods |
+| `REBUSS.Pure.Tests\Services\LocalReview\LocalGitClientParseTests.cs` | `LocalGitClient` porcelain/name-status parsing, `BuildStatusArgs` HEAD/no-HEAD command selection — via reflection on internal static methods |
 | `REBUSS.Pure.Tests\Services\LocalReview\LocalReviewProviderTests.cs` | `LocalReviewProvider` — files listing, status mapping, classification, file diff, skip reasons, exception cases |
 | `REBUSS.Pure.Tests\Services\ContextWindow\TokenEstimatorTests.cs` | `TokenEstimator` — token estimation accuracy, null/empty input, boundary conditions, custom ratio, invalid ratio fallback, rounding; +`EstimateFromStats` tests (additions+deletions, zero lines fallback, negative values clamped); +`EstimateTokenCount` tests (null/empty input returns zero, typical content, rounds up, invalid ratio fallback to 4.0, custom ratio) |
 | `REBUSS.Pure.Tests\Services\ContextWindow\ContextBudgetResolverTests.cs` | `ContextBudgetResolver` — explicit budget, registry lookup, default fallback, guardrails, safety margin, case-insensitive matching, gateway cap (clamp, disable via null/zero), edge cases |

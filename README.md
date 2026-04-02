@@ -165,6 +165,11 @@ In Copilot / AI chat:
 ```
 123 #review-pr
 ```
+or use `execute` to force tool invocation (recommended for smaller models that may not call tools autonomously):
+
+```
+execute 123 #review-pr
+```
 
 Where `123` is the Azure DevOps or GitHub Pull Request number.
 

@@ -23,10 +23,32 @@ namespace REBUSS.Pure.Services.LocalReview
             LocalReviewScope scope,
             CancellationToken cancellationToken = default)
         {
-            var (args, parseMode) = BuildStatusArgs(scope);
+            // Optimistic path: assume HEAD exists (true for virtually all repositories).
+            // On failure we verify HEAD absence before retrying with no-HEAD fallback,
+            // avoiding a redundant `rev-parse --verify HEAD` process on every call.
+            var (args, parseMode) = BuildStatusArgs(scope, hasHead: true);
 
             _logger.LogDebug(Resources.LogLocalGitClientRunning, args, repositoryRoot);
-            var output = await RunGitAsync(repositoryRoot, args, cancellationToken);
+
+            string output;
+            try
+            {
+                output = await RunGitAsync(repositoryRoot, args, cancellationToken);
+            }
+            catch (GitCommandException)
+            {
+                // Primary command failed — verify whether this is a fresh repo with no commits.
+                // If HEAD exists the failure has a different cause; re-throw the original error.
+                if (await HasHeadAsync(repositoryRoot, cancellationToken))
+                    throw;
+
+                _logger.LogDebug(Resources.LogLocalGitClientNoHead, repositoryRoot);
+
+                // BuildStatusArgs throws for BranchDiff when no HEAD — provides a clear error.
+                (args, parseMode) = BuildStatusArgs(scope, hasHead: false);
+                _logger.LogDebug(Resources.LogLocalGitClientRunning, args, repositoryRoot);
+                output = await RunGitAsync(repositoryRoot, args, cancellationToken);
+            }
 
             return parseMode == StatusParseMode.Porcelain
                 ? ParsePorcelainStatus(output)
@@ -98,8 +120,26 @@ namespace REBUSS.Pure.Services.LocalReview
 
         private enum StatusParseMode { Porcelain, NameStatus }
 
-        private static (string Args, StatusParseMode Mode) BuildStatusArgs(LocalReviewScope scope)
+        private static (string Args, StatusParseMode Mode) BuildStatusArgs(LocalReviewScope scope, bool hasHead)
         {
+            if (!hasHead)
+            {
+                return scope.Kind switch
+                {
+                    LocalReviewScopeKind.Staged =>
+                        ("diff --name-status --cached", StatusParseMode.NameStatus),
+
+                    LocalReviewScopeKind.WorkingTree =>
+                        ("status --porcelain", StatusParseMode.Porcelain),
+
+                    LocalReviewScopeKind.BranchDiff =>
+                        throw new GitCommandException(128,
+                            Resources.ErrorBranchDiffRequiresCommits),
+
+                    _ => throw new ArgumentOutOfRangeException(nameof(scope))
+                };
+            }
+
             return scope.Kind switch
             {
                 LocalReviewScopeKind.Staged =>
@@ -174,6 +214,23 @@ namespace REBUSS.Pure.Services.LocalReview
             }
 
             return result;
+        }
+
+        // --- HEAD detection -------------------------------------------------------
+
+        private async Task<bool> HasHeadAsync(
+            string repositoryRoot,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                await RunGitAsync(repositoryRoot, Resources.GitRevParseVerifyHead, cancellationToken);
+                return true;
+            }
+            catch (GitCommandException)
+            {
+                return false;
+            }
         }
 
         // --- Git process execution ------------------------------------------------

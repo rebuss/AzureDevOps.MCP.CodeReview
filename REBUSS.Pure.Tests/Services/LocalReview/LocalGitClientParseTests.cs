@@ -96,6 +96,56 @@ public class LocalGitClientParseTests
         Assert.Empty(parsed);
     }
 
+    // --- BuildStatusArgs (no-HEAD fallback) ---
+
+    [Fact]
+    public void BuildStatusArgs_Staged_WithHead_UsesDiffCachedHead()
+    {
+        var (args, mode) = InvokeBuildStatusArgs(LocalReviewScope.Staged(), hasHead: true);
+        Assert.Equal("diff --name-status --cached HEAD", args);
+        Assert.Equal("NameStatus", mode);
+    }
+
+    [Fact]
+    public void BuildStatusArgs_Staged_WithoutHead_UsesDiffCachedWithoutHead()
+    {
+        var (args, mode) = InvokeBuildStatusArgs(LocalReviewScope.Staged(), hasHead: false);
+        Assert.Equal("diff --name-status --cached", args);
+        Assert.Equal("NameStatus", mode);
+    }
+
+    [Fact]
+    public void BuildStatusArgs_WorkingTree_WithHead_UsesDiffHead()
+    {
+        var (args, mode) = InvokeBuildStatusArgs(LocalReviewScope.WorkingTree(), hasHead: true);
+        Assert.Equal("diff --name-status HEAD", args);
+        Assert.Equal("NameStatus", mode);
+    }
+
+    [Fact]
+    public void BuildStatusArgs_WorkingTree_WithoutHead_UsesStatusPorcelain()
+    {
+        var (args, mode) = InvokeBuildStatusArgs(LocalReviewScope.WorkingTree(), hasHead: false);
+        Assert.Equal("status --porcelain", args);
+        Assert.Equal("Porcelain", mode);
+    }
+
+    [Fact]
+    public void BuildStatusArgs_BranchDiff_WithHead_UsesDiffBranch()
+    {
+        var (args, mode) = InvokeBuildStatusArgs(LocalReviewScope.BranchDiff("main"), hasHead: true);
+        Assert.Equal("diff --name-status main...HEAD", args);
+        Assert.Equal("NameStatus", mode);
+    }
+
+    [Fact]
+    public void BuildStatusArgs_BranchDiff_WithoutHead_ThrowsGitCommandException()
+    {
+        var ex = Assert.Throws<System.Reflection.TargetInvocationException>(
+            () => InvokeBuildStatusArgs(LocalReviewScope.BranchDiff("main"), hasHead: false));
+        Assert.IsType<GitCommandException>(ex.InnerException);
+    }
+
     // --- Helpers that invoke internal parsing via reflection ---
 
     private static IReadOnlyList<LocalFileStatus> InvokeParsePorcelain(string output)
@@ -112,5 +162,17 @@ public class LocalGitClientParseTests
             "ParseNameStatusOutput",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
         return (IReadOnlyList<LocalFileStatus>)method.Invoke(null, new object[] { output })!;
+    }
+
+    private static (string Args, string Mode) InvokeBuildStatusArgs(LocalReviewScope scope, bool hasHead)
+    {
+        var method = typeof(LocalGitClient).GetMethod(
+            "BuildStatusArgs",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        var result = method.Invoke(null, new object[] { scope, hasHead })!;
+        var tupleType = result.GetType();
+        var args = (string)tupleType.GetField("Item1")!.GetValue(result)!;
+        var mode = tupleType.GetField("Item2")!.GetValue(result)!.ToString()!;
+        return (args, mode);
     }
 }

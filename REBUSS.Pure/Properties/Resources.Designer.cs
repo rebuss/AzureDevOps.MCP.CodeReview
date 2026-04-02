@@ -97,6 +97,15 @@ namespace REBUSS.Pure.Properties {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Branch diff requires at least one commit in the repository. Create an initial commit first, then retry..
+        /// </summary>
+        internal static string ErrorBranchDiffRequiresCommits {
+            get {
+                return ResourceManager.GetString("ErrorBranchDiffRequiresCommits", resourceCulture)!;
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Failed to start process.
         /// </summary>
         internal static string ErrorFailedToStartProcess {
@@ -408,6 +417,15 @@ namespace REBUSS.Pure.Properties {
         internal static string GitRevParseAbbrevRefHead {
             get {
                 return ResourceManager.GetString("GitRevParseAbbrevRefHead", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to rev-parse --verify HEAD.
+        /// </summary>
+        internal static string GitRevParseVerifyHead {
+            get {
+                return ResourceManager.GetString("GitRevParseVerifyHead", resourceCulture)!;
             }
         }
 
@@ -822,6 +840,15 @@ namespace REBUSS.Pure.Properties {
         internal static string LogLocalGitClientFileNotFoundAtRef {
             get {
                 return ResourceManager.GetString("LogLocalGitClientFileNotFoundAtRef", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Repository at {Root} has no HEAD (no commits yet); using fallback commands.
+        /// </summary>
+        internal static string LogLocalGitClientNoHead {
+            get {
+                return ResourceManager.GetString("LogLocalGitClientNoHead", resourceCulture)!;
             }
         }
 

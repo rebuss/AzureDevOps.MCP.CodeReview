@@ -71,6 +71,9 @@
   <data name="ConfigKeyProvider" xml:space="preserve">
     <value>Provider</value>
   </data>
+  <data name="ErrorBranchDiffRequiresCommits" xml:space="preserve">
+    <value>Branch diff requires at least one commit in the repository. Create an initial commit first, then retry.</value>
+  </data>
   <data name="ErrorFailedToStartProcess" xml:space="preserve">
     <value>Failed to start process</value>
   </data>
@@ -175,6 +178,9 @@
   </data>
   <data name="GitRevParseAbbrevRefHead" xml:space="preserve">
     <value>rev-parse --abbrev-ref HEAD</value>
+  </data>
+  <data name="GitRevParseVerifyHead" xml:space="preserve">
+    <value>rev-parse --verify HEAD</value>
   </data>
   <data name="LogGetFileContentAtRefCompleted" xml:space="preserve">
     <value>[get_file_content_at_ref] Completed: path='{Path}', ref='{Ref}', {Size} bytes, binary={IsBinary}, {ResponseLength} chars, {ElapsedMs}ms</value>
@@ -313,6 +319,9 @@
   </data>
   <data name="LogLocalGitClientFileNotFoundAtRef" xml:space="preserve">
     <value>File '{Path}' not found at ref '{Ref}': {Error}</value>
+  </data>
+  <data name="LogLocalGitClientNoHead" xml:space="preserve">
+    <value>Repository at {Root} has no HEAD (no commits yet); using fallback commands</value>
   </data>
   <data name="LogLocalGitClientRunning" xml:space="preserve">
     <value>Running: git {Args} (in {Root})</value>
