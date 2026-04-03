@@ -1,15 +1,15 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
+using ModelContextProtocol.Protocol;
 using NSubstitute;
 using REBUSS.Pure.Core;
 using REBUSS.Pure.Core.Exceptions;
 using REBUSS.Pure.Core.Models;
 using REBUSS.Pure.Core.Shared;
 using REBUSS.Pure.Services.ResponsePacking;
-using REBUSS.Pure.Tools;
-using System.Text.Json;
 using REBUSS.Pure.Services.Pagination;
+using REBUSS.Pure.Tools;
 
 namespace REBUSS.Pure.Tests.Integration;
 
@@ -86,17 +86,14 @@ public class EndToEndTests
             });
 
         var handler = BuildHandler();
-        var json = await handler.ExecuteAsync(prNumber: 42);
+        var blocks = (await handler.ExecuteAsync(prNumber: 42)).ToList();
+        var text = string.Join("\n", blocks.Cast<TextContentBlock>().Select(b => b.Text));
 
-        var structured = JsonDocument.Parse(json).RootElement;
-
-        Assert.Equal(42, structured.GetProperty("prNumber").GetInt32());
-        Assert.True(structured.TryGetProperty("files", out var files));
-        Assert.Equal(1, files.GetArrayLength());
-        Assert.Equal("/src/App.cs", files[0].GetProperty("path").GetString());
-        Assert.True(files[0].TryGetProperty("hunks", out var hunks));
-        Assert.Equal(1, hunks.GetArrayLength());
-        Assert.False(structured.TryGetProperty("title", out _));
+        Assert.NotEmpty(blocks);
+        Assert.Contains("/src/App.cs", text);
+        Assert.Contains("-old", text);
+        Assert.Contains("+new", text);
+        Assert.DoesNotContain("Fix bug", text);
     }
 
     [Fact]

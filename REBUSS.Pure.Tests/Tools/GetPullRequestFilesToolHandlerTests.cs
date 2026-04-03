@@ -1,6 +1,6 @@
-﻿using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol;
+using ModelContextProtocol.Protocol;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using REBUSS.Pure.Core;
@@ -70,6 +70,9 @@ public class GetPullRequestFilesToolHandlerTests
             NullLogger<GetPullRequestFilesToolHandler>.Instance);
     }
 
+    private static string AllText(IEnumerable<ContentBlock> blocks) =>
+        string.Join("\n", blocks.Cast<TextContentBlock>().Select(b => b.Text));
+
     // --- Happy path ---
 
     [Fact]
@@ -77,14 +80,12 @@ public class GetPullRequestFilesToolHandlerTests
     {
         _filesProvider.GetFilesAsync(42, Arg.Any<CancellationToken>()).Returns(SampleFiles);
 
-        var text = await _handler.ExecuteAsync(prNumber: 42);
+        var blocks = (await _handler.ExecuteAsync(prNumber: 42)).ToList();
+        var text = AllText(blocks);
 
-        var doc = JsonDocument.Parse(text);
-        var root = doc.RootElement;
-
-        Assert.Equal(42, root.GetProperty("prNumber").GetInt32());
-        Assert.Equal(2, root.GetProperty("totalFiles").GetInt32());
-        Assert.Equal(2, root.GetProperty("files").GetArrayLength());
+        Assert.NotEmpty(blocks);
+        Assert.Contains("PR #42", text);
+        Assert.Contains("src/Service.cs", text);
     }
 
     [Fact]
@@ -92,20 +93,13 @@ public class GetPullRequestFilesToolHandlerTests
     {
         _filesProvider.GetFilesAsync(42, Arg.Any<CancellationToken>()).Returns(SampleFiles);
 
-        var text = await _handler.ExecuteAsync(prNumber: 42);
-        var doc = JsonDocument.Parse(text);
-        var firstFile = doc.RootElement.GetProperty("files")[0];
+        var blocks = (await _handler.ExecuteAsync(prNumber: 42)).ToList();
+        var firstBlockText = blocks.Cast<TextContentBlock>().First().Text;
 
-        Assert.Equal("src/Service.cs", firstFile.GetProperty("path").GetString());
-        Assert.Equal("modified", firstFile.GetProperty("status").GetString());
-        Assert.Equal(10, firstFile.GetProperty("additions").GetInt32());
-        Assert.Equal(3, firstFile.GetProperty("deletions").GetInt32());
-        Assert.Equal(13, firstFile.GetProperty("changes").GetInt32());
-        Assert.Equal(".cs", firstFile.GetProperty("extension").GetString());
-        Assert.False(firstFile.GetProperty("isBinary").GetBoolean());
-        Assert.False(firstFile.GetProperty("isGenerated").GetBoolean());
-        Assert.False(firstFile.GetProperty("isTestFile").GetBoolean());
-        Assert.Equal("high", firstFile.GetProperty("reviewPriority").GetString());
+        Assert.Contains("src/Service.cs", firstBlockText);
+        Assert.Contains("modified", firstBlockText);
+        Assert.Contains("+  10", firstBlockText);
+        Assert.Contains("-   3", firstBlockText);
     }
 
     [Fact]
@@ -113,17 +107,12 @@ public class GetPullRequestFilesToolHandlerTests
     {
         _filesProvider.GetFilesAsync(42, Arg.Any<CancellationToken>()).Returns(SampleFiles);
 
-        var text = await _handler.ExecuteAsync(prNumber: 42);
-        var doc = JsonDocument.Parse(text);
-        var summary = doc.RootElement.GetProperty("summary");
+        var blocks = (await _handler.ExecuteAsync(prNumber: 42)).ToList();
+        var firstBlockText = blocks.Cast<TextContentBlock>().First().Text;
 
-        Assert.Equal(1, summary.GetProperty("sourceFiles").GetInt32());
-        Assert.Equal(1, summary.GetProperty("testFiles").GetInt32());
-        Assert.Equal(0, summary.GetProperty("configFiles").GetInt32());
-        Assert.Equal(0, summary.GetProperty("docsFiles").GetInt32());
-        Assert.Equal(0, summary.GetProperty("binaryFiles").GetInt32());
-        Assert.Equal(0, summary.GetProperty("generatedFiles").GetInt32());
-        Assert.Equal(1, summary.GetProperty("highPriorityFiles").GetInt32());
+        Assert.Contains("1 source", firstBlockText);
+        Assert.Contains("1 test", firstBlockText);
+        Assert.Contains("High priority: 1", firstBlockText);
     }
 
     // --- Validation errors ---
@@ -182,7 +171,6 @@ public class GetPullRequestFilesToolHandlerTests
         _filesProvider.GetFilesAsync(42, Arg.Any<CancellationToken>()).Returns(SampleFiles);
         _budgetResolver.Resolve(Arg.Any<int?>(), Arg.Any<string?>())
             .Returns(new BudgetResolutionResult(200, 100, BudgetSource.Explicit, Array.Empty<string>()));
-
         _pageAllocator.Allocate(Arg.Any<IReadOnlyList<PackingCandidate>>(), Arg.Any<int>())
             .Throws(new BudgetTooSmallException("Token budget (100) is too small for pagination."));
 
@@ -199,11 +187,9 @@ public class GetPullRequestFilesToolHandlerTests
     {
         _filesProvider.GetFilesAsync(42, Arg.Any<CancellationToken>()).Returns(SampleFiles);
 
-        var text = await _handler.ExecuteAsync(prNumber: 42);
+        var blocks = (await _handler.ExecuteAsync(prNumber: 42)).ToList();
+        var lastBlock = blocks.Cast<TextContentBlock>().Last().Text;
 
-        var doc = JsonDocument.Parse(text);
-        Assert.True(doc.RootElement.TryGetProperty("manifest", out var manifest));
-        Assert.True(manifest.TryGetProperty("summary", out var summary));
-        Assert.Equal(2, summary.GetProperty("totalItems").GetInt32());
+        Assert.Contains("Manifest:", lastBlock);
     }
 }

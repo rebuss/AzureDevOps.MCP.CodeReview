@@ -1,4 +1,3 @@
-using System.Text.Json;
 using REBUSS.Pure.Core;
 using REBUSS.Pure.Core.Models;
 using REBUSS.Pure.Core.Models.ResponsePacking;
@@ -9,21 +8,14 @@ namespace REBUSS.Pure.Tools.Shared;
 
 /// <summary>
 /// Shared helper that builds <see cref="PackingCandidate"/> items from a
-/// <see cref="PullRequestDiff"/> by serializing each file to its structured
-/// JSON form and measuring the actual token cost.
+/// <see cref="PullRequestDiff"/> by formatting each file as plain text
+/// and measuring the actual token cost of that output format.
 /// </summary>
 internal static class FileTokenMeasurement
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        WriteIndented = true,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-    };
-
     /// <summary>
     /// Builds a list of packing candidates from the diff, each with a measured
-    /// token count derived from the serialized JSON of the structured file change.
+    /// token count derived from the plain-text representation of the file diff.
     /// </summary>
     public static List<PackingCandidate> BuildCandidatesFromDiff(
         PullRequestDiff diff,
@@ -35,8 +27,8 @@ internal static class FileTokenMeasurement
         foreach (var file in diff.Files)
         {
             var structured = MapToStructured(file);
-            var fileJson = JsonSerializer.Serialize(structured, JsonOptions);
-            var actualTokens = tokenEstimator.EstimateTokenCount(fileJson);
+            var plainText = PlainTextFormatter.FormatFileDiff(structured);
+            var actualTokens = tokenEstimator.EstimateTokenCount(plainText);
             var classification = fileClassifier.Classify(file.Path);
 
             candidates.Add(new PackingCandidate(

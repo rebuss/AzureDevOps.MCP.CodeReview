@@ -6,30 +6,42 @@
 
 ## 1. Serialization Pipeline
 
-Since the migration to the official **ModelContextProtocol SDK v1.2.0**, tool output goes through **two serialization layers**:
+All tool handlers return **`Task<IEnumerable<ContentBlock>>`** where each `ContentBlock` is a `TextContentBlock` containing a plain text string. The SDK wraps these in a standard MCP `content` array.
 
-1. **Tool handler** serializes DTO → JSON string (`camelCase`, `WriteIndented = true`, `WhenWritingNull` ignore) using per-handler `JsonSerializerOptions`
-2. Handler returns the JSON string as `Task<string>`. The **SDK** wraps it in a `TextContent` message automatically
+Output pipeline:
+
+1. **Tool handler** → `PlainTextFormatter` → one `TextContentBlock` per file/section (plain text, no JSON)
+2. Handler returns `IEnumerable<ContentBlock>`. The **SDK** wraps the collection directly in the MCP `content` array
 3. **SDK transport** serializes the JSON-RPC envelope (outer framing is fully SDK-managed)
 
-Each tool handler defines its own `JsonSerializerOptions`:
-
-```csharp
-private static readonly JsonSerializerOptions JsonOptions = new()
-{
-    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-    WriteIndented = true,
-    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-};
-```
-
-Result: compact JSON-RPC envelope wrapping a pretty-printed payload string (same wire format as before):
+Wire format example (diff tool, 2 files + manifest):
 
 ```json
-{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"{\n  \"prNumber\": 42,\n  \"files\": [...]\n}"}]}}
+{
+  "jsonrpc": "2.0", "id": 1,
+  "result": {
+    "content": [
+      {"type":"text","text":"=== src/Foo.cs (edit: +10 -3) ===\n +added line\n-removed line\n context"},
+      {"type":"text","text":"=== src/Bar.cs (edit: +2 -0) ===\n +another line"},
+      {"type":"text","text":"Manifest:\n  src/Foo.cs                                                    ~  150 tokens  Included   Source\nBudget: 300/140000 tokens (0%)"}
+    ]
+  }
+}
 ```
 
-> **Migration note:** The outer JSON-RPC serialization is now owned by the SDK. The inner tool-response serialization (the pretty-printed JSON inside the `text` field) is still controlled by each handler's `JsonSerializerOptions`. The wire format is identical to the pre-SDK implementation.
+**Block structure by tool:**
+
+| Tool | Blocks returned |
+|---|---|
+| `get_pr_diff` / `get_file_diff` / `get_local_file_diff` (F003) | `[file_block..., manifest_block]` |
+| `get_pr_diff` / `get_pr_files` (F004, paginated) | `[file_block..., manifest_block, pagination_block]` |
+| `get_pr_content` / `get_local_content` | `[file_block..., simple_pagination_block]` |
+| `get_pr_files` (F003, non-paginated) | `[file_list_block, manifest_block]` |
+| `get_local_files` (F004, paginated) | `[file_list_block, manifest_block, pagination_block]` |
+| `get_pr_metadata` | `[metadata_block]` (single block) |
+| `get_file_content_at_ref` | `[content_block]` (single block) |
+
+> **Refactor note:** Before this change, handlers serialized output DTOs to JSON inside the `text` field. Now all output is human-readable plain text. The `[JsonPropertyName]` output DTOs (`PullRequestMetadataResult`, `PullRequestFilesResult`, `FileContentAtRefResult`, etc.) have been removed. Internal data structures (`StructuredFileChange`, `StructuredHunk`, `StructuredLine`) remain as plain C# classes used by `PlainTextFormatter`.
 
 ## 2. Error Contracts
 
@@ -160,54 +172,33 @@ Auto-generated from `GetPullRequestMetadataToolHandler.ExecuteAsync` signature. 
 | `modelName` | `string?` | ❌ | `null` | Model name for context budget resolution (e.g. `"gpt-4o"`). Triggers pagination info. |
 | `maxTokens` | `int?` | ❌ | `null` | Explicit token budget override. Triggers pagination info. |
 
-> **Feature 005 note:** When `modelName` or `maxTokens` is provided, the response includes a `contentPaging` section with page allocation info for use with `get_pr_content`.
+> **Feature 005 note:** When `modelName` or `maxTokens` is provided, the response includes content paging info in plain text for use with `get_pr_content`.
 
-#### Output — `PullRequestMetadataResult`
+#### Output — plain text (single `TextContentBlock`)
 
-```json
-{
-  "prNumber": 42,
-  "id": 12345,
-  "title": "Add caching support",
-  "author": { "login": "jdoe", "displayName": "Jane Doe" },
-  "state": "active",
-  "isDraft": false,
-  "createdAt": "2024-11-15T10:30:00.0000000Z",
-  "updatedAt": null,
-  "base": { "ref": "refs/heads/main", "sha": "abc123" },
-  "head": { "ref": "refs/heads/feature/cache", "sha": "def456" },
-  "stats": { "commits": 3, "changedFiles": 5, "additions": 120, "deletions": 40 },
-  "commitShas": ["def456", "789abc", "012def"],
-  "description": { "text": "PR description...", "isTruncated": false, "originalLength": 18, "returnedLength": 18 },
-  "source": { "repository": "org/repo", "url": "https://dev.azure.com/org/project/_git/repo/pullrequest/42" },
-  "contentPaging": {
-    "totalPages": 5,
-    "totalFiles": 286,
-    "budgetPerPageTokens": 89600,
-    "filesByPage": [
-      { "pageNumber": 1, "fileCount": 12 },
-      { "pageNumber": 2, "fileCount": 15 },
-      { "pageNumber": 3, "fileCount": 18 },
-      { "pageNumber": 4, "fileCount": 14 },
-      { "pageNumber": 5, "fileCount": 8 }
-    ]
-  }
-}
+```
+PR #42: Add caching support
+State:    active
+Author:   jdoe (Jane Doe)
+Branch:   refs/heads/feature/cache → refs/heads/main
+Stats:    5 file(s) | +120 -40 | 3 commit(s)
+URL:      https://dev.azure.com/org/project/_git/repo/pullrequest/42
+Head SHA: def456
+Base SHA: abc123
+Description:
+  PR description...
+
+Content paging: 5 page(s) | 286 file(s) | 89600 tokens/page
+Files per page: p1:12f, p2:15f, p3:18f, p4:14f, p5:8f
 ```
 
-| Field | Type | Nullable | Notes |
-|---|---|---|---|
-| `state` | string | no | `"active"`, `"completed"`, `"abandoned"` (GitHub `open`→`active`, `closed+merged`→`completed`, `closed`→`abandoned`) |
-| `isDraft` | bool | no | |
-| `createdAt` | string | no | ISO 8601 round-trip format (`"O"`) |
-| `updatedAt` | string | **yes** | Set to `closedDate` if present; omitted when null |
-| `description.text` | string | no | Truncated to **800 chars** if longer |
-| `description.isTruncated` | bool | no | `true` when original exceeded 800 chars |
-| `contentPaging` | object | **yes** | Only present when `modelName` or `maxTokens` is provided; omitted otherwise (WhenWritingNull) |
-| `contentPaging.totalPages` | int | no | Total number of content pages |
-| `contentPaging.totalFiles` | int | no | Total number of changed files across all pages |
-| `contentPaging.budgetPerPageTokens` | int | no | Safe token budget used for page allocation |
-| `contentPaging.filesByPage` | array | no | Per-page file count breakdown (`PageFileCount[]`) |
+| Line | Condition |
+|---|---|
+| `URL:` | Only present when `WebUrl` is non-empty |
+| `Head SHA:` / `Base SHA:` | Only present when commit SHAs are available |
+| `Description:` block | Only present when PR has a description; truncated to **800 chars** |
+| `Content paging:` block | Only present when `modelName` or `maxTokens` was provided |
+| Author display name | Only appended when display name differs from login |
 
 ---
 
@@ -227,69 +218,39 @@ Auto-generated from `GetPullRequestFilesToolHandler.ExecuteAsync` signature. All
 
 > **Feature 004 note:** `prNumber` is **optional** when `pageReference` is provided (the page reference encodes the original request parameters). `pageReference` and `pageNumber` are mutually exclusive.
 
-#### Output — `PullRequestFilesResult`
+#### Output — plain text blocks
 
-```json
-{
-  "prNumber": 42,
-  "totalFiles": 2,
-  "files": [
-    {
-      "path": "src/Cache/CacheService.cs",
-      "status": "edit",
-      "additions": 45, "deletions": 12, "changes": 57,
-      "extension": ".cs",
-      "isBinary": false, "isGenerated": false, "isTestFile": false,
-      "reviewPriority": "high"
-    }
-  ],
-  "summary": {
-    "sourceFiles": 1, "testFiles": 1, "configFiles": 0,
-    "docsFiles": 0, "binaryFiles": 0, "generatedFiles": 0,
-    "highPriorityFiles": 1
-  },
-  "manifest": {
-    "items": [
-      { "path": "src/Cache/CacheService.cs", "estimatedTokens": 100, "status": "Included", "priorityTier": "Source" }
-    ],
-    "summary": {
-      "totalItems": 2, "includedCount": 2, "partialCount": 0, "deferredCount": 0,
-      "totalBudgetTokens": 140000, "budgetUsed": 200, "budgetRemaining": 139800, "utilizationPercent": 0.1
-    }
-  }
-}
+**Block 1:** file list table
+
+```
+Changed files: PR #42 (2 file(s))
+  Path                                                           Status       +Add    -Del  Priority Flags
+  ----------------------------------------------------------------------------------------------------
+  src/Cache/CacheService.cs                                      edit          +45     -12  high
+  tests/CacheServiceTests.cs                                     edit          +30      -0  medium [test]
+
+Summary: 1 source, 1 test | High priority: 1
 ```
 
-Uses **`PullRequestFileItem`** (shared with `get_local_files`), **`PullRequestFilesSummaryResult`** (shared), and **`ContentManifestResult`** (packing manifest).
+**Block 2:** manifest
 
-When paginated (Feature 004), the response includes additional top-level fields:
-
-```json
-{
-  "prNumber": 42,
-  "totalFiles": 2,
-  "files": [ /* ... */ ],
-  "summary": { /* ... */ },
-  "manifest": { /* ... */ },
-  "pagination": {
-    "currentPage": 1,
-    "totalPages": 3,
-    "hasMore": true,
-    "currentPageReference": "eyJ0IjoiZ2V0X3ByX2ZpbGVzIi...",
-    "nextPageReference": "eyJ0IjoiZ2V0X3ByX2ZpbGVzIi..."
-  },
-  "stalenessWarning": {
-    "message": "PR data has changed since pagination started...",
-    "originalFingerprint": "abc123",
-    "currentFingerprint": "def456"
-  }
-}
+```
+Manifest:
+  src/Cache/CacheService.cs                                          ~  450 tokens  Included   Source
+  tests/CacheServiceTests.cs                                         ~  300 tokens  Included   Test
+Budget: 750/140000 tokens (1%)
 ```
 
-| Field | Type | Nullable | Notes |
-|---|---|---|---|
-| `pagination` | object? | **yes** | Feature 004: omitted when not paginated |
-| `stalenessWarning` | object? | **yes** | Feature 004: omitted when no staleness detected |
+**Block 3 (paginated only — Feature 004):** pagination footer
+
+```
+--- Page 1 of 3 | hasMore: true | next: eyJ0IjoiZ2V0X3ByX2ZpbGVzIi... | STALE: head changed (abc123… → def456…) ---
+```
+
+| Part | Condition |
+|---|---|
+| `next: <ref>` | Only present when `hasMore: true` |
+| `STALE: ...` | Only present when staleness detected (head SHA changed between pages) |
 
 ---
 
@@ -309,73 +270,40 @@ Auto-generated from `GetPullRequestDiffToolHandler.ExecuteAsync` signature. All 
 
 > **Feature 004 note:** `prNumber` is **optional** when `pageReference` is provided (the page reference encodes the original request parameters). `pageReference` and `pageNumber` are mutually exclusive.
 
-#### Output — `StructuredDiffResult`
+#### Output — plain text blocks
 
-```json
-{
-  "prNumber": 42,
-  "files": [
-    {
-      "path": "src/Cache/CacheService.cs",
-      "changeType": "edit",
-      "additions": 5, "deletions": 2,
-      "hunks": [
-        {
-          "oldStart": 10, "oldCount": 7, "newStart": 10, "newCount": 10,
-          "lines": [
-            { "op": " ", "text": "    public class CacheService" },
-            { "op": "-", "text": "        private int _ttl = 60;" },
-            { "op": "+", "text": "        private int _ttl = 300;" }
-          ]
-        }
-      ]
-    },
-    {
-      "path": "docs/logo.png",
-      "changeType": "add",
-      "skipReason": "Binary file",
-      "additions": 0, "deletions": 0,
-      "hunks": []
-    }
-  ]
-}
+**Block 1..N:** one `TextContentBlock` per file
+
+```
+=== src/Cache/CacheService.cs (edit: +5 -2) ===
+ public class CacheService
+-    private int _ttl = 60;
++    private int _ttl = 300;
 ```
 
-| Field | Type | Nullable | Notes |
-|---|---|---|---|
-| `prNumber` | int? | **yes** | Set for PR diffs; `null` (omitted) for local diffs |
-| `skipReason` | string? | **yes** | Set when hunks are empty: `"Binary file"`, `"Generated file"`, `"Full rewrite"`, or partial truncation reason |
-| `hunks` | array | no | Empty array `[]` when `skipReason` is set |
-| `manifest` | object? | **yes** | Packing manifest with items + summary; `null` (omitted) when WhenWritingNull |
+For skipped files (binary, generated, etc.):
 
-**Shared by:** `get_pr_diff`, `get_file_diff`, `get_local_file_diff`.
-
-When paginated (Feature 004), the response includes additional top-level fields:
-
-```json
-{
-  "prNumber": 42,
-  "files": [ /* ... */ ],
-  "manifest": { /* ... */ },
-  "pagination": {
-    "currentPage": 1,
-    "totalPages": 3,
-    "hasMore": true,
-    "currentPageReference": "eyJ0IjoiZ2V0X3ByX2RpZmYiL...",
-    "nextPageReference": "eyJ0IjoiZ2V0X3ByX2RpZmYiL..."
-  },
-  "stalenessWarning": {
-    "message": "PR data has changed since pagination started...",
-    "originalFingerprint": "abc123",
-    "currentFingerprint": "def456"
-  }
-}
+```
+=== docs/logo.png (add: skipped) ===
+Reason: Binary file
 ```
 
-| Field | Type | Nullable | Notes |
-|---|---|---|---|
-| `pagination` | object? | **yes** | Feature 004: PaginationMetadataResult; omitted when not paginated |
-| `stalenessWarning` | object? | **yes** | Feature 004: StalenessWarningResult; omitted when no staleness detected |
+**Last block:** manifest
+
+```
+Manifest:
+  src/Cache/CacheService.cs                                          ~  150 tokens  Included   Source
+  docs/logo.png                                                      ~    5 tokens  Included   Docs
+Budget: 155/140000 tokens (0%)
+```
+
+**Extra block (paginated only — Feature 004):** pagination footer (appended after manifest)
+
+```
+--- Page 1 of 3 | hasMore: true | next: eyJ0IjoiZ2V0X3ByX2RpZmYiL... | STALE: head changed (abc123… → def456…) ---
+```
+
+**Shared by:** `get_pr_diff`, `get_file_diff`, `get_local_file_diff`. For `get_file_diff`, exactly 1 file block is returned.
 
 ---
 
@@ -392,7 +320,7 @@ Auto-generated from `GetFileDiffToolHandler.ExecuteAsync` signature. Both parame
 
 #### Output
 
-Same `StructuredDiffResult` shape. `files` array contains **exactly 1 element** (or tool-level error if file not in PR).
+Same plain text format as `get_pr_diff`. Returns exactly 1 file block + manifest block. Tool-level error if file not in PR.
 
 ---
 
@@ -407,24 +335,26 @@ Auto-generated from `GetFileContentAtRefToolHandler.ExecuteAsync` signature. Bot
 | `path` | `string` | ✅ | The repository-relative path of the file |
 | `ref` | `string` | ✅ | The Git ref to fetch the file at: a commit SHA, branch name, or tag |
 
-#### Output — `FileContentAtRefResult`
+#### Output — plain text (single `TextContentBlock`)
 
-```json
-{
-  "path": "src/Cache/CacheService.cs",
-  "ref": "abc123def456",
-  "size": 1234,
-  "encoding": "utf-8",
-  "content": "using System;\n\nnamespace Cache...",
-  "isBinary": false
-}
+```
+=== src/Cache/CacheService.cs @ abc123def456 ===
+using System;
+
+namespace Cache...
 ```
 
-| Field | Type | Nullable | Notes |
-|---|---|---|---|
-| `encoding` | string | no | `"utf-8"` for text, `"base64"` for binary |
-| `content` | string? | **yes** | `null` when binary and base64 not available |
-| `size` | int | no | Byte count of content (UTF-8 encoded) |
+For binary files:
+
+```
+=== docs/logo.png @ abc123def456 ===
+[binary file, size: 4096 bytes, encoding: base64]
+```
+
+| Part | Notes |
+|---|---|
+| Header line | `=== {path} @ {ref} ===` |
+| Body | Raw file content for text files; `[binary file, ...]` for binary; `[file content not available]` if content is null |
 
 ---
 
@@ -442,52 +372,29 @@ Auto-generated from `GetLocalChangesFilesToolHandler.ExecuteAsync` signature. Al
 | `pageReference` | `string?` | ❌ | `null` | Opaque page reference from a previous response. Mutually exclusive with `pageNumber`. |
 | `pageNumber` | `int?` | ❌ | `null` | Page number for direct access. Mutually exclusive with `pageReference`. |
 
-#### Output — `LocalReviewFilesResult`
+#### Output — plain text blocks
 
-```json
-{
-  "repositoryRoot": "C:/Projects/MyApp",
-  "scope": "working-tree",
-  "currentBranch": "feature/cache",
-  "totalFiles": 3,
-  "files": [ /* PullRequestFileItem[] — same shape as get_pr_files */ ],
-  "summary": { /* PullRequestFilesSummaryResult — same shape as get_pr_files */ },
-  "manifest": { /* ContentManifestResult — same shape as get_pr_files manifest */ }
-}
+Same block structure as `get_pr_files`. Context string in the file list header uses the local scope, e.g. `"working-tree (3 file(s))"`.
+
+**Block 1:** file list table (same format as `get_pr_files`, context = `"{scope} (N file(s))"` for non-paginated or `"{scope} (page P/T)"` for paginated)
+
+```
+Changed files: working-tree (2 file(s))
+  Path                                                           Status       +Add    -Del  Priority Flags
+  ----------------------------------------------------------------------------------------------------
+  src/Cache/CacheService.cs                                      modified        +5      -2  high
+  tests/CacheServiceTests.cs                                     modified        +3      -0  medium [test]
+
+Summary: 1 source, 1 test | High priority: 1
 ```
 
-| Field | Type | Nullable | Notes |
-|---|---|---|---|
-| `currentBranch` | string? | **yes** | Omitted when detached HEAD |
-| `scope` | string | no | Echoes the resolved scope value |
-| `manifest` | object? | **yes** | Packing manifest with items + summary |
+**Block 2:** manifest (same format as `get_pr_files`)
 
-Reuses `PullRequestFileItem` and `PullRequestFilesSummaryResult` from `get_pr_files`.
+**Block 3 (paginated only — Feature 004):** pagination footer (no staleness warning for local tools)
 
-When paginated (Feature 004), the response includes an additional top-level field:
-
-```json
-{
-  "repositoryRoot": "C:/Projects/MyApp",
-  "scope": "working-tree",
-  "currentBranch": "feature/cache",
-  "totalFiles": 3,
-  "files": [ /* ... */ ],
-  "summary": { /* ... */ },
-  "manifest": { /* ... */ },
-  "pagination": {
-    "currentPage": 1,
-    "totalPages": 2,
-    "hasMore": true,
-    "currentPageReference": "eyJ0IjoiZ2V0X2xvY2FsX2Zp...",
-    "nextPageReference": "eyJ0IjoiZ2V0X2xvY2FsX2Zp..."
-  }
-}
 ```
-
-| Field | Type | Nullable | Notes |
-|---|---|---|---|
-| `pagination` | object? | **yes** | Feature 004: PaginationMetadataResult; omitted when not paginated |
+--- Page 1 of 2 | hasMore: true | next: eyJ0IjoiZ2V0X2xvY2FsX2Zp... ---
+```
 
 > **Note:** `get_local_files` does **not** include `stalenessWarning` (local tools use null fingerprint).
 
@@ -510,7 +417,7 @@ Auto-generated from `GetLocalFileDiffToolHandler.ExecuteAsync` signature.
 
 #### Output
 
-Same `StructuredDiffResult` shape with `manifest`. `prNumber` is `null` (omitted from JSON). `files` array contains **exactly 1 element**.
+Same plain text format as `get_pr_diff`. Returns exactly 1 file block + manifest block.
 
 ---
 
@@ -527,51 +434,29 @@ Auto-generated from `GetPullRequestContentToolHandler.ExecuteAsync` signature. A
 | `modelName` | `string?` | ❌ | `null` | Model name for context budget resolution |
 | `maxTokens` | `int?` | ❌ | `null` | Explicit token budget override |
 
-#### Output — `PullRequestContentPageResult`
+#### Output — plain text blocks
 
-```json
-{
-  "prNumber": 42,
-  "pageNumber": 1,
-  "totalPages": 5,
-  "files": [
-    {
-      "path": "src/Cache/CacheService.cs",
-      "changeType": "edit",
-      "additions": 5, "deletions": 2,
-      "hunks": [
-        {
-          "oldStart": 10, "oldCount": 7, "newStart": 10, "newCount": 10,
-          "lines": [
-            { "op": " ", "text": "    public class CacheService" },
-            { "op": "-", "text": "        private int _ttl = 60;" },
-            { "op": "+", "text": "        private int _ttl = 300;" }
-          ]
-        }
-      ]
-    }
-  ],
-  "summary": {
-    "filesOnPage": 12,
-    "totalFiles": 286,
-    "estimatedTokens": 85000,
-    "hasMorePages": true,
-    "categories": { "source": 8, "test": 3, "config": 1 }
-  }
-}
+**Block 1..N:** one `TextContentBlock` per file (same diff format as `get_pr_diff`)
+
+```
+=== src/Cache/CacheService.cs (edit: +5 -2) ===
+ public class CacheService
+-    private int _ttl = 60;
++    private int _ttl = 300;
 ```
 
-| Field | Type | Nullable | Notes |
-|---|---|---|---|
-| `prNumber` | int | no | Echoes input PR number |
-| `pageNumber` | int | no | Current page (1-based) |
-| `totalPages` | int | no | Total number of pages |
-| `files` | array | no | `StructuredFileChange[]` — diff content for files on this page |
-| `summary.filesOnPage` | int | no | Number of files included on this page |
-| `summary.totalFiles` | int | no | Total files across all pages |
-| `summary.estimatedTokens` | int | no | Estimated token usage for this page |
-| `summary.hasMorePages` | bool | no | `true` when `pageNumber < totalPages` |
-| `summary.categories` | object | no | File count by category (e.g. `"source"`, `"test"`, `"config"`) |
+**Last block:** simple pagination footer
+
+```
+--- Page 1 of 5 | hasMore: true | 12/286 files | ~85000 tokens | 10 Source, 2 Config ---
+```
+
+| Part | Notes |
+|---|---|
+| `hasMore` | `true` when `pageNumber < totalPages` |
+| `N/M files` | Files on this page / total files |
+| `~X tokens` | Estimated token usage for this page |
+| Category breakdown | Optional; shows count per `FileCategory` on this page (e.g. `3 Source, 1 Test`). Omitted when empty. |
 
 Error messages: `"Missing required parameter: prNumber"`, `"prNumber must be greater than 0"`, `"Missing required parameter: pageNumber"`, `"pageNumber must be >= 1"`, `"pageNumber N exceeds total pages M"`, `"Pull Request not found: ..."`, `"Error retrieving PR content: ..."`.
 
@@ -590,83 +475,32 @@ Auto-generated from `GetLocalContentToolHandler.ExecuteAsync` signature. All par
 | `modelName` | `string?` | ❌ | `null` | Model name for context budget resolution |
 | `maxTokens` | `int?` | ❌ | `null` | Explicit token budget override |
 
-#### Output — `LocalContentPageResult`
+#### Output — plain text blocks
 
-```json
-{
-  "repositoryRoot": "C:/Projects/MyApp",
-  "currentBranch": "feature/cache",
-  "scope": "working-tree",
-  "pageNumber": 1,
-  "totalPages": 2,
-  "files": [
-    {
-      "path": "src/Cache/CacheService.cs",
-      "changeType": "edit",
-      "additions": 5, "deletions": 2,
-      "hunks": [
-        {
-          "oldStart": 10, "oldCount": 7, "newStart": 10, "newCount": 10,
-          "lines": [
-            { "op": " ", "text": "    public class CacheService" },
-            { "op": "-", "text": "        private int _ttl = 60;" },
-            { "op": "+", "text": "        private int _ttl = 300;" }
-          ]
-        }
-      ]
-    }
-  ],
-  "summary": {
-    "filesOnPage": 5,
-    "totalFiles": 8,
-    "estimatedTokens": 12000,
-    "hasMorePages": true,
-    "categories": { "source": 3, "test": 1, "config": 1 }
-  }
-}
+Same structure as `get_pr_content`. One `TextContentBlock` per file on the page, followed by a simple pagination footer block (including category breakdown).
+
 ```
-
-| Field | Type | Nullable | Notes |
-|---|---|---|---|
-| `repositoryRoot` | string | no | Absolute path to the repository root |
-| `currentBranch` | string | **yes** | Omitted when detached HEAD |
-| `scope` | string | no | Echoes the resolved scope value |
-| `pageNumber` | int | no | Current page (1-based) |
-| `totalPages` | int | no | Total number of pages |
-| `files` | array | no | `StructuredFileChange[]` — diff content for files on this page |
-| `summary` | object | no | `ContentPageSummary` — same shape as `get_pr_content` summary |
+--- Page 1 of 2 | hasMore: true | 5/8 files | ~12000 tokens | 4 Source, 1 Test ---
+```
 
 Error messages: `"Missing required parameter: pageNumber"`, `"pageNumber must be >= 1"`, `"pageNumber N exceeds total pages M"`, `"Error retrieving local content: ..."`.
 
 ---
 
-## 5. Shared DTO Reference
+## 5. Internal Data Structures
 
-| DTO | Used by | Fields |
+These C# classes are used internally by `PlainTextFormatter`, `ToolHandlerHelpers`, and `FileTokenMeasurement`. They are **not** JSON output DTOs — they have no `[JsonPropertyName]` attributes.
+
+| Type | Used by | Fields |
 |---|---|---|
-| **StructuredDiffResult** | `get_pr_diff`, `get_file_diff`, `get_local_file_diff` | `prNumber` (int?), `files` (StructuredFileChange[]), `manifest`? (ContentManifestResult), `pagination`? (PaginationMetadataResult — Feature 004), `stalenessWarning`? (StalenessWarningResult — Feature 004) |
-| **StructuredFileChange** | nested in StructuredDiffResult, `get_pr_content`, `get_local_content` | `path`, `changeType`, `skipReason`?, `additions`, `deletions`, `hunks` |
-| **StructuredHunk** | nested in above | `oldStart`, `oldCount`, `newStart`, `newCount`, `lines` |
-| **StructuredLine** | nested in above | `op`, `text` |
-| **PullRequestFileItem** | `get_pr_files`, `get_local_files` | `path`, `status`, `additions`, `deletions`, `changes`, `extension`, `isBinary`, `isGenerated`, `isTestFile`, `reviewPriority` |
-| **PullRequestFilesSummaryResult** | `get_pr_files`, `get_local_files` | `sourceFiles`, `testFiles`, `configFiles`, `docsFiles`, `binaryFiles`, `generatedFiles`, `highPriorityFiles` |
-| **ContentManifestResult** | `get_pr_diff`, `get_pr_files`, `get_local_files`, `get_local_file_diff` | `items` (ManifestEntryResult[]), `summary` (ManifestSummaryResult) |
+| **StructuredFileChange** | `PlainTextFormatter.FormatFileDiff`, `ToolHandlerHelpers.TruncateHunks`, `FileTokenMeasurement` | `path`, `changeType`, `skipReason`?, `additions`, `deletions`, `hunks` |
+| **StructuredHunk** | nested in `StructuredFileChange` | `oldStart`, `oldCount`, `newStart`, `newCount`, `lines` |
+| **StructuredLine** | nested in `StructuredHunk` | `op` (`"+"`, `"-"`, `" "`), `text` |
+| **ContentManifestResult** | `PlainTextFormatter.FormatManifestBlock`, `ToolHandlerHelpers.BuildPageManifest` | `items` (ManifestEntryResult[]), `summary` (ManifestSummaryResult) |
 | **ManifestEntryResult** | nested in ContentManifestResult | `path`, `estimatedTokens`, `status`, `priorityTier` |
-| **ManifestSummaryResult** | nested in ContentManifestResult | `totalItems`, `includedCount`, `partialCount`, `deferredCount`, `totalBudgetTokens`, `budgetUsed`, `budgetRemaining`, `utilizationPercent`, `includedOnThisPage`? (int? — Feature 004), `remainingAfterThisPage`? (int? — Feature 004), `totalPages`? (int? — Feature 004) |
-| **PullRequestMetadataResult** | `get_pr_metadata` | `prNumber`, `id`, `title`, `author` (AuthorInfo), `state`, `isDraft`, `createdAt`, `updatedAt`?, `base` (RefInfo), `head` (RefInfo), `stats` (PrStats), `commitShas`, `description` (DescriptionInfo), `source` (SourceInfo), `contentPaging`? (ContentPagingInfo) |
-| **ContentPagingInfo** | `get_pr_metadata` (when budget params provided) | `totalPages` (int), `totalFiles` (int), `budgetPerPageTokens` (int), `filesByPage` (PageFileCount[]) |
-| **PageFileCount** | nested in ContentPagingInfo | `pageNumber` (int), `fileCount` (int) |
-| **PullRequestContentPageResult** | `get_pr_content` | `prNumber` (int), `pageNumber` (int), `totalPages` (int), `files` (StructuredFileChange[]), `summary` (ContentPageSummary) |
-| **LocalContentPageResult** | `get_local_content` | `repositoryRoot` (string), `currentBranch`? (string), `scope` (string), `pageNumber` (int), `totalPages` (int), `files` (StructuredFileChange[]), `summary` (ContentPageSummary) |
-| **ContentPageSummary** | `get_pr_content`, `get_local_content` | `filesOnPage` (int), `totalFiles` (int), `estimatedTokens` (int), `hasMorePages` (bool), `categories` (Dictionary<string, int>) |
-| **AuthorInfo** | `get_pr_metadata` | `login`, `displayName` |
-| **RefInfo** | `get_pr_metadata` | `ref`, `sha` |
-| **PrStats** | `get_pr_metadata` | `commits`, `changedFiles`, `additions`, `deletions` |
-| **DescriptionInfo** | `get_pr_metadata` | `text`, `isTruncated`, `originalLength`, `returnedLength` |
-| **SourceInfo** | `get_pr_metadata` | `repository`, `url` |
-| **ContextBudgetMetadata** | context window awareness (Feature 003 integration) | `totalBudgetTokens`, `safeBudgetTokens`, `source`, `estimatedTokensUsed`?, `percentageUsed`?, `warnings`? |
-| **PaginationMetadataResult** | `get_pr_diff`, `get_pr_files`, `get_local_files` (Feature 004) | `currentPage` (int), `totalPages` (int), `hasMore` (bool), `currentPageReference` (string), `nextPageReference`? (string) |
-| **StalenessWarningResult** | `get_pr_diff`, `get_pr_files` (Feature 004) | `message` (string), `originalFingerprint` (string), `currentFingerprint` (string) |
+| **ManifestSummaryResult** | nested in ContentManifestResult | `totalItems`, `includedCount`, `partialCount`, `deferredCount`, `totalBudgetTokens`, `budgetUsed`, `budgetRemaining`, `utilizationPercent`, `includedOnThisPage`? (int?), `remainingAfterThisPage`? (int?), `totalPages`? (int?) |
+| **PaginationMetadataResult** | `PlainTextFormatter.FormatPaginationBlock` | `currentPage`, `totalPages`, `hasMore`, `currentPageReference`, `nextPageReference`? |
+| **StalenessWarningResult** | `PlainTextFormatter.FormatPaginationBlock`, `FormatManifestBlock` | `message`, `originalFingerprint`, `currentFingerprint` |
 
 ## 6. Enum & Constant Values
 

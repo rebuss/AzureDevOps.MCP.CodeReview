@@ -1,6 +1,6 @@
-using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol;
+using ModelContextProtocol.Protocol;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using REBUSS.Pure.Core;
@@ -113,30 +113,32 @@ public class GetPullRequestMetadataToolHandlerTests
             NullLogger<GetPullRequestMetadataToolHandler>.Instance);
     }
 
+    private static string AllText(IEnumerable<ContentBlock> blocks) =>
+        string.Join("\n", blocks.Cast<TextContentBlock>().Select(b => b.Text));
+
     // --- Existing behavior (backward compatibility) ---
 
     [Fact]
     public async Task ExecuteAsync_WithoutBudgetParams_ReturnsMetadataWithoutPaging()
     {
-        var json = await _handler.ExecuteAsync(prNumber: 42);
+        var blocks = (await _handler.ExecuteAsync(prNumber: 42)).ToList();
+        var text = AllText(blocks);
 
-        var doc = JsonDocument.Parse(json);
-        Assert.Equal(42, doc.RootElement.GetProperty("prNumber").GetInt32());
-        Assert.Equal("Fix the bug", doc.RootElement.GetProperty("title").GetString());
-        Assert.False(doc.RootElement.TryGetProperty("contentPaging", out _));
+        Assert.Contains("PR #42: Fix the bug", text);
+        Assert.DoesNotContain("Content paging:", text);
     }
 
     [Fact]
     public async Task ExecuteAsync_PreservesExistingFields()
     {
-        var json = await _handler.ExecuteAsync(prNumber: 42);
+        var blocks = (await _handler.ExecuteAsync(prNumber: 42)).ToList();
+        var text = AllText(blocks);
 
-        var doc = JsonDocument.Parse(json);
-        Assert.Equal("user1", doc.RootElement.GetProperty("author").GetProperty("login").GetString());
-        Assert.Equal("active", doc.RootElement.GetProperty("state").GetString());
-        Assert.Equal("main", doc.RootElement.GetProperty("base").GetProperty("ref").GetString());
-        Assert.Equal("feature/x", doc.RootElement.GetProperty("head").GetProperty("ref").GetString());
-        Assert.Equal(3, doc.RootElement.GetProperty("stats").GetProperty("changedFiles").GetInt32());
+        Assert.Contains("user1", text);
+        Assert.Contains("active", text);
+        Assert.Contains("main", text);
+        Assert.Contains("feature/x", text);
+        Assert.Contains("3 file(s)", text);
     }
 
     // --- Pagination info (diff-based measurement) ---
@@ -144,34 +146,31 @@ public class GetPullRequestMetadataToolHandlerTests
     [Fact]
     public async Task ExecuteAsync_WithModelName_ReturnsContentPaging()
     {
-        var json = await _handler.ExecuteAsync(prNumber: 42, modelName: "gpt-4o");
+        var blocks = (await _handler.ExecuteAsync(prNumber: 42, modelName: "gpt-4o")).ToList();
+        var text = AllText(blocks);
 
-        var doc = JsonDocument.Parse(json);
-        var paging = doc.RootElement.GetProperty("contentPaging");
-        Assert.Equal(1, paging.GetProperty("totalPages").GetInt32());
-        Assert.Equal(2, paging.GetProperty("totalFiles").GetInt32());
-        Assert.Equal(140000, paging.GetProperty("budgetPerPageTokens").GetInt32());
+        Assert.Contains("Content paging:", text);
+        Assert.Contains("1 page(s)", text);
+        Assert.Contains("2 file(s)", text);
+        Assert.Contains("140000 tokens/page", text);
     }
 
     [Fact]
     public async Task ExecuteAsync_WithMaxTokens_ReturnsContentPaging()
     {
-        var json = await _handler.ExecuteAsync(prNumber: 42, maxTokens: 50000);
+        var blocks = (await _handler.ExecuteAsync(prNumber: 42, maxTokens: 50000)).ToList();
+        var text = AllText(blocks);
 
-        var doc = JsonDocument.Parse(json);
-        Assert.True(doc.RootElement.TryGetProperty("contentPaging", out _));
+        Assert.Contains("Content paging:", text);
     }
 
     [Fact]
     public async Task ExecuteAsync_ContentPaging_FilesByPage_HasCorrectShape()
     {
-        var json = await _handler.ExecuteAsync(prNumber: 42, modelName: "gpt-4o");
+        var blocks = (await _handler.ExecuteAsync(prNumber: 42, modelName: "gpt-4o")).ToList();
+        var text = AllText(blocks);
 
-        var doc = JsonDocument.Parse(json);
-        var filesByPage = doc.RootElement.GetProperty("contentPaging").GetProperty("filesByPage");
-        Assert.Equal(1, filesByPage.GetArrayLength());
-        Assert.Equal(1, filesByPage[0].GetProperty("pageNumber").GetInt32());
-        Assert.Equal(2, filesByPage[0].GetProperty("fileCount").GetInt32());
+        Assert.Contains("p1:2f", text);
     }
 
     [Fact]
@@ -184,15 +183,12 @@ public class GetPullRequestMetadataToolHandlerTests
         _pageAllocator.Allocate(Arg.Any<IReadOnlyList<PackingCandidate>>(), Arg.Any<int>())
             .Returns(new PageAllocation(new[] { slice1, slice2 }, 2, 2));
 
-        var json = await _handler.ExecuteAsync(prNumber: 42, modelName: "gpt-4o");
+        var blocks = (await _handler.ExecuteAsync(prNumber: 42, modelName: "gpt-4o")).ToList();
+        var text = AllText(blocks);
 
-        var doc = JsonDocument.Parse(json);
-        var paging = doc.RootElement.GetProperty("contentPaging");
-        Assert.Equal(2, paging.GetProperty("totalPages").GetInt32());
-        var filesByPage = paging.GetProperty("filesByPage");
-        Assert.Equal(2, filesByPage.GetArrayLength());
-        Assert.Equal(1, filesByPage[0].GetProperty("fileCount").GetInt32());
-        Assert.Equal(1, filesByPage[1].GetProperty("fileCount").GetInt32());
+        Assert.Contains("2 page(s)", text);
+        Assert.Contains("p1:1f", text);
+        Assert.Contains("p2:1f", text);
     }
 
     [Fact]
@@ -260,12 +256,10 @@ public class GetPullRequestMetadataToolHandlerTests
                 CommitShas = new List<string>()
             });
 
-        var json = await _handler.ExecuteAsync(prNumber: 42);
+        var blocks = (await _handler.ExecuteAsync(prNumber: 42)).ToList();
+        var text = AllText(blocks);
 
-        var doc = JsonDocument.Parse(json);
-        var desc = doc.RootElement.GetProperty("description");
-        Assert.True(desc.GetProperty("isTruncated").GetBoolean());
-        Assert.Equal(800, desc.GetProperty("returnedLength").GetInt32());
+        Assert.Contains("... [truncated]", text);
     }
 
     [Fact]
@@ -281,15 +275,14 @@ public class GetPullRequestMetadataToolHandlerTests
         };
         _diffCache.GetOrFetchDiffAsync(Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Returns(emptyDiff);
-
         _pageAllocator.Allocate(Arg.Any<IReadOnlyList<PackingCandidate>>(), Arg.Any<int>())
             .Returns(new PageAllocation(Array.Empty<PageSlice>(), 0, 0));
 
-        var json = await _handler.ExecuteAsync(prNumber: 42, modelName: "gpt-4o");
+        var blocks = (await _handler.ExecuteAsync(prNumber: 42, modelName: "gpt-4o")).ToList();
+        var text = AllText(blocks);
 
-        var doc = JsonDocument.Parse(json);
-        var paging = doc.RootElement.GetProperty("contentPaging");
-        Assert.Equal(0, paging.GetProperty("totalPages").GetInt32());
-        Assert.Equal(0, paging.GetProperty("totalFiles").GetInt32());
+        Assert.Contains("Content paging:", text);
+        Assert.Contains("0 page(s)", text);
+        Assert.Contains("0 file(s)", text);
     }
 }

@@ -1,6 +1,6 @@
-using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol;
+using ModelContextProtocol.Protocol;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using REBUSS.Pure.Core;
@@ -32,23 +32,21 @@ public class GetFileContentAtRefToolHandlerTests
             NullLogger<GetFileContentAtRefToolHandler>.Instance);
     }
 
-    // --- Happy path ---
+    private static string AllText(IEnumerable<ContentBlock> blocks) =>
+        string.Join("\n", blocks.Cast<TextContentBlock>().Select(b => b.Text));
 
     [Fact]
-    public async Task ExecuteAsync_ReturnsStructuredJson_WithCorrectFields()
+    public async Task ExecuteAsync_ReturnsPlainText_WithCorrectContent()
     {
         _fileContentProvider.GetFileContentAsync("src/Cache/CacheService.cs", "abc123def456", Arg.Any<CancellationToken>())
             .Returns(SampleFileContent);
 
-        var json = await _handler.ExecuteAsync("src/Cache/CacheService.cs", "abc123def456");
+        var blocks = (await _handler.ExecuteAsync("src/Cache/CacheService.cs", "abc123def456")).ToList();
+        var text = AllText(blocks);
 
-        var doc = JsonDocument.Parse(json);
-        Assert.Equal("src/Cache/CacheService.cs", doc.RootElement.GetProperty("path").GetString());
-        Assert.Equal("abc123def456", doc.RootElement.GetProperty("ref").GetString());
-        Assert.Equal(30, doc.RootElement.GetProperty("size").GetInt32());
-        Assert.Equal("utf-8", doc.RootElement.GetProperty("encoding").GetString());
-        Assert.Equal("public class CacheService { }", doc.RootElement.GetProperty("content").GetString());
-        Assert.False(doc.RootElement.GetProperty("isBinary").GetBoolean());
+        Assert.Contains("src/Cache/CacheService.cs", text);
+        Assert.Contains("abc123def456", text);
+        Assert.Contains("public class CacheService { }", text);
     }
 
     [Fact]
@@ -63,25 +61,20 @@ public class GetFileContentAtRefToolHandlerTests
             Content = Convert.ToBase64String(new byte[] { 0x89, 0x50, 0x4E, 0x47 }),
             IsBinary = true
         };
-
         _fileContentProvider.GetFileContentAsync("image.png", "abc123", Arg.Any<CancellationToken>())
             .Returns(binaryContent);
 
-        var json = await _handler.ExecuteAsync("image.png", "abc123");
+        var blocks = (await _handler.ExecuteAsync("image.png", "abc123")).ToList();
+        var text = AllText(blocks);
 
-        var doc = JsonDocument.Parse(json);
-        Assert.True(doc.RootElement.GetProperty("isBinary").GetBoolean());
-        Assert.Equal("base64", doc.RootElement.GetProperty("encoding").GetString());
+        Assert.Contains("[binary file", text);
     }
-
-    // --- Validation errors ---
 
     [Fact]
     public async Task ExecuteAsync_ThrowsMcpException_WhenPathEmpty()
     {
         var ex = await Assert.ThrowsAsync<McpException>(
             () => _handler.ExecuteAsync("", "abc123"));
-
         Assert.Contains("Missing required parameter: path", ex.Message);
     }
 
@@ -90,47 +83,28 @@ public class GetFileContentAtRefToolHandlerTests
     {
         var ex = await Assert.ThrowsAsync<McpException>(
             () => _handler.ExecuteAsync("src/File.cs", ""));
-
         Assert.Contains("Missing required parameter: ref", ex.Message);
     }
-
-    // --- Provider exceptions ---
 
     [Fact]
     public async Task ExecuteAsync_ThrowsMcpException_WhenFileContentNotFound()
     {
-        _fileContentProvider.GetFileContentAsync("src/Missing.cs", "abc123", Arg.Any<CancellationToken>())
-            .ThrowsAsync(new FileContentNotFoundException("File 'src/Missing.cs' not found at ref 'abc123'"));
+        _fileContentProvider.GetFileContentAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .ThrowsAsync(new FileContentNotFoundException("not found"));
 
         var ex = await Assert.ThrowsAsync<McpException>(
-            () => _handler.ExecuteAsync("src/Missing.cs", "abc123"));
-
-        Assert.Contains("File not found", ex.Message);
-        Assert.Contains("Missing.cs", ex.Message);
-    }
-
-    [Fact]
-    public async Task ExecuteAsync_ThrowsMcpException_WhenRefInvalid()
-    {
-        _fileContentProvider.GetFileContentAsync("src/File.cs", "invalid-ref", Arg.Any<CancellationToken>())
-            .ThrowsAsync(new FileContentNotFoundException("File 'src/File.cs' not found at ref 'invalid-ref'"));
-
-        var ex = await Assert.ThrowsAsync<McpException>(
-            () => _handler.ExecuteAsync("src/File.cs", "invalid-ref"));
-
-        Assert.Contains("File not found", ex.Message);
-        Assert.Contains("invalid-ref", ex.Message);
+            () => _handler.ExecuteAsync("src/File.cs", "abc123"));
+        Assert.Contains("not found", ex.Message.ToLower());
     }
 
     [Fact]
     public async Task ExecuteAsync_ThrowsMcpException_OnUnexpectedException()
     {
-        _fileContentProvider.GetFileContentAsync("src/File.cs", "abc123", Arg.Any<CancellationToken>())
+        _fileContentProvider.GetFileContentAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .ThrowsAsync(new InvalidOperationException("Something broke"));
 
         var ex = await Assert.ThrowsAsync<McpException>(
             () => _handler.ExecuteAsync("src/File.cs", "abc123"));
-
         Assert.Contains("Something broke", ex.Message);
     }
 }

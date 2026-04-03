@@ -1,6 +1,6 @@
-using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol;
+using ModelContextProtocol.Protocol;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using REBUSS.Pure.Core;
@@ -66,6 +66,9 @@ public class GetLocalFileDiffToolHandlerTests
             NullLogger<GetLocalFileDiffToolHandler>.Instance);
     }
 
+    private static string AllText(IEnumerable<ContentBlock> blocks) =>
+        string.Join("\n", blocks.Cast<TextContentBlock>().Select(b => b.Text));
+
     // --- Happy path ---
 
     [Fact]
@@ -75,24 +78,13 @@ public class GetLocalFileDiffToolHandlerTests
                 "src/Service.cs", Arg.Any<LocalReviewScope>(), Arg.Any<CancellationToken>())
             .Returns(SampleDiff);
 
-        var json = await _handler.ExecuteAsync("src/Service.cs");
+        var blocks = (await _handler.ExecuteAsync("src/Service.cs")).ToList();
+        var text = AllText(blocks);
 
-        var doc = JsonDocument.Parse(json);
-        Assert.True(doc.RootElement.TryGetProperty("files", out var files));
-        Assert.Equal(1, files.GetArrayLength());
-
-        var file = files[0];
-        Assert.Equal("src/Service.cs", file.GetProperty("path").GetString());
-        Assert.Equal("edit", file.GetProperty("changeType").GetString());
-        Assert.Equal(1, file.GetProperty("additions").GetInt32());
-
-        // prNumber should be absent from local diff output
-        Assert.False(doc.RootElement.TryGetProperty("prNumber", out _));
-
-        var hunks = file.GetProperty("hunks");
-        Assert.Equal(1, hunks.GetArrayLength());
-        var lines = hunks[0].GetProperty("lines");
-        Assert.Equal(2, lines.GetArrayLength());
+        Assert.NotEmpty(blocks);
+        Assert.Contains("src/Service.cs", text);
+        Assert.Contains("-old code", text);
+        Assert.Contains("+new code", text);
     }
 
     [Fact]
@@ -199,11 +191,9 @@ public class GetLocalFileDiffToolHandlerTests
                 "src/Service.cs", Arg.Any<LocalReviewScope>(), Arg.Any<CancellationToken>())
             .Returns(SampleDiff);
 
-        var json = await _handler.ExecuteAsync("src/Service.cs");
+        var blocks = (await _handler.ExecuteAsync("src/Service.cs")).ToList();
+        var lastBlock = blocks.Cast<TextContentBlock>().Last().Text;
 
-        var doc = JsonDocument.Parse(json);
-        Assert.True(doc.RootElement.TryGetProperty("manifest", out var manifest));
-        Assert.True(manifest.TryGetProperty("summary", out var summary));
-        Assert.Equal(1, summary.GetProperty("totalItems").GetInt32());
+        Assert.Contains("Manifest:", lastBlock);
     }
 }

@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
+using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using REBUSS.Pure.Core;
 using REBUSS.Pure.Core.Exceptions;
@@ -17,12 +18,6 @@ using REBUSS.Pure.Tools.Shared;
 
 namespace REBUSS.Pure.Tools
 {
-    /// <summary>
-    /// Handles the execution of the get_pr_files MCP tool.
-    /// Validates input, delegates to <see cref="IPullRequestFilesProvider"/>,
-    /// and formats the result as a structured JSON response.
-    /// Integrates with response packing (F003) and deterministic pagination (F004).
-    /// </summary>
     [McpServerToolType]
     public class GetPullRequestFilesToolHandler
     {
@@ -34,13 +29,6 @@ namespace REBUSS.Pure.Tools
         private readonly IPageAllocator _pageAllocator;
         private readonly IPageReferenceCodec _pageReferenceCodec;
         private readonly ILogger<GetPullRequestFilesToolHandler> _logger;
-
-        private static readonly JsonSerializerOptions JsonOptions = new()
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            WriteIndented = true,
-            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-        };
 
         public GetPullRequestFilesToolHandler(
             IPullRequestDataProvider filesProvider,
@@ -64,13 +52,12 @@ namespace REBUSS.Pure.Tools
 
         [McpServerTool(Name = "get_pr_files"), Description(
             "Retrieves structured information about all files changed in a specific Pull Request. " +
-            "Returns per-file metadata (status, additions, deletions, extension, " +
-            "binary/generated/test flags, review priority) and an aggregated summary by category.")]
-        public async Task<string> ExecuteAsync(
+            "Returns a plain-text table of files with status, additions, deletions, and classification flags.")]
+        public async Task<IEnumerable<ContentBlock>> ExecuteAsync(
             [Description("The Pull Request number/ID to retrieve the file list for")] int? prNumber = null,
-            [Description("Optional model name (e.g. 'Claude Sonnet') to resolve context window size")] string? modelName = null,
+            [Description("Optional model name (e.g. '\''Claude Sonnet'\'') to resolve context window size")] string? modelName = null,
             [Description("Optional explicit context window size in tokens")] int? maxTokens = null,
-            [Description("Opaque page reference from a previous response. Encodes all context needed to re-derive the page.")] string? pageReference = null,
+            [Description("Opaque page reference from a previous response.")] string? pageReference = null,
             [Description("Page number for direct access (requires original params + budget)")] int? pageNumber = null,
             CancellationToken cancellationToken = default)
         {
@@ -129,19 +116,17 @@ namespace REBUSS.Pure.Tools
 
                 if (!hasExplicitBudget && pageReference == null)
                 {
-                    var result = BuildPackedResult(effectivePrNumber.Value, prFiles, budget.SafeBudgetTokens);
-                    var json = JsonSerializer.Serialize(result, JsonOptions);
+                    var blocks = BuildPackedBlocks(effectivePrNumber.Value, prFiles, budget.SafeBudgetTokens);
                     sw.Stop();
                     _logger.LogInformation(Resources.LogGetPrFilesCompletedF003,
                         effectivePrNumber, prFiles.Files.Count, sw.ElapsedMilliseconds);
-                    return json;
+                    return blocks;
                 }
 
-                // Feature 004 path
-                var fileItems = BuildFileItems(prFiles);
                 var candidates = ToolHandlerHelpers.BuildCandidates(
-                    fileItems, effectiveBudget, _tokenEstimator, _fileClassifier,
-                    fi => fi.Path, fi => fi.Additions + fi.Deletions);
+                    prFiles.Files, effectiveBudget, _tokenEstimator, _fileClassifier,
+                    fi => fi.Path, fi => fi.Additions + fi.Deletions,
+                    fi => PlainTextFormatter.FormatFileEntry(fi));
                 var sortedCandidates = ToolHandlerHelpers.SortCandidates(candidates);
 
                 PageAllocation allocation;
@@ -159,9 +144,8 @@ namespace REBUSS.Pure.Tools
                     throw new McpException(string.Format(Resources.ErrorPageNumberOutOfRange, requestedPage, allocation.TotalPages));
 
                 var pageSlice = allocation.Pages[requestedPage - 1];
-
                 var packedFiles = ToolHandlerHelpers.ExtractPageFiles(
-                    fileItems, sortedCandidates, pageSlice, fi => fi.Path);
+                    prFiles.Files, sortedCandidates, pageSlice, fi => fi.Path);
 
                 StalenessWarningResult? staleness = null;
                 if (metadataTask != null)
@@ -186,40 +170,23 @@ namespace REBUSS.Pure.Tools
                 }
 
                 var requestParams = JsonSerializer.SerializeToElement(new { prNumber = effectivePrNumber });
-
                 var paginationMeta = PaginationOrchestrator.BuildPaginationMetadata(
                     allocation, requestedPage, _pageReferenceCodec,
                     "get_pr_files", requestParams, effectiveBudget, currentFingerprint);
-
                 var manifestResult = ToolHandlerHelpers.BuildPageManifest(sortedCandidates, pageSlice, allocation, effectiveBudget);
 
-                var paginatedResult = new PullRequestFilesResult
-                {
-                    PrNumber = effectivePrNumber.Value,
-                    TotalFiles = prFiles.Files.Count,
-                    Files = packedFiles,
-                    Summary = new PullRequestFilesSummaryResult
-                    {
-                        SourceFiles = prFiles.Summary.SourceFiles,
-                        TestFiles = prFiles.Summary.TestFiles,
-                        ConfigFiles = prFiles.Summary.ConfigFiles,
-                        DocsFiles = prFiles.Summary.DocsFiles,
-                        BinaryFiles = prFiles.Summary.BinaryFiles,
-                        GeneratedFiles = prFiles.Summary.GeneratedFiles,
-                        HighPriorityFiles = prFiles.Summary.HighPriorityFiles
-                    },
-                    Manifest = manifestResult,
-                    Pagination = paginationMeta,
-                    StalenessWarning = staleness
-                };
+                var fileListText = PlainTextFormatter.FormatFileList(packedFiles, prFiles.Summary, $"PR #{effectivePrNumber} (page {requestedPage}/{allocation.TotalPages})");
 
-                var jsonResult = JsonSerializer.Serialize(paginatedResult, JsonOptions);
                 sw.Stop();
-                _logger.LogInformation(
-                    Resources.LogGetPrFilesCompletedF004,
+                _logger.LogInformation(Resources.LogGetPrFilesCompletedF004,
                     effectivePrNumber, requestedPage, allocation.TotalPages, sw.ElapsedMilliseconds);
 
-                return jsonResult;
+                return
+                [
+                    new TextContentBlock { Text = fileListText },
+                    new TextContentBlock { Text = PlainTextFormatter.FormatManifestBlock(manifestResult) },
+                    new TextContentBlock { Text = PlainTextFormatter.FormatPaginationBlock(paginationMeta, staleness) }
+                ];
             }
             catch (PullRequestNotFoundException ex)
             {
@@ -234,59 +201,27 @@ namespace REBUSS.Pure.Tools
             }
         }
 
-        // --- Build helpers ---
-
-        private static List<PullRequestFileItem> BuildFileItems(PullRequestFiles prFiles)
+        private IEnumerable<ContentBlock> BuildPackedBlocks(int prNumber, PullRequestFiles prFiles, int safeBudgetTokens)
         {
-            return prFiles.Files.Select(f => new PullRequestFileItem
-            {
-                Path = f.Path,
-                Status = f.Status,
-                Additions = f.Additions,
-                Deletions = f.Deletions,
-                Changes = f.Changes,
-                Extension = f.Extension,
-                IsBinary = f.IsBinary,
-                IsGenerated = f.IsGenerated,
-                IsTestFile = f.IsTestFile,
-                ReviewPriority = f.ReviewPriority
-            }).ToList();
-        }
-
-        // --- F003 result builder ---
-
-        private PullRequestFilesResult BuildPackedResult(int prNumber, PullRequestFiles prFiles, int safeBudgetTokens)
-        {
-            var fileItems = BuildFileItems(prFiles);
             var candidates = ToolHandlerHelpers.BuildCandidates(
-                fileItems, safeBudgetTokens, _tokenEstimator, _fileClassifier,
-                fi => fi.Path, fi => fi.Additions + fi.Deletions);
+                prFiles.Files, safeBudgetTokens, _tokenEstimator, _fileClassifier,
+                fi => fi.Path, fi => fi.Additions + fi.Deletions,
+                fi => PlainTextFormatter.FormatFileEntry(fi));
             var decision = _packer.Pack(candidates, safeBudgetTokens);
 
-            var packedFiles = new List<PullRequestFileItem>();
+            var packedFiles = new List<PullRequestFileInfo>();
             for (var i = 0; i < decision.Items.Count; i++)
             {
                 if (decision.Items[i].Status != PackingItemStatus.Deferred)
-                    packedFiles.Add(fileItems[i]);
+                    packedFiles.Add(prFiles.Files[i]);
             }
 
-            return new PullRequestFilesResult
-            {
-                PrNumber = prNumber,
-                TotalFiles = prFiles.Files.Count,
-                Files = packedFiles,
-                Summary = new PullRequestFilesSummaryResult
-                {
-                    SourceFiles = prFiles.Summary.SourceFiles,
-                    TestFiles = prFiles.Summary.TestFiles,
-                    ConfigFiles = prFiles.Summary.ConfigFiles,
-                    DocsFiles = prFiles.Summary.DocsFiles,
-                    BinaryFiles = prFiles.Summary.BinaryFiles,
-                    GeneratedFiles = prFiles.Summary.GeneratedFiles,
-                    HighPriorityFiles = prFiles.Summary.HighPriorityFiles
-                },
-                Manifest = ContentManifestResult.From(decision.Manifest)
-            };
+            var fileListText = PlainTextFormatter.FormatFileList(packedFiles, prFiles.Summary, $"PR #{prNumber}");
+            return
+            [
+                new TextContentBlock { Text = fileListText },
+                new TextContentBlock { Text = PlainTextFormatter.FormatManifestBlock(ContentManifestResult.From(decision.Manifest)) }
+            ];
         }
     }
 }

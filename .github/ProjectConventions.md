@@ -26,7 +26,9 @@ MCP stdin → SDK (JSON-RPC dispatch) → [McpServerTool] method on GetPullReque
     → IPullRequestDataProvider.GetDiffAsync(42)  [DI → AzureDevOpsScmClient or GitHubScmClient]
       → DiffProvider → API client (HTTP) → Parser (JSON → domain) → StructuredDiffBuilder (hunks)
     ← PullRequestDiff
-  → map to StructuredDiffResult → serialize JSON string → returned to SDK → JSON-RPC response on stdout
+  → FileTokenMeasurement.BuildCandidatesFromDiff → StructuredFileChange models
+  → PlainTextFormatter.FormatFileDiff (one block per file) + FormatManifestBlock
+  → IEnumerable<ContentBlock> → returned to SDK → JSON-RPC response on stdout
 ```
 
 ### Local Review: `get_local_files(scope)`
@@ -34,7 +36,8 @@ MCP stdin → SDK (JSON-RPC dispatch) → [McpServerTool] method on GetPullReque
 MCP stdin → SDK → [McpServerTool] method on GetLocalChangesFilesToolHandler
   → ExecuteAsync → ILocalReviewProvider.GetFilesAsync(scope)
     → ILocalGitClient (git child process: diff --name-status) → FileClassifier
-  ← LocalReviewFiles → map to LocalReviewFilesResult → JSON on stdout
+  ← LocalReviewFiles → PlainTextFormatter.FormatFileList + FormatManifestBlock
+  → IEnumerable<ContentBlock> on stdout
 ```
 
 ### CLI: `rebuss-pure init`
@@ -49,7 +52,7 @@ args → CliArgumentParser.Parse → Program.RunCliCommandAsync → InitCommand.
 | Aspect | Convention |
 |---|---|
 | **Framework** | .NET 10 (`net10.0`), C# 14, nullable `enable`, implicit usings `enable` |
-| **JSON (tool output)** | `camelCase`, `WriteIndented = true`, `WhenWritingNull` ignore; `[JsonPropertyName]` on all DTO properties |
+| **Tool output** | Plain text `IEnumerable<ContentBlock>` (`TextContentBlock` per file/section); formatted by `PlainTextFormatter`; no JSON serialization in handler output |
 | **JSON (MCP protocol)** | Handled by MCP SDK internally (compact JSON-RPC envelope) |
 | **Naming** | `*Provider`, `*Parser`, `*ToolHandler`, `*ScmClient`; `I*` interfaces; `_field` privates |
 | **Pure helpers** | `internal static` methods (e.g. `ParseRemoteUrl`, `MapState`) — unit-testable via `InternalsVisibleTo` |
@@ -77,10 +80,10 @@ args → CliArgumentParser.Parse → Program.RunCliCommandAsync → InitCommand.
 ## 5. Extension Recipes
 
 ### 5.1 Add a new MCP tool
-1. **Output model** → `REBUSS.Pure/Tools/Models/{Name}Result.cs` (class with `[JsonPropertyName]` on all properties)
-2. **Handler** → `REBUSS.Pure/Tools/{Name}ToolHandler.cs`: public class with `[McpServerToolType]`, public method with `[McpServerTool(Name = "tool_name")]` and `[Description]` on method + parameters. Returns `Task<string>` (JSON). Inject dependencies via constructor.
+1. **Handler** → `REBUSS.Pure/Tools/{Name}ToolHandler.cs`: public class with `[McpServerToolType]`, public method with `[McpServerTool(Name = "tool_name")]` and `[Description]` on method + parameters. Returns `Task<IEnumerable<ContentBlock>>`. Inject dependencies via constructor.
+2. **Formatter** → add formatter methods to `PlainTextFormatter` if new output format is needed; otherwise reuse existing methods
 3. **Discovery** → automatic via `WithToolsFromAssembly()` in `Program.cs` — no manual DI registration needed for tools
-4. **Tests** → `REBUSS.Pure.Tests/Tools/{Name}ToolHandlerTests.cs` (mock provider, call `ExecuteAsync` directly, verify JSON structure)
+4. **Tests** → `REBUSS.Pure.Tests/Tools/{Name}ToolHandlerTests.cs` (mock provider, call `ExecuteAsync` directly, use `AllText(blocks)` helper to verify text content)
 5. **Smoke** → update `REBUSS.Pure.SmokeTests/McpProtocol/McpServerSmokeTests.cs` tool count assertion
 
 ### 5.2 Add a new domain model
@@ -90,10 +93,12 @@ args → CliArgumentParser.Parse → Program.RunCliCommandAsync → InitCommand.
 4. **Providers** → update relevant fine-grained provider in each provider's `Providers/` folder
 5. **Tests** → parser tests + provider tests in both `AzureDevOps.Tests` and `GitHub.Tests`
 
-### 5.3 Modify JSON output format of existing tool
-1. **DTO** → edit model in `REBUSS.Pure/Tools/Models/`; preserve or add properties (prefer additive changes)
-2. **Handler** → update mapping logic in the tool handler's `Build*Result` method
-3. **Tests** → update unit tests (JSON assertions), smoke tests (structure), and contract tests (live expectations)
+### 5.3 Modify plain text output of existing tool
+1. **Formatter** → edit `PlainTextFormatter` method for this tool's output section
+2. **Handler** → update call site in the tool handler if the formatter signature changes
+3. **Tests** → update unit tests (text content assertions in `AllText(blocks)`) and smoke tests
+
+> **Note:** JSON output DTOs (`*Result.cs` with `[JsonPropertyName]`) have been removed. Output is produced entirely by `PlainTextFormatter` methods.
 
 ### 5.4 Add a new `IReviewAnalyzer`
 1. **Implementation** → `REBUSS.Pure.Core/Analysis/{Name}Analyzer.cs` implementing `IReviewAnalyzer` (`SectionKey`, `DisplayName`, `Order`, `CanAnalyze`, `AnalyzeAsync`)

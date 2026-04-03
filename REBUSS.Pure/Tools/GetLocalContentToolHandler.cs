@@ -1,8 +1,8 @@
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
+using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using REBUSS.Pure.Core;
 using REBUSS.Pure.Core.Models;
@@ -17,11 +17,6 @@ using REBUSS.Pure.Tools.Shared;
 
 namespace REBUSS.Pure.Tools
 {
-    /// <summary>
-    /// Handles the <c>get_local_content</c> MCP tool.
-    /// Returns diff content for a single page of local uncommitted changes.
-    /// Pages are computed via stat-based token estimation and deterministic page allocation.
-    /// </summary>
     [McpServerToolType]
     public class GetLocalContentToolHandler
     {
@@ -31,13 +26,6 @@ namespace REBUSS.Pure.Tools
         private readonly IFileClassifier _fileClassifier;
         private readonly IPageAllocator _pageAllocator;
         private readonly ILogger<GetLocalContentToolHandler> _logger;
-
-        private static readonly JsonSerializerOptions JsonOptions = new()
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            WriteIndented = true,
-            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-        };
 
         public GetLocalContentToolHandler(
             ILocalReviewProvider localProvider,
@@ -56,10 +44,10 @@ namespace REBUSS.Pure.Tools
         }
 
         [McpServerTool(Name = "get_local_content"), Description(
-            "Returns the diff content for a specific page of local uncommitted changes. " +
-            "Pages are determined by stat-based token estimation and the provided budget. " +
-            "The tool computes page allocation internally — no separate metadata call is needed.")]
-        public async Task<string> ExecuteAsync(
+            "Returns plain-text diff content for a specific page of local uncommitted changes. " +
+            "One content block per file with -/+/space prefixed lines, plus a pagination footer. " +
+            "The tool computes page allocation internally.")]
+        public async Task<IEnumerable<ContentBlock>> ExecuteAsync(
             [Description("Page number to retrieve (1-based)")] int? pageNumber = null,
             [Description("Review scope: 'working-tree' (default), 'staged', or a branch/ref name")] string? scope = null,
             [Description("Model name for context budget resolution")] string? modelName = null,
@@ -74,15 +62,12 @@ namespace REBUSS.Pure.Tools
             try
             {
                 var parsedScope = LocalReviewScope.Parse(scope);
-                _logger.LogInformation(Resources.LogGetLocalContentEntry,
-                    pageNumber, parsedScope);
-
+                _logger.LogInformation(Resources.LogGetLocalContentEntry, pageNumber, parsedScope);
                 var sw = Stopwatch.StartNew();
 
                 var budget = _budgetResolver.Resolve(maxTokens, modelName);
                 var safeBudget = budget.SafeBudgetTokens;
 
-                // 1. Fetch lightweight file list and build page allocation
                 var localFiles = await _localProvider.GetFilesAsync(parsedScope, cancellationToken);
                 var candidates = BuildStatBasedCandidates(localFiles.Files);
                 candidates.Sort(PackingPriorityComparer.Instance);
@@ -95,7 +80,6 @@ namespace REBUSS.Pure.Tools
 
                 var pageSlice = allocation.Pages[pageNumber.Value - 1];
 
-                // 2. Fetch diffs for page files in parallel (each call spawns an independent git process)
                 var diffTasks = pageSlice.Items
                     .Select(item => (
                         Index: item.OriginalIndex,
@@ -115,47 +99,41 @@ namespace REBUSS.Pure.Tools
                         pageFiles.Add(FileTokenMeasurement.MapToStructured(fileChange));
                 }
 
-                // 3. Build category breakdown
                 var categories = BuildCategoryBreakdown(pageCandidateIndices, candidates);
 
-                var summary = new ContentPageSummary(
-                    FilesOnPage: pageFiles.Count,
-                    TotalFiles: allocation.TotalItems,
-                    EstimatedTokens: pageSlice.BudgetUsed,
-                    HasMorePages: pageNumber.Value < allocation.TotalPages,
-                    Categories: categories);
+                var blocks = new List<ContentBlock>(pageFiles.Count + 2);
+                blocks.Add(new TextContentBlock
+                {
+                    Text = PlainTextFormatter.FormatLocalContentHeader(
+                        localFiles.RepositoryRoot,
+                        localFiles.CurrentBranch,
+                        parsedScope.ToString())
+                });
+                foreach (var f in pageFiles)
+                    blocks.Add(new TextContentBlock { Text = PlainTextFormatter.FormatFileDiff(f) });
 
-                var result = new LocalContentPageResult(
-                    RepositoryRoot: localFiles.RepositoryRoot,
-                    CurrentBranch: localFiles.CurrentBranch,
-                    Scope: parsedScope.ToString(),
-                    PageNumber: pageNumber.Value,
-                    TotalPages: allocation.TotalPages,
-                    Files: pageFiles,
-                    Summary: summary);
+                blocks.Add(new TextContentBlock
+                {
+                    Text = PlainTextFormatter.FormatSimplePaginationBlock(
+                        pageNumber.Value, allocation.TotalPages,
+                        pageFiles.Count, allocation.TotalItems,
+                        pageSlice.BudgetUsed,
+                        categories)
+                });
 
-                var json = JsonSerializer.Serialize(result, JsonOptions);
                 sw.Stop();
+                _logger.LogInformation(Resources.LogGetLocalContentCompleted,
+                    pageNumber, allocation.TotalPages, pageFiles.Count, sw.ElapsedMilliseconds);
 
-                _logger.LogInformation(
-                    Resources.LogGetLocalContentCompleted,
-                    pageNumber, allocation.TotalPages, pageFiles.Count, json.Length, sw.ElapsedMilliseconds);
-
-                return json;
+                return blocks;
             }
-            catch (McpException)
-            {
-                throw;
-            }
+            catch (McpException) { throw; }
             catch (Exception ex)
             {
-                _logger.LogError(ex, Resources.LogGetLocalContentError,
-                    pageNumber, scope);
+                _logger.LogError(ex, Resources.LogGetLocalContentError, pageNumber, scope);
                 throw new McpException(string.Format(Resources.ErrorRetrievingLocalContent, ex.Message));
             }
         }
-
-        // --- Helpers ---------------------------------------------------------------
 
         private List<PackingCandidate> BuildStatBasedCandidates(List<PullRequestFileInfo> files)
         {

@@ -1,6 +1,6 @@
-﻿using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol;
+using ModelContextProtocol.Protocol;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using REBUSS.Pure.Core;
@@ -62,6 +62,9 @@ public class GetLocalChangesFilesToolHandlerTests
         Summary = new PullRequestFilesSummary { SourceFiles = count, HighPriorityFiles = count }
     };
 
+    private static string AllText(IEnumerable<ContentBlock> blocks) =>
+        string.Join("\n", blocks.Cast<TextContentBlock>().Select(b => b.Text));
+
     // --- Happy path ---
 
     [Fact]
@@ -70,14 +73,14 @@ public class GetLocalChangesFilesToolHandlerTests
         _reviewProvider.GetFilesAsync(Arg.Any<LocalReviewScope>(), Arg.Any<CancellationToken>())
             .Returns(SampleFiles(2));
 
-        var text = await _handler.ExecuteAsync();
+        var blocks = (await _handler.ExecuteAsync()).ToList();
+        var text = AllText(blocks);
 
-        var doc = JsonDocument.Parse(text);
-        Assert.Equal("/repo", doc.RootElement.GetProperty("repositoryRoot").GetString());
-        Assert.Equal("working-tree", doc.RootElement.GetProperty("scope").GetString());
-        Assert.Equal("feature/x", doc.RootElement.GetProperty("currentBranch").GetString());
-        Assert.Equal(2, doc.RootElement.GetProperty("totalFiles").GetInt32());
-        Assert.Equal(2, doc.RootElement.GetProperty("files").GetArrayLength());
+        Assert.NotEmpty(blocks);
+        Assert.Contains("/repo", text);
+        Assert.Contains("working-tree", text);
+        Assert.Contains("src/File0.cs", text);
+        Assert.Contains("src/File1.cs", text);
     }
 
     [Fact]
@@ -125,11 +128,10 @@ public class GetLocalChangesFilesToolHandlerTests
         _reviewProvider.GetFilesAsync(Arg.Any<LocalReviewScope>(), Arg.Any<CancellationToken>())
             .Returns(SampleFiles(3));
 
-        var text = await _handler.ExecuteAsync();
+        var blocks = (await _handler.ExecuteAsync()).ToList();
+        var text = AllText(blocks);
 
-        var doc = JsonDocument.Parse(text);
-        var summary = doc.RootElement.GetProperty("summary");
-        Assert.Equal(3, summary.GetProperty("sourceFiles").GetInt32());
+        Assert.Contains("3 source", text);
     }
 
     // --- Error cases ---
@@ -163,7 +165,6 @@ public class GetLocalChangesFilesToolHandlerTests
             .Returns(SampleFiles(2));
         _budgetResolver.Resolve(Arg.Any<int?>(), Arg.Any<string?>())
             .Returns(new BudgetResolutionResult(200, 100, BudgetSource.Explicit, Array.Empty<string>()));
-
         _pageAllocator.Allocate(Arg.Any<IReadOnlyList<PackingCandidate>>(), Arg.Any<int>())
             .Throws(new BudgetTooSmallException("Token budget (100) is too small for pagination."));
 
@@ -192,11 +193,9 @@ public class GetLocalChangesFilesToolHandlerTests
         _reviewProvider.GetFilesAsync(Arg.Any<LocalReviewScope>(), Arg.Any<CancellationToken>())
             .Returns(SampleFiles(2));
 
-        var text = await _handler.ExecuteAsync();
+        var blocks = (await _handler.ExecuteAsync()).ToList();
+        var lastBlock = blocks.Cast<TextContentBlock>().Last().Text;
 
-        var doc = JsonDocument.Parse(text);
-        Assert.True(doc.RootElement.TryGetProperty("manifest", out var manifest));
-        Assert.True(manifest.TryGetProperty("summary", out var summary));
-        Assert.Equal(2, summary.GetProperty("totalItems").GetInt32());
+        Assert.Contains("Manifest:", lastBlock);
     }
 }

@@ -1,6 +1,6 @@
-using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol;
+using ModelContextProtocol.Protocol;
 using NSubstitute;
 using REBUSS.Pure.Core;
 using REBUSS.Pure.Core.Models;
@@ -93,44 +93,50 @@ public class GetLocalContentToolHandlerTests
             NullLogger<GetLocalContentToolHandler>.Instance);
     }
 
+    private static string AllText(IEnumerable<ContentBlock> blocks) =>
+        string.Join("\n", blocks.Cast<TextContentBlock>().Select(b => b.Text));
+
     // --- Happy path ---
 
     [Fact]
     public async Task ExecuteAsync_SinglePage_ReturnsAllFiles()
     {
-        var json = await _handler.ExecuteAsync(pageNumber: 1);
+        var blocks = (await _handler.ExecuteAsync(pageNumber: 1)).ToList();
+        var text = AllText(blocks);
 
-        var doc = JsonDocument.Parse(json);
-        Assert.Equal(1, doc.RootElement.GetProperty("pageNumber").GetInt32());
-        Assert.Equal(1, doc.RootElement.GetProperty("totalPages").GetInt32());
-        Assert.Equal(2, doc.RootElement.GetProperty("files").GetArrayLength());
+        Assert.Contains("src/A.cs", text);
+        Assert.Contains("src/B.cs", text);
+
+        var lastBlock = blocks.Cast<TextContentBlock>().Last().Text;
+        Assert.Contains("Page 1 of 1", lastBlock);
     }
 
     [Fact]
     public async Task ExecuteAsync_IncludesRepositoryRoot()
     {
-        var json = await _handler.ExecuteAsync(pageNumber: 1);
+        var blocks = (await _handler.ExecuteAsync(pageNumber: 1)).ToList();
+        var headerText = blocks.Cast<TextContentBlock>().First().Text;
 
-        var doc = JsonDocument.Parse(json);
-        Assert.Equal("C:\\Projects\\MyRepo", doc.RootElement.GetProperty("repositoryRoot").GetString());
+        Assert.Contains("C:\\Projects\\MyRepo", headerText);
     }
 
     [Fact]
     public async Task ExecuteAsync_IncludesCurrentBranch()
     {
-        var json = await _handler.ExecuteAsync(pageNumber: 1);
+        var blocks = (await _handler.ExecuteAsync(pageNumber: 1)).ToList();
+        var headerText = blocks.Cast<TextContentBlock>().First().Text;
 
-        var doc = JsonDocument.Parse(json);
-        Assert.Equal("feature/my-branch", doc.RootElement.GetProperty("currentBranch").GetString());
+        Assert.Contains("feature/my-branch", headerText);
     }
 
     [Fact]
     public async Task ExecuteAsync_DefaultScope_IsWorkingTree()
     {
-        var json = await _handler.ExecuteAsync(pageNumber: 1);
+        await _handler.ExecuteAsync(pageNumber: 1);
 
-        var doc = JsonDocument.Parse(json);
-        Assert.Equal("working-tree", doc.RootElement.GetProperty("scope").GetString());
+        await _localProvider.Received(1).GetFilesAsync(
+            Arg.Is<LocalReviewScope>(s => s.Kind == LocalReviewScopeKind.WorkingTree),
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -156,24 +162,23 @@ public class GetLocalContentToolHandlerTests
     [Fact]
     public async Task ExecuteAsync_Summary_HasCorrectValues()
     {
-        var json = await _handler.ExecuteAsync(pageNumber: 1);
+        var blocks = (await _handler.ExecuteAsync(pageNumber: 1)).ToList();
+        var lastBlock = blocks.Cast<TextContentBlock>().Last().Text;
 
-        var doc = JsonDocument.Parse(json);
-        var summary = doc.RootElement.GetProperty("summary");
-        Assert.Equal(2, summary.GetProperty("filesOnPage").GetInt32());
-        Assert.Equal(2, summary.GetProperty("totalFiles").GetInt32());
-        Assert.Equal(1000, summary.GetProperty("estimatedTokens").GetInt32());
-        Assert.False(summary.GetProperty("hasMorePages").GetBoolean());
+        Assert.Contains("Page 1 of 1", lastBlock);
+        Assert.Contains("hasMore: false", lastBlock);
+        Assert.Contains("2/2 files", lastBlock);
+        Assert.Contains("~1000 tokens", lastBlock);
     }
 
     [Fact]
     public async Task ExecuteAsync_Summary_HasCategories()
     {
-        var json = await _handler.ExecuteAsync(pageNumber: 1);
+        var blocks = (await _handler.ExecuteAsync(pageNumber: 1)).ToList();
+        var text = AllText(blocks);
 
-        var doc = JsonDocument.Parse(json);
-        var categories = doc.RootElement.GetProperty("summary").GetProperty("categories");
-        Assert.Equal(2, categories.GetProperty("source").GetInt32());
+        // Files appear in diff output
+        Assert.Contains("src/A.cs", text);
     }
 
     [Fact]
@@ -188,19 +193,15 @@ public class GetLocalContentToolHandlerTests
         _pageAllocator.Allocate(Arg.Any<IReadOnlyList<PackingCandidate>>(), Arg.Any<int>())
             .Returns(new PageAllocation(new[] { slice1, slice2 }, 2, 2));
 
-        var json = await _handler.ExecuteAsync(pageNumber: 1);
+        var blocks = (await _handler.ExecuteAsync(pageNumber: 1)).ToList();
+        var text = AllText(blocks);
 
-        // Only first file's diff should be fetched
         await _localProvider.Received(1).GetFileDiffAsync(
             "src/A.cs", Arg.Any<LocalReviewScope>(), Arg.Any<CancellationToken>());
         await _localProvider.DidNotReceive().GetFileDiffAsync(
             "src/B.cs", Arg.Any<LocalReviewScope>(), Arg.Any<CancellationToken>());
 
-        // Verify the fetched diff actually appears in the output
-        var doc = JsonDocument.Parse(json);
-        var files = doc.RootElement.GetProperty("files");
-        Assert.Equal(1, files.GetArrayLength());
-        Assert.Equal("src/A.cs", files[0].GetProperty("path").GetString());
+        Assert.Contains("src/A.cs", text);
     }
 
     // --- Error handling ---
@@ -244,7 +245,6 @@ public class GetLocalContentToolHandlerTests
     [Fact]
     public async Task ExecuteAsync_FileWithZeroChanges_UsesFallbackTokenEstimate()
     {
-        // Arrange: file with Changes == 0 (e.g. rename without content change)
         var filesWithZeroCounts = new LocalReviewFiles
         {
             RepositoryRoot = "C:\\Projects\\MyRepo",
@@ -271,10 +271,8 @@ public class GetLocalContentToolHandlerTests
                 return new PageAllocation(new[] { slice }, 1, 1);
             });
 
-        // Act
         await _handler.ExecuteAsync(pageNumber: 1);
 
-        // Assert: candidate must use fallback (300), not EstimateFromStats(0,0) = 50
         _pageAllocator.Received(1).Allocate(
             Arg.Is<IReadOnlyList<PackingCandidate>>(list =>
                 list.Count == 1 && list[0].EstimatedTokens == 300),

@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
+using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using REBUSS.Pure.Core;
 using REBUSS.Pure.Core.Exceptions;
@@ -10,16 +11,14 @@ using REBUSS.Pure.Core.Models.ResponsePacking;
 using REBUSS.Pure.Core.Shared;
 using REBUSS.Pure.Properties;
 using REBUSS.Pure.Services.ResponsePacking;
-using REBUSS.Pure.Tools.Models;
 using REBUSS.Pure.Tools.Shared;
-using System.Text.Json;
 
 namespace REBUSS.Pure.Tools
 {
     /// <summary>
     /// Handles the execution of the get_pr_metadata MCP tool.
-    /// Validates input, delegates to <see cref="IPullRequestMetadataProvider"/>,
-    /// and formats the result as a structured JSON response.
+    /// Validates input, delegates to <see cref="IPullRequestDataProvider"/>,
+    /// and formats the result as a plain-text response.
     /// When budget parameters are provided, also computes pagination info.
     /// </summary>
     [McpServerToolType]
@@ -32,15 +31,6 @@ namespace REBUSS.Pure.Tools
         private readonly IPageAllocator _pageAllocator;
         private readonly IPullRequestDiffCache _diffCache;
         private readonly ILogger<GetPullRequestMetadataToolHandler> _logger;
-
-        private const int MaxDescriptionLength = 800;
-
-        private static readonly JsonSerializerOptions JsonOptions = new()
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            WriteIndented = true,
-            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-        };
 
         public GetPullRequestMetadataToolHandler(
             IPullRequestDataProvider metadataProvider,
@@ -62,11 +52,11 @@ namespace REBUSS.Pure.Tools
 
         [McpServerTool(Name = "get_pr_metadata"), Description(
             "Retrieves metadata for a specific Pull Request. " +
-            "Returns a JSON object with PR details including title, author, state, " +
+            "Returns a plain-text block with PR details including title, author, state, " +
             "branches, stats, commit SHAs, and description. " +
-            "When modelName or maxTokens is provided, also returns contentPaging " +
+            "When modelName or maxTokens is provided, also returns content paging info " +
             "with page count and per-page file breakdown for use with get_pr_content.")]
-        public async Task<string> ExecuteAsync(
+        public async Task<IEnumerable<ContentBlock>> ExecuteAsync(
             [Description("The Pull Request number/ID to retrieve metadata for")] int? prNumber = null,
             [Description("Model name for context budget resolution (e.g. 'gpt-4o'). Triggers pagination info.")] string? modelName = null,
             [Description("Explicit token budget override. Triggers pagination info.")] int? maxTokens = null,
@@ -84,23 +74,17 @@ namespace REBUSS.Pure.Tools
                 var sw = Stopwatch.StartNew();
 
                 var metadata = await _metadataProvider.GetMetadataAsync(prNumber.Value, cancellationToken);
-                var result = BuildMetadataResult(prNumber.Value, metadata);
 
-                // Compute pagination info when budget parameters are provided
+                (int TotalPages, int TotalFiles, int BudgetPerPage, IReadOnlyList<(int Page, int Count)> ByPage)? paging = null;
                 if (modelName != null || maxTokens != null)
-                {
-                    var pagingInfo = await BuildContentPagingInfoAsync(
-                        prNumber.Value, metadata.LastMergeSourceCommitId, modelName, maxTokens, cancellationToken);
-                    result.ContentPaging = pagingInfo;
-                }
+                    paging = await BuildContentPagingAsync(prNumber.Value, metadata.LastMergeSourceCommitId, modelName, maxTokens, cancellationToken);
 
-                var json = JsonSerializer.Serialize(result, JsonOptions);
+                var text = PlainTextFormatter.FormatMetadata(metadata, prNumber.Value, paging);
                 sw.Stop();
 
-                _logger.LogInformation(Resources.LogGetPrMetadataCompleted,
-                    prNumber, json.Length, sw.ElapsedMilliseconds);
+                _logger.LogInformation(Resources.LogGetPrMetadataCompleted, prNumber, text.Length, sw.ElapsedMilliseconds);
 
-                return json;
+                return [new TextContentBlock { Text = text }];
             }
             catch (PullRequestNotFoundException ex)
             {
@@ -118,13 +102,10 @@ namespace REBUSS.Pure.Tools
             }
         }
 
-        // --- Pagination info builder -----------------------------------------------
-
-        private async Task<ContentPagingInfo> BuildContentPagingInfoAsync(
-            int prNumber, string? knownHeadCommitId, string? modelName, int? maxTokens, CancellationToken ct)
+        private async Task<(int TotalPages, int TotalFiles, int BudgetPerPage, IReadOnlyList<(int Page, int Count)> ByPage)>
+            BuildContentPagingAsync(int prNumber, string? knownHeadCommitId, string? modelName, int? maxTokens, CancellationToken ct)
         {
             var diff = await _diffCache.GetOrFetchDiffAsync(prNumber, knownHeadCommitId, ct);
-
             var budget = _budgetResolver.Resolve(maxTokens, modelName);
             var safeBudget = budget.SafeBudgetTokens;
 
@@ -133,78 +114,12 @@ namespace REBUSS.Pure.Tools
 
             var allocation = _pageAllocator.Allocate(candidates, safeBudget);
 
-            var filesByPage = allocation.Pages
-                .Select(p => new PageFileCount(p.PageNumber, p.Items.Count))
-                .ToList();
+            var byPage = allocation.Pages
+                .Select(p => (Page: p.PageNumber, Count: p.Items.Count))
+                .ToArray();
 
-            return new ContentPagingInfo(
-                TotalPages: allocation.TotalPages,
-                TotalFiles: allocation.TotalItems,
-                BudgetPerPageTokens: safeBudget,
-                FilesByPage: filesByPage);
-        }
-
-        // --- Result builder -------------------------------------------------------
-
-        private PullRequestMetadataResult BuildMetadataResult(int prNumber, FullPullRequestMetadata metadata)
-        {
-            return new PullRequestMetadataResult
-            {
-                PrNumber = prNumber,
-                Id = metadata.CodeReviewId,
-                Title = metadata.Title,
-                Author = new AuthorInfo
-                {
-                    Login = metadata.AuthorLogin,
-                    DisplayName = metadata.AuthorDisplayName
-                },
-                State = metadata.Status,
-                IsDraft = metadata.IsDraft,
-                CreatedAt = metadata.CreatedDate.ToString("O"),
-                UpdatedAt = metadata.ClosedDate?.ToString("O"),
-                Base = new RefInfo
-                {
-                    Ref = metadata.TargetBranch,
-                    Sha = metadata.LastMergeTargetCommitId
-                },
-                Head = new RefInfo
-                {
-                    Ref = metadata.SourceBranch,
-                    Sha = metadata.LastMergeSourceCommitId
-                },
-                Stats = new PrStats
-                {
-                    Commits = metadata.CommitShas.Count,
-                    ChangedFiles = metadata.ChangedFilesCount,
-                    Additions = metadata.Additions,
-                    Deletions = metadata.Deletions
-                },
-                CommitShas = metadata.CommitShas,
-                Description = BuildDescriptionInfo(metadata.Description),
-                Source = new SourceInfo
-                {
-                    Repository = metadata.RepositoryFullName,
-                    Url = metadata.WebUrl
-                }
-            };
-        }
-
-        private static DescriptionInfo BuildDescriptionInfo(string description)
-        {
-            var originalLength = description?.Length ?? 0;
-            var text = description ?? string.Empty;
-            var isTruncated = originalLength > MaxDescriptionLength;
-
-            if (isTruncated)
-                text = text[..MaxDescriptionLength];
-
-            return new DescriptionInfo
-            {
-                Text = text,
-                IsTruncated = isTruncated,
-                OriginalLength = originalLength,
-                ReturnedLength = text.Length
-            };
+            return (allocation.TotalPages, allocation.TotalItems, safeBudget, byPage);
         }
     }
 }
+

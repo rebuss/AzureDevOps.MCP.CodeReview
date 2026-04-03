@@ -210,7 +210,7 @@
     <value>[get_file_diff] Pull request not found (prNumber={PrNumber}, path='{Path}')</value>
   </data>
   <data name="LogGetLocalContentCompleted" xml:space="preserve">
-    <value>[get_local_content] Completed: page {Page}/{TotalPages}, {FileCount} files, {Chars} chars, {Ms}ms</value>
+    <value>[get_local_content] Completed: page {Page}/{TotalPages}, {FileCount} files, {Ms}ms</value>
   </data>
   <data name="LogGetLocalContentEntry" xml:space="preserve">
     <value>[get_local_content] Entry: page {PageNumber}, scope={Scope}</value>
@@ -255,7 +255,7 @@
     <value>[get_local_files] Repository not found</value>
   </data>
   <data name="LogGetPrContentCompleted" xml:space="preserve">
-    <value>[get_pr_content] Completed: PR #{PrNumber}, page {Page}/{TotalPages}, {FileCount} files, {Chars} chars, {Ms}ms</value>
+    <value>[get_pr_content] Completed: PR #{PrNumber}, page {Page}/{TotalPages}, {FileCount} files, {Ms}ms</value>
   </data>
   <data name="LogGetPrContentEntry" xml:space="preserve">
     <value>[get_pr_content] Entry: PR #{PrNumber}, page {PageNumber}</value>

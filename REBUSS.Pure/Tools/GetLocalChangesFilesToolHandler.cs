@@ -3,9 +3,11 @@ using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
+using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using REBUSS.Pure.Core;
 using REBUSS.Pure.Core.Exceptions;
+using REBUSS.Pure.Core.Models;
 using REBUSS.Pure.Core.Models.Pagination;
 using REBUSS.Pure.Core.Models.ResponsePacking;
 using REBUSS.Pure.Core.Shared;
@@ -18,12 +20,6 @@ using REBUSS.Pure.Tools.Shared;
 
 namespace REBUSS.Pure.Tools
 {
-    /// <summary>
-    /// Handles the <c>get_local_files</c> MCP tool.
-    /// Returns a classified list of locally changed files so an AI agent can
-    /// decide which files to inspect in detail.
-    /// Integrates with response packing (F003) and deterministic pagination (F004).
-    /// </summary>
     [McpServerToolType]
     public class GetLocalChangesFilesToolHandler
     {
@@ -35,13 +31,6 @@ namespace REBUSS.Pure.Tools
         private readonly IPageAllocator _pageAllocator;
         private readonly IPageReferenceCodec _pageReferenceCodec;
         private readonly ILogger<GetLocalChangesFilesToolHandler> _logger;
-
-        private static readonly JsonSerializerOptions JsonOptions = new()
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            WriteIndented = true,
-            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-        };
 
         public GetLocalChangesFilesToolHandler(
             ILocalReviewProvider reviewProvider,
@@ -64,16 +53,14 @@ namespace REBUSS.Pure.Tools
         }
 
         [McpServerTool(Name = "get_local_files"), Description(
-            "Lists all locally changed files in the git repository with classification metadata " +
-            "(status, extension, binary/generated/test flags, review priority) and a summary by category. " +
-            "Use this as the first step of a self-review to discover what changed before inspecting diffs. " +
-            "Supported scopes: 'working-tree' (default, staged + unstaged vs HEAD), " +
-            "'staged' (index vs HEAD only), or any branch/ref name to diff the current branch against it.")]
-        public async Task<string> ExecuteAsync(
-            [Description("The change scope to review. 'working-tree' (default): all uncommitted changes vs HEAD. 'staged': only staged (indexed) changes vs HEAD. Any other value is treated as a base branch/ref.")] string? scope = null,
-            [Description("Optional model name (e.g. 'Claude Sonnet') to resolve context window size")] string? modelName = null,
+            "Lists all locally changed files in the git repository with classification metadata. " +
+            "Returns a plain-text table of files with status, additions, deletions, and classification flags. " +
+            "Scopes: '\''working-tree'\'' (default), '\''staged'\'', or a branch/ref name.")]
+        public async Task<IEnumerable<ContentBlock>> ExecuteAsync(
+            [Description("The change scope. '\''working-tree'\'': all uncommitted changes. '\''staged'\'': only staged. Any other value treated as base branch/ref.")] string? scope = null,
+            [Description("Optional model name to resolve context window size")] string? modelName = null,
             [Description("Optional explicit context window size in tokens")] int? maxTokens = null,
-            [Description("Opaque page reference from a previous response. Encodes all context needed to re-derive the page.")] string? pageReference = null,
+            [Description("Opaque page reference from a previous response.")] string? pageReference = null,
             [Description("Page number for direct access (requires original params + budget)")] int? pageNumber = null,
             CancellationToken cancellationToken = default)
         {
@@ -84,7 +71,6 @@ namespace REBUSS.Pure.Tools
                     throw new McpException(mutualExclError);
 
                 var hasExplicitBudget = modelName != null || maxTokens != null;
-
                 var budget = _budgetResolver.Resolve(maxTokens, modelName);
 
                 var resolution = PaginationOrchestrator.ResolvePage(
@@ -93,7 +79,6 @@ namespace REBUSS.Pure.Tools
                 if (!resolution.IsSuccess)
                     throw new McpException(resolution.ErrorMessage!);
 
-                // Extract scope from page reference if provided
                 var effectiveScope = scope;
                 if (resolution.DecodedParams != null)
                 {
@@ -120,43 +105,17 @@ namespace REBUSS.Pure.Tools
 
                 if (!hasExplicitBudget && pageReference == null)
                 {
-                    // Feature 003 path
-                    var fileItems003 = BuildFileItems(reviewFiles);
-                    var candidates003 = ToolHandlerHelpers.BuildCandidates(
-                        fileItems003, budget.SafeBudgetTokens, _tokenEstimator, _fileClassifier,
-                        fi => fi.Path, fi => fi.Additions + fi.Deletions);
-                    var decision = _packer.Pack(candidates003, budget.SafeBudgetTokens);
-
-                    var packedFiles003 = new List<PullRequestFileItem>();
-                    for (var i = 0; i < decision.Items.Count; i++)
-                    {
-                        if (decision.Items[i].Status != PackingItemStatus.Deferred)
-                            packedFiles003.Add(fileItems003[i]);
-                    }
-
-                    var result003 = new LocalReviewFilesResult
-                    {
-                        RepositoryRoot = reviewFiles.RepositoryRoot,
-                        Scope = reviewFiles.Scope,
-                        CurrentBranch = reviewFiles.CurrentBranch,
-                        TotalFiles = reviewFiles.Files.Count,
-                        Files = packedFiles003,
-                        Summary = BuildSummary(reviewFiles),
-                        Manifest = ContentManifestResult.From(decision.Manifest)
-                    };
-
-                    var json003 = JsonSerializer.Serialize(result003, JsonOptions);
+                    var blocks = BuildPackedBlocks(reviewFiles, budget.SafeBudgetTokens);
                     sw.Stop();
                     _logger.LogInformation(Resources.LogGetLocalFilesCompletedF003,
                         parsedScope, reviewFiles.Files.Count, sw.ElapsedMilliseconds);
-                    return json003;
+                    return blocks;
                 }
 
-                // Feature 004 path
-                var fileItems = BuildFileItems(reviewFiles);
                 var candidates = ToolHandlerHelpers.BuildCandidates(
-                    fileItems, effectiveBudget, _tokenEstimator, _fileClassifier,
-                    fi => fi.Path, fi => fi.Additions + fi.Deletions);
+                    reviewFiles.Files, effectiveBudget, _tokenEstimator, _fileClassifier,
+                    fi => fi.Path, fi => fi.Additions + fi.Deletions,
+                    fi => PlainTextFormatter.FormatFileEntry(fi));
                 var sortedCandidates = ToolHandlerHelpers.SortCandidates(candidates);
 
                 PageAllocation allocation;
@@ -175,36 +134,28 @@ namespace REBUSS.Pure.Tools
 
                 var pageSlice = allocation.Pages[requestedPage - 1];
                 var packedFiles = ToolHandlerHelpers.ExtractPageFiles(
-                    fileItems, sortedCandidates, pageSlice, fi => fi.Path);
+                    reviewFiles.Files, sortedCandidates, pageSlice, fi => fi.Path);
 
                 var scopeForRef = effectiveScope ?? "working-tree";
                 var requestParams = JsonSerializer.SerializeToElement(new { scope = scopeForRef });
-
                 var paginationMeta = PaginationOrchestrator.BuildPaginationMetadata(
                     allocation, requestedPage, _pageReferenceCodec,
                     "get_local_files", requestParams, effectiveBudget, null);
-
                 var manifestResult = ToolHandlerHelpers.BuildPageManifest(sortedCandidates, pageSlice, allocation, effectiveBudget);
 
-                var result = new LocalReviewFilesResult
-                {
-                    RepositoryRoot = reviewFiles.RepositoryRoot,
-                    Scope = reviewFiles.Scope,
-                    CurrentBranch = reviewFiles.CurrentBranch,
-                    TotalFiles = reviewFiles.Files.Count,
-                    Files = packedFiles,
-                    Summary = BuildSummary(reviewFiles),
-                    Manifest = manifestResult,
-                    Pagination = paginationMeta
-                };
+                var context = $"{parsedScope} (page {requestedPage}/{allocation.TotalPages})";
+                var fileListText = PlainTextFormatter.FormatFileList(packedFiles, reviewFiles.Summary, context);
 
-                var json = JsonSerializer.Serialize(result, JsonOptions);
                 sw.Stop();
-                _logger.LogInformation(
-                    Resources.LogGetLocalFilesCompletedF004,
+                _logger.LogInformation(Resources.LogGetLocalFilesCompletedF004,
                     parsedScope, requestedPage, allocation.TotalPages, sw.ElapsedMilliseconds);
 
-                return json;
+                return
+                [
+                    new TextContentBlock { Text = fileListText },
+                    new TextContentBlock { Text = PlainTextFormatter.FormatManifestBlock(manifestResult) },
+                    new TextContentBlock { Text = PlainTextFormatter.FormatPaginationBlock(paginationMeta) }
+                ];
             }
             catch (LocalRepositoryNotFoundException ex)
             {
@@ -224,37 +175,29 @@ namespace REBUSS.Pure.Tools
             }
         }
 
-        // --- Build helpers ---
-
-        private static List<PullRequestFileItem> BuildFileItems(LocalReviewFiles reviewFiles)
+        private IEnumerable<ContentBlock> BuildPackedBlocks(LocalReviewFiles reviewFiles, int safeBudgetTokens)
         {
-            return reviewFiles.Files.Select(f => new PullRequestFileItem
-            {
-                Path = f.Path,
-                Status = f.Status,
-                Additions = f.Additions,
-                Deletions = f.Deletions,
-                Changes = f.Changes,
-                Extension = f.Extension,
-                IsBinary = f.IsBinary,
-                IsGenerated = f.IsGenerated,
-                IsTestFile = f.IsTestFile,
-                ReviewPriority = f.ReviewPriority
-            }).ToList();
-        }
+            var candidates = ToolHandlerHelpers.BuildCandidates(
+                reviewFiles.Files, safeBudgetTokens, _tokenEstimator, _fileClassifier,
+                fi => fi.Path, fi => fi.Additions + fi.Deletions,
+                fi => PlainTextFormatter.FormatFileEntry(fi));
+            var decision = _packer.Pack(candidates, safeBudgetTokens);
 
-        private static PullRequestFilesSummaryResult BuildSummary(LocalReviewFiles reviewFiles)
-        {
-            return new PullRequestFilesSummaryResult
+            var packedFiles = new List<PullRequestFileInfo>();
+            for (var i = 0; i < decision.Items.Count; i++)
             {
-                SourceFiles = reviewFiles.Summary.SourceFiles,
-                TestFiles = reviewFiles.Summary.TestFiles,
-                ConfigFiles = reviewFiles.Summary.ConfigFiles,
-                DocsFiles = reviewFiles.Summary.DocsFiles,
-                BinaryFiles = reviewFiles.Summary.BinaryFiles,
-                GeneratedFiles = reviewFiles.Summary.GeneratedFiles,
-                HighPriorityFiles = reviewFiles.Summary.HighPriorityFiles
-            };
+                if (decision.Items[i].Status != PackingItemStatus.Deferred)
+                    packedFiles.Add(reviewFiles.Files[i]);
+            }
+
+            var fileListText = PlainTextFormatter.FormatFileList(
+                packedFiles, reviewFiles.Summary,
+                $"{reviewFiles.Scope} (repo: {reviewFiles.RepositoryRoot})");
+            return
+            [
+                new TextContentBlock { Text = fileListText },
+                new TextContentBlock { Text = PlainTextFormatter.FormatManifestBlock(ContentManifestResult.From(decision.Manifest)) }
+            ];
         }
     }
 }

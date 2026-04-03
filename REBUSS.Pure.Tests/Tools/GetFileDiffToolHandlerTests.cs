@@ -1,11 +1,13 @@
-using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol;
+using ModelContextProtocol.Protocol;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using REBUSS.Pure.Core;
 using REBUSS.Pure.Core.Exceptions;
 using REBUSS.Pure.Core.Models;
+using REBUSS.Pure.Core.Shared;
+using REBUSS.Pure.Services.ResponsePacking;
 using REBUSS.Pure.Tools;
 
 namespace REBUSS.Pure.Tests.Tools;
@@ -13,6 +15,9 @@ namespace REBUSS.Pure.Tests.Tools;
 public class GetFileDiffToolHandlerTests
 {
     private readonly IPullRequestDataProvider _diffProvider = Substitute.For<IPullRequestDataProvider>();
+    private readonly IContextBudgetResolver _budgetResolver = Substitute.For<IContextBudgetResolver>();
+    private readonly ITokenEstimator _tokenEstimator = Substitute.For<ITokenEstimator>();
+    private readonly IFileClassifier _fileClassifier = Substitute.For<IFileClassifier>();
     private readonly GetFileDiffToolHandler _handler;
 
     private static readonly PullRequestDiff SampleFileDiff = new()
@@ -49,10 +54,24 @@ public class GetFileDiffToolHandlerTests
 
     public GetFileDiffToolHandlerTests()
     {
+        _budgetResolver.Resolve(Arg.Any<int?>(), Arg.Any<string?>())
+            .Returns(new BudgetResolutionResult(200000, 140000, BudgetSource.Default, Array.Empty<string>()));
+        _tokenEstimator.Estimate(Arg.Any<string>(), Arg.Any<int>())
+            .Returns(new TokenEstimationResult(100, 0.07, true));
+        _fileClassifier.Classify(Arg.Any<string>())
+            .Returns(new FileClassification { Category = FileCategory.Source, Extension = ".cs", IsBinary = false, IsGenerated = false, IsTestFile = false, ReviewPriority = "high" });
+
         _handler = new GetFileDiffToolHandler(
             _diffProvider,
+            new ResponsePacker(NullLogger<ResponsePacker>.Instance),
+            _budgetResolver,
+            _tokenEstimator,
+            _fileClassifier,
             NullLogger<GetFileDiffToolHandler>.Instance);
     }
+
+    private static string AllText(IEnumerable<ContentBlock> blocks) =>
+        string.Join("\n", blocks.Cast<TextContentBlock>().Select(b => b.Text));
 
     // --- Happy path ---
 
@@ -62,18 +81,26 @@ public class GetFileDiffToolHandlerTests
         _diffProvider.GetFileDiffAsync(42, "/src/A.cs", Arg.Any<CancellationToken>())
             .Returns(SampleFileDiff);
 
-        var json = await _handler.ExecuteAsync(42, "/src/A.cs");
+        var blocks = (await _handler.ExecuteAsync(42, "/src/A.cs")).ToList();
+        var text = AllText(blocks);
 
-        var doc = JsonDocument.Parse(json);
-        Assert.Equal(42, doc.RootElement.GetProperty("prNumber").GetInt32());
-        Assert.True(doc.RootElement.TryGetProperty("files", out var files));
-        Assert.Equal(1, files.GetArrayLength());
-        Assert.Equal("/src/A.cs", files[0].GetProperty("path").GetString());
+        Assert.NotEmpty(blocks);
+        Assert.Contains("/src/A.cs", text);
+        Assert.Contains("-old", text);
+        Assert.Contains("+new", text);
+    }
 
-        var hunks = files[0].GetProperty("hunks");
-        Assert.Equal(1, hunks.GetArrayLength());
-        Assert.True(hunks[0].TryGetProperty("lines", out var lines));
-        Assert.Equal(2, lines.GetArrayLength());
+    [Fact]
+    public async Task ExecuteAsync_IncludesManifest_InResponse()
+    {
+        _diffProvider.GetFileDiffAsync(42, "/src/A.cs", Arg.Any<CancellationToken>())
+            .Returns(SampleFileDiff);
+
+        var blocks = (await _handler.ExecuteAsync(42, "/src/A.cs")).ToList();
+        var lastBlock = blocks.Cast<TextContentBlock>().Last().Text;
+
+        Assert.Contains("Manifest:", lastBlock);
+        Assert.Contains("/src/A.cs", lastBlock);
     }
 
     // --- Validation errors ---

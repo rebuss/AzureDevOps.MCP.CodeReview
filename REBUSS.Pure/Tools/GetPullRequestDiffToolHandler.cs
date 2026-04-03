@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
+using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using REBUSS.Pure.Core;
 using REBUSS.Pure.Core.Exceptions;
@@ -21,7 +22,7 @@ namespace REBUSS.Pure.Tools
     /// <summary>
     /// Handles the execution of the get_pr_diff MCP tool.
     /// Validates input, delegates to <see cref="IPullRequestDiffProvider"/>,
-    /// and returns a structured JSON result with per-file hunks.
+    /// and returns plain-text diff blocks — one per file.
     /// Integrates with response packing (F003) and deterministic pagination (F004).
     /// </summary>
     [McpServerToolType]
@@ -35,13 +36,6 @@ namespace REBUSS.Pure.Tools
         private readonly IPageAllocator _pageAllocator;
         private readonly IPageReferenceCodec _pageReferenceCodec;
         private readonly ILogger<GetPullRequestDiffToolHandler> _logger;
-
-        private static readonly JsonSerializerOptions JsonOptions = new()
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            WriteIndented = true,
-            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-        };
 
         public GetPullRequestDiffToolHandler(
             IPullRequestDataProvider diffProvider,
@@ -65,8 +59,8 @@ namespace REBUSS.Pure.Tools
 
         [McpServerTool(Name = "get_pr_diff"), Description(
             "Retrieves the diff (file changes) for a specific Pull Request. " +
-            "Returns a structured JSON object with per-file hunks optimized for AI code review.")]
-        public async Task<string> ExecuteAsync(
+            "Returns plain-text diff content with -/+/space prefixed lines, one content block per file.")]
+        public async Task<IEnumerable<ContentBlock>> ExecuteAsync(
             [Description("The Pull Request number/ID to retrieve the diff for")] int? prNumber = null,
             [Description("Optional model name (e.g. 'Claude Sonnet') to resolve context window size")] string? modelName = null,
             [Description("Optional explicit context window size in tokens")] int? maxTokens = null,
@@ -130,17 +124,18 @@ namespace REBUSS.Pure.Tools
 
                 if (!hasExplicitBudget && pageReference == null)
                 {
-                    var result = BuildPackedResult(effectivePrNumber.Value, diff, budget.SafeBudgetTokens);
+                    var blocks = BuildPackedBlocks(effectivePrNumber.Value, diff, budget.SafeBudgetTokens);
                     sw.Stop();
                     _logger.LogInformation(Resources.LogGetPrDiffCompletedF003,
                         effectivePrNumber, diff.Files.Count, sw.ElapsedMilliseconds);
-                    return result;
+                    return blocks;
                 }
 
                 var fileChanges = BuildFileChanges(diff);
                 var candidates = ToolHandlerHelpers.BuildCandidates(
                     fileChanges, effectiveBudget, _tokenEstimator, _fileClassifier,
-                    fc => fc.Path, fc => fc.Additions + fc.Deletions);
+                    fc => fc.Path, fc => fc.Additions + fc.Deletions,
+                    fc => PlainTextFormatter.FormatFileDiff(fc));
                 var sortedCandidates = ToolHandlerHelpers.SortCandidates(candidates);
 
                 PageAllocation allocation;
@@ -194,21 +189,18 @@ namespace REBUSS.Pure.Tools
 
                 var manifestResult = ToolHandlerHelpers.BuildPageManifest(sortedCandidates, pageSlice, allocation, effectiveBudget);
 
-                var structured = new StructuredDiffResult
-                {
-                    PrNumber = effectivePrNumber,
-                    Files = packedFiles,
-                    Manifest = manifestResult,
-                    Pagination = paginationMeta,
-                    StalenessWarning = staleness
-                };
+                var blocks004 = new List<ContentBlock>(packedFiles.Count + 2);
+                foreach (var f in packedFiles)
+                    blocks004.Add(new TextContentBlock { Text = PlainTextFormatter.FormatFileDiff(f) });
+                blocks004.Add(new TextContentBlock { Text = PlainTextFormatter.FormatManifestBlock(manifestResult) });
+                blocks004.Add(new TextContentBlock { Text = PlainTextFormatter.FormatPaginationBlock(paginationMeta, staleness) });
 
                 sw.Stop();
                 _logger.LogInformation(
                     Resources.LogGetPrDiffCompletedF004,
                     effectivePrNumber, requestedPage, allocation.TotalPages, packedFiles.Count, sw.ElapsedMilliseconds);
 
-                return JsonSerializer.Serialize(structured, JsonOptions);
+                return blocks004;
             }
             catch (PullRequestNotFoundException ex)
             {
@@ -249,41 +241,39 @@ namespace REBUSS.Pure.Tools
             }).ToList();
         }
 
-        // --- Result builders (F003 path) ---
+        // --- F003 path ---
 
-        private string BuildPackedResult(int prNumber, PullRequestDiff diff, int safeBudgetTokens)
+        private IEnumerable<ContentBlock> BuildPackedBlocks(int prNumber, PullRequestDiff diff, int safeBudgetTokens)
         {
             var fileChanges = BuildFileChanges(diff);
             var candidates = ToolHandlerHelpers.BuildCandidates(
                 fileChanges, safeBudgetTokens, _tokenEstimator, _fileClassifier,
-                fc => fc.Path, fc => fc.Additions + fc.Deletions);
+                fc => fc.Path, fc => fc.Additions + fc.Deletions,
+                fc => PlainTextFormatter.FormatFileDiff(fc));
 
             var decision = _packer.Pack(candidates, safeBudgetTokens);
 
-            var packedFiles = new List<StructuredFileChange>();
+            var blocks = new List<ContentBlock>(decision.Items.Count + 1);
             for (var i = 0; i < decision.Items.Count; i++)
             {
                 var item = decision.Items[i];
+                StructuredFileChange fc;
                 switch (item.Status)
                 {
                     case PackingItemStatus.Included:
-                        packedFiles.Add(fileChanges[i]);
+                        fc = fileChanges[i];
                         break;
-
                     case PackingItemStatus.Partial:
-                        packedFiles.Add(ToolHandlerHelpers.TruncateHunks(fileChanges[i], item.BudgetForPartial ?? 0, safeBudgetTokens, _tokenEstimator));
+                        fc = ToolHandlerHelpers.TruncateHunks(fileChanges[i], item.BudgetForPartial ?? 0, safeBudgetTokens, _tokenEstimator);
                         break;
+                    default:
+                        continue;
                 }
+                blocks.Add(new TextContentBlock { Text = PlainTextFormatter.FormatFileDiff(fc) });
             }
 
-            var structured = new StructuredDiffResult
-            {
-                PrNumber = prNumber,
-                Files = packedFiles,
-                Manifest = ContentManifestResult.From(decision.Manifest)
-            };
-
-            return JsonSerializer.Serialize(structured, JsonOptions);
+            blocks.Add(new TextContentBlock { Text = PlainTextFormatter.FormatManifestBlock(ContentManifestResult.From(decision.Manifest)) });
+            return blocks;
         }
     }
 }

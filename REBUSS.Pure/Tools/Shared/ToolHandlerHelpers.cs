@@ -1,4 +1,3 @@
-using System.Text.Json;
 using REBUSS.Pure.Core;
 using REBUSS.Pure.Core.Models.Pagination;
 using REBUSS.Pure.Core.Models.ResponsePacking;
@@ -18,13 +17,6 @@ namespace REBUSS.Pure.Tools.Shared;
 /// </summary>
 internal static class ToolHandlerHelpers
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        WriteIndented = true,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-    };
-
     /// <summary>
     /// Returns a copy of the candidates list sorted by packing priority
     /// (category ascending → total changes descending → path ascending).
@@ -37,8 +29,10 @@ internal static class ToolHandlerHelpers
     }
 
     /// <summary>
-    /// Builds a list of <see cref="PackingCandidate"/> items from any typed list by
-    /// serializing each item to JSON, estimating its token cost, and classifying by path.
+    /// Builds a list of <see cref="PackingCandidate"/> items from any typed list.
+    /// Each item is formatted via <paramref name="formatter"/> to produce the plain-text
+    /// output that will be returned to the client, and that representation is used for
+    /// accurate token-count estimation.
     /// </summary>
     public static List<PackingCandidate> BuildCandidates<T>(
         List<T> items,
@@ -46,14 +40,15 @@ internal static class ToolHandlerHelpers
         ITokenEstimator tokenEstimator,
         IFileClassifier fileClassifier,
         Func<T, string> pathSelector,
-        Func<T, int> changeSizeSelector)
+        Func<T, int> changeSizeSelector,
+        Func<T, string> formatter)
     {
         var candidates = new List<PackingCandidate>(items.Count);
         for (var i = 0; i < items.Count; i++)
         {
             var item = items[i];
-            var serialized = JsonSerializer.Serialize(item, JsonOptions);
-            var estimation = tokenEstimator.Estimate(serialized, safeBudgetTokens);
+            var plainText = formatter(item);
+            var estimation = tokenEstimator.Estimate(plainText, safeBudgetTokens);
             var classification = fileClassifier.Classify(pathSelector(item));
 
             candidates.Add(new PackingCandidate(
@@ -166,8 +161,8 @@ internal static class ToolHandlerHelpers
         var usedTokens = 0;
         foreach (var hunk in file.Hunks)
         {
-            var serialized = JsonSerializer.Serialize(hunk, JsonOptions);
-            var estimation = tokenEstimator.Estimate(serialized, safeBudgetTokens);
+            var plainText = PlainTextFormatter.FormatHunk(hunk);
+            var estimation = tokenEstimator.Estimate(plainText, safeBudgetTokens);
 
             if (usedTokens + estimation.EstimatedTokens > budgetForPartial)
                 break;

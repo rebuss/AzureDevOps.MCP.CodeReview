@@ -1,27 +1,19 @@
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
+using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using REBUSS.Pure.Core;
 using REBUSS.Pure.Core.Exceptions;
-using REBUSS.Pure.Core.Models;
-using REBUSS.Pure.Core.Models.Pagination;
 using REBUSS.Pure.Core.Models.ResponsePacking;
 using REBUSS.Pure.Core.Shared;
 using REBUSS.Pure.Properties;
 using REBUSS.Pure.Services.ResponsePacking;
-using REBUSS.Pure.Tools.Models;
 using REBUSS.Pure.Tools.Shared;
 
 namespace REBUSS.Pure.Tools
 {
-    /// <summary>
-    /// Handles the <c>get_pr_content</c> MCP tool.
-    /// Returns diff content for a single page of a pull request review.
-    /// Pages are computed via diff-based token measurement and deterministic page allocation.
-    /// </summary>
     [McpServerToolType]
     public class GetPullRequestContentToolHandler
     {
@@ -31,13 +23,6 @@ namespace REBUSS.Pure.Tools
         private readonly IFileClassifier _fileClassifier;
         private readonly IPageAllocator _pageAllocator;
         private readonly ILogger<GetPullRequestContentToolHandler> _logger;
-
-        private static readonly JsonSerializerOptions JsonOptions = new()
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            WriteIndented = true,
-            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-        };
 
         public GetPullRequestContentToolHandler(
             IPullRequestDiffCache diffCache,
@@ -56,10 +41,10 @@ namespace REBUSS.Pure.Tools
         }
 
         [McpServerTool(Name = "get_pr_content"), Description(
-            "Returns the diff content for a specific page of a pull request review. " +
-            "Pages are determined by diff-based token measurement and the provided budget. " +
+            "Returns plain-text diff content for a specific page of a pull request review. " +
+            "One content block per file with -/+/space prefixed lines, plus a pagination footer. " +
             "Use get_pr_metadata with modelName/maxTokens to discover the total page count first.")]
-        public async Task<string> ExecuteAsync(
+        public async Task<IEnumerable<ContentBlock>> ExecuteAsync(
             [Description("The Pull Request number/ID")] int? prNumber = null,
             [Description("Page number to retrieve (1-based)")] int? pageNumber = null,
             [Description("Model name for context budget resolution")] string? modelName = null,
@@ -77,14 +62,12 @@ namespace REBUSS.Pure.Tools
 
             try
             {
-                _logger.LogInformation(Resources.LogGetPrContentEntry,
-                    prNumber, pageNumber);
+                _logger.LogInformation(Resources.LogGetPrContentEntry, prNumber, pageNumber);
                 var sw = Stopwatch.StartNew();
 
                 var budget = _budgetResolver.Resolve(maxTokens, modelName);
                 var safeBudget = budget.SafeBudgetTokens;
 
-                // 1. Fetch diff (cache hit from metadata, or cache miss + fetch)
                 var diff = await _diffCache.GetOrFetchDiffAsync(prNumber.Value, ct: cancellationToken);
                 var candidates = FileTokenMeasurement.BuildCandidatesFromDiff(diff, _tokenEstimator, _fileClassifier);
                 candidates.Sort(PackingPriorityComparer.Instance);
@@ -97,61 +80,48 @@ namespace REBUSS.Pure.Tools
 
                 var pageSlice = allocation.Pages[pageNumber.Value - 1];
 
-                // 2. Collect file paths on this page
                 var pageFilePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var item in pageSlice.Items)
                     pageFilePaths.Add(candidates[item.OriginalIndex].Path);
 
-                // 3. Filter cached diff to page files and map to structured output
+                var categories = BuildCategoryBreakdown(pageFilePaths, candidates);
+
                 var pageFiles = diff.Files
                     .Where(f => pageFilePaths.Contains(f.Path))
                     .Select(f => FileTokenMeasurement.MapToStructured(f))
                     .ToList();
 
-                // 4. Build category breakdown
-                var categories = BuildCategoryBreakdown(pageFilePaths, candidates);
+                var blocks = new List<ContentBlock>(pageFiles.Count + 1);
+                foreach (var f in pageFiles)
+                    blocks.Add(new TextContentBlock { Text = PlainTextFormatter.FormatFileDiff(f) });
 
-                var summary = new ContentPageSummary(
-                    FilesOnPage: pageFiles.Count,
-                    TotalFiles: allocation.TotalItems,
-                    EstimatedTokens: pageSlice.BudgetUsed,
-                    HasMorePages: pageNumber.Value < allocation.TotalPages,
-                    Categories: categories);
+                blocks.Add(new TextContentBlock
+                {
+                    Text = PlainTextFormatter.FormatSimplePaginationBlock(
+                        pageNumber.Value, allocation.TotalPages,
+                        pageFiles.Count, allocation.TotalItems,
+                        pageSlice.BudgetUsed,
+                        categories)
+                });
 
-                var result = new PullRequestContentPageResult(
-                    PrNumber: prNumber.Value,
-                    PageNumber: pageNumber.Value,
-                    TotalPages: allocation.TotalPages,
-                    Files: pageFiles,
-                    Summary: summary);
-
-                var json = JsonSerializer.Serialize(result, JsonOptions);
                 sw.Stop();
+                _logger.LogInformation(Resources.LogGetPrContentCompleted,
+                    prNumber, pageNumber, allocation.TotalPages, pageFiles.Count, sw.ElapsedMilliseconds);
 
-                _logger.LogInformation(
-                    Resources.LogGetPrContentCompleted,
-                    prNumber, pageNumber, allocation.TotalPages, pageFiles.Count, json.Length, sw.ElapsedMilliseconds);
-
-                return json;
+                return blocks;
             }
             catch (PullRequestNotFoundException ex)
             {
                 _logger.LogWarning(ex, Resources.LogGetPrContentPrNotFound, prNumber);
                 throw new McpException(string.Format(Resources.ErrorPullRequestNotFound, ex.Message));
             }
-            catch (McpException)
-            {
-                throw;
-            }
+            catch (McpException) { throw; }
             catch (Exception ex)
             {
-                _logger.LogError(ex, Resources.LogGetPrContentError,
-                    prNumber, pageNumber);
+                _logger.LogError(ex, Resources.LogGetPrContentError, prNumber, pageNumber);
                 throw new McpException(string.Format(Resources.ErrorRetrievingPrContent, ex.Message));
             }
         }
-
-        // --- Helpers ---------------------------------------------------------------
 
         private static Dictionary<string, int> BuildCategoryBreakdown(
             HashSet<string> pageFilePaths, List<PackingCandidate> candidates)

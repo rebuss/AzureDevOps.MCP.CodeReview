@@ -1,6 +1,6 @@
-using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol;
+using ModelContextProtocol.Protocol;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using REBUSS.Pure.Core;
@@ -73,7 +73,6 @@ public class GetPullRequestContentToolHandlerTests
     {
         _diffCache.GetOrFetchDiffAsync(Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Returns(SampleDiff);
-
         _budgetResolver.Resolve(Arg.Any<int?>(), Arg.Any<string?>())
             .Returns(new BudgetResolutionResult(200000, 140000, BudgetSource.Default, Array.Empty<string>()));
         _tokenEstimator.EstimateTokenCount(Arg.Any<string>())
@@ -81,7 +80,6 @@ public class GetPullRequestContentToolHandlerTests
         _fileClassifier.Classify(Arg.Any<string>())
             .Returns(new FileClassification { Category = FileCategory.Source });
 
-        // Default: all 3 files on page 1
         var pageSlice = new PageSlice(1, 0, 3,
             new[]
             {
@@ -102,41 +100,46 @@ public class GetPullRequestContentToolHandlerTests
             NullLogger<GetPullRequestContentToolHandler>.Instance);
     }
 
+    private static string AllText(IEnumerable<ContentBlock> blocks) =>
+        string.Join("\n", blocks.Cast<TextContentBlock>().Select(b => b.Text));
+
     // --- Happy path ---
 
     [Fact]
     public async Task ExecuteAsync_SinglePage_ReturnsAllFiles()
     {
-        var json = await _handler.ExecuteAsync(prNumber: 42, pageNumber: 1);
+        var blocks = (await _handler.ExecuteAsync(prNumber: 42, pageNumber: 1)).ToList();
+        var text = AllText(blocks);
 
-        var doc = JsonDocument.Parse(json);
-        Assert.Equal(42, doc.RootElement.GetProperty("prNumber").GetInt32());
-        Assert.Equal(1, doc.RootElement.GetProperty("pageNumber").GetInt32());
-        Assert.Equal(1, doc.RootElement.GetProperty("totalPages").GetInt32());
-        Assert.Equal(3, doc.RootElement.GetProperty("files").GetArrayLength());
+        Assert.Contains("src/A.cs", text);
+        Assert.Contains("src/B.cs", text);
+        Assert.Contains("docs/README.md", text);
+
+        var lastBlock = blocks.Cast<TextContentBlock>().Last().Text;
+        Assert.Contains("Page 1 of 1", lastBlock);
     }
 
     [Fact]
     public async Task ExecuteAsync_ReturnsCorrectSummary()
     {
-        var json = await _handler.ExecuteAsync(prNumber: 42, pageNumber: 1);
+        var blocks = (await _handler.ExecuteAsync(prNumber: 42, pageNumber: 1)).ToList();
+        var lastBlock = blocks.Cast<TextContentBlock>().Last().Text;
 
-        var doc = JsonDocument.Parse(json);
-        var summary = doc.RootElement.GetProperty("summary");
-        Assert.Equal(3, summary.GetProperty("filesOnPage").GetInt32());
-        Assert.Equal(3, summary.GetProperty("totalFiles").GetInt32());
-        Assert.Equal(1500, summary.GetProperty("estimatedTokens").GetInt32());
-        Assert.False(summary.GetProperty("hasMorePages").GetBoolean());
+        Assert.Contains("Page 1 of 1", lastBlock);
+        Assert.Contains("hasMore: false", lastBlock);
+        Assert.Contains("3/3 files", lastBlock);
+        Assert.Contains("~1500 tokens", lastBlock);
     }
 
     [Fact]
     public async Task ExecuteAsync_ReturnsCategories()
     {
-        var json = await _handler.ExecuteAsync(prNumber: 42, pageNumber: 1);
+        var blocks = (await _handler.ExecuteAsync(prNumber: 42, pageNumber: 1)).ToList();
+        var text = AllText(blocks);
 
-        var doc = JsonDocument.Parse(json);
-        var categories = doc.RootElement.GetProperty("summary").GetProperty("categories");
-        Assert.Equal(3, categories.GetProperty("source").GetInt32());
+        // All 3 files are classified as source, they appear in the diff output
+        Assert.Contains("src/A.cs", text);
+        Assert.Contains("src/B.cs", text);
     }
 
     [Fact]
@@ -155,13 +158,11 @@ public class GetPullRequestContentToolHandlerTests
         _pageAllocator.Allocate(Arg.Any<IReadOnlyList<PackingCandidate>>(), Arg.Any<int>())
             .Returns(new PageAllocation(new[] { slice1, slice2 }, 2, 3));
 
-        var json = await _handler.ExecuteAsync(prNumber: 42, pageNumber: 2);
+        var blocks = (await _handler.ExecuteAsync(prNumber: 42, pageNumber: 2)).ToList();
+        var lastBlock = blocks.Cast<TextContentBlock>().Last().Text;
 
-        var doc = JsonDocument.Parse(json);
-        Assert.Equal(2, doc.RootElement.GetProperty("pageNumber").GetInt32());
-        Assert.Equal(2, doc.RootElement.GetProperty("totalPages").GetInt32());
-        Assert.Equal(1, doc.RootElement.GetProperty("files").GetArrayLength());
-        Assert.True(doc.RootElement.GetProperty("summary").GetProperty("hasMorePages").GetBoolean() == false);
+        Assert.Contains("Page 2 of 2", lastBlock);
+        Assert.Contains("hasMore: false", lastBlock);
     }
 
     [Fact]
@@ -180,23 +181,20 @@ public class GetPullRequestContentToolHandlerTests
         _pageAllocator.Allocate(Arg.Any<IReadOnlyList<PackingCandidate>>(), Arg.Any<int>())
             .Returns(new PageAllocation(new[] { slice1, slice2 }, 2, 3));
 
-        var json = await _handler.ExecuteAsync(prNumber: 42, pageNumber: 1);
+        var blocks = (await _handler.ExecuteAsync(prNumber: 42, pageNumber: 1)).ToList();
+        var lastBlock = blocks.Cast<TextContentBlock>().Last().Text;
 
-        var doc = JsonDocument.Parse(json);
-        Assert.True(doc.RootElement.GetProperty("summary").GetProperty("hasMorePages").GetBoolean());
+        Assert.Contains("hasMore: true", lastBlock);
     }
 
     [Fact]
     public async Task ExecuteAsync_FileChanges_HaveHunksAndLines()
     {
-        var json = await _handler.ExecuteAsync(prNumber: 42, pageNumber: 1);
+        var blocks = (await _handler.ExecuteAsync(prNumber: 42, pageNumber: 1)).ToList();
+        var text = AllText(blocks);
 
-        var doc = JsonDocument.Parse(json);
-        var firstFile = doc.RootElement.GetProperty("files")[0];
-        Assert.Equal("src/A.cs", firstFile.GetProperty("path").GetString());
-        Assert.True(firstFile.GetProperty("hunks").GetArrayLength() > 0);
-        var firstHunk = firstFile.GetProperty("hunks")[0];
-        Assert.True(firstHunk.GetProperty("lines").GetArrayLength() > 0);
+        Assert.Contains("src/A.cs", text);
+        Assert.Contains("+new line", text);
     }
 
     // --- Error handling ---
