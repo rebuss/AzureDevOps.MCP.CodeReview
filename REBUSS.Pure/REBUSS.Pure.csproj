@@ -26,8 +26,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="Cli\Prompts\review-pr.md" />
-    <EmbeddedResource Include="Cli\Prompts\self-review.md" />
+    <EmbeddedResource Include="Cli\Prompts\review-pr.prompt.md" />
+    <EmbeddedResource Include="Cli\Prompts\self-review.prompt.md" />
     <EmbeddedResource Include="Cli\Prompts\create-pr.md" />
     <EmbeddedResource Update="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>

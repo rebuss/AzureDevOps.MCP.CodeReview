@@ -681,8 +681,8 @@ public class InitCommandTests
 
             Assert.Equal(0, exitCode);
 
-            var reviewPrPath = Path.Combine(tempDir, ".github", "prompts", "review-pr.md");
-            var selfReviewPath = Path.Combine(tempDir, ".github", "prompts", "self-review.md");
+            var reviewPrPath = Path.Combine(tempDir, ".github", "prompts", "review-pr.prompt.md");
+            var selfReviewPath = Path.Combine(tempDir, ".github", "prompts", "self-review.prompt.md");
             var createPrPath = Path.Combine(tempDir, ".github", "prompts", "create-pr.md");
 
             Assert.True(File.Exists(reviewPrPath), $"Expected prompt file at {reviewPrPath}");
@@ -750,7 +750,7 @@ public class InitCommandTests
         Directory.CreateDirectory(promptsDir);
 
         var existingContent = "# My custom review prompt";
-        await File.WriteAllTextAsync(Path.Combine(promptsDir, "review-pr.md"), existingContent);
+        await File.WriteAllTextAsync(Path.Combine(promptsDir, "review-pr.prompt.md"), existingContent);
 
         try
         {
@@ -762,12 +762,47 @@ public class InitCommandTests
             Assert.Equal(0, exitCode);
 
             // Existing prompt file should be overwritten with embedded content
-            var reviewPrContent = await File.ReadAllTextAsync(Path.Combine(promptsDir, "review-pr.md"));
+            var reviewPrContent = await File.ReadAllTextAsync(Path.Combine(promptsDir, "review-pr.prompt.md"));
             Assert.NotEqual(existingContent, reviewPrContent);
             Assert.Contains("Pull Request Code Review", reviewPrContent);
 
-            var selfReviewPath = Path.Combine(promptsDir, "self-review.md");
+            var selfReviewPath = Path.Combine(promptsDir, "self-review.prompt.md");
             Assert.True(File.Exists(selfReviewPath));
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_DeletesLegacyPromptFiles_WhenPresent()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        var promptsDir = Path.Combine(tempDir, ".github", "prompts");
+        Directory.CreateDirectory(Path.Combine(tempDir, ".git"));
+        Directory.CreateDirectory(promptsDir);
+
+        var legacyReviewPr = Path.Combine(promptsDir, "review-pr.md");
+        var legacySelfReview = Path.Combine(promptsDir, "self-review.md");
+        await File.WriteAllTextAsync(legacyReviewPr, "# old review-pr");
+        await File.WriteAllTextAsync(legacySelfReview, "# old self-review");
+
+        try
+        {
+            var output = new StringWriter();
+            var command = CreateCommand(output, tempDir, "rebuss-pure.exe");
+
+            var exitCode = await command.ExecuteAsync();
+
+            Assert.Equal(0, exitCode);
+            Assert.False(File.Exists(legacyReviewPr), "Legacy review-pr.md should be deleted");
+            Assert.False(File.Exists(legacySelfReview), "Legacy self-review.md should be deleted");
+
+            var outputText = output.ToString();
+            Assert.Contains("Deleted legacy prompt file", outputText);
+            Assert.Contains("review-pr.md", outputText);
+            Assert.Contains("self-review.md", outputText);
         }
         finally
         {
@@ -852,9 +887,9 @@ public class InitCommandTests
 
             Assert.Equal(0, exitCode);
 
-            var reviewPrPath = Path.Combine(tempDir, ".github", "prompts", "review-pr.md");
+            var reviewPrPath = Path.Combine(tempDir, ".github", "prompts", "review-pr.prompt.md");
             Assert.True(File.Exists(reviewPrPath));
-            Assert.False(File.Exists(Path.Combine(subDir, ".github", "prompts", "review-pr.md")));
+            Assert.False(File.Exists(Path.Combine(subDir, ".github", "prompts", "review-pr.prompt.md")));
 
             var reviewPrInstr = Path.Combine(tempDir, ".github", "instructions", "review-pr.instructions.md");
             Assert.True(File.Exists(reviewPrInstr));
@@ -871,8 +906,8 @@ public class InitCommandTests
     // -------------------------------------------------------------------------
 
     [Theory]
-    [InlineData("review-pr.md", "review-pr.instructions.md")]
-    [InlineData("self-review.md", "self-review.instructions.md")]
+    [InlineData("review-pr.prompt.md", "review-pr.instructions.md")]
+    [InlineData("self-review.prompt.md", "self-review.instructions.md")]
     [InlineData("create-pr.md", "create-pr.instructions.md")]
     public void ToInstructionsFileName_ConvertsCorrectly(string input, string expected)
     {
@@ -1605,7 +1640,7 @@ public class InitCommandTests
 
         Assert.Equal(0, exitCode);
 
-        var reviewPrPath = Path.Combine(ctx.RepoDir, ".github", "prompts", "review-pr.md");
+        var reviewPrPath = Path.Combine(ctx.RepoDir, ".github", "prompts", "review-pr.prompt.md");
         Assert.True(File.Exists(reviewPrPath), "Prompt files should still be copied in global mode");
     }
 

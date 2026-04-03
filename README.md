@@ -156,6 +156,8 @@ This writes the MCP configuration to the **user-level** paths (`~/.vs/mcp.json` 
 
 > **Switching between repositories:** If you use multiple repositories, run `rebuss-pure init -g` in the target repository before switching to it. This updates the global configuration to point to the correct workspace.
 
+> **After updating the tool:** If you run `dotnet tool update -g CodeReview.MCP`, run `rebuss-pure init` again afterwards to refresh the prompt files and configurations to the latest version.
+
 ---
 
 ## 3. Review a Pull Request

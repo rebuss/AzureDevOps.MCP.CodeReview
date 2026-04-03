@@ -356,6 +356,9 @@
   <data name="MsgCopiedInstructions" xml:space="preserve">
     <value>Copied {0} instruction file(s) to {1}</value>
   </data>
+  <data name="MsgDeletedLegacyPromptFile" xml:space="preserve">
+    <value>Deleted legacy prompt file: {0}</value>
+  </data>
   <data name="MsgCopiedPrompts" xml:space="preserve">
     <value>Copied {0} prompt file(s) to {1}</value>
   </data>

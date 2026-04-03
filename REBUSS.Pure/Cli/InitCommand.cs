@@ -37,6 +37,12 @@ public class InitCommand : ICliCommand
 
     private static readonly string[] PromptFileNames =
     {
+        "review-pr.prompt.md",
+        "self-review.prompt.md"
+    };
+
+    private static readonly string[] LegacyPromptFileNames =
+    {
         "review-pr.md",
         "self-review.md"
     };
@@ -503,6 +509,8 @@ public class InitCommand : ICliCommand
         Directory.CreateDirectory(promptsTargetDir);
         Directory.CreateDirectory(instructionsTargetDir);
 
+        await DeleteLegacyPromptFilesAsync(promptsTargetDir);
+
         var assembly = Assembly.GetExecutingAssembly();
         var promptsWritten = 0;
         var instructionsWritten = 0;
@@ -540,14 +548,30 @@ public class InitCommand : ICliCommand
             await _output.WriteLineAsync(string.Format(Resources.MsgCopiedInstructions, instructionsWritten, instructionsTargetDir));
     }
 
+    private async Task DeleteLegacyPromptFilesAsync(string promptsTargetDir)
+    {
+        foreach (var legacyFileName in LegacyPromptFileNames)
+        {
+            var legacyPath = Path.Combine(promptsTargetDir, legacyFileName);
+            if (!File.Exists(legacyPath))
+                continue;
+
+            File.Delete(legacyPath);
+            await _output.WriteLineAsync(string.Format(Resources.MsgDeletedLegacyPromptFile, legacyPath));
+        }
+    }
+
     /// <summary>
     /// Converts a prompt file name (e.g. <c>review-pr.md</c>) to the corresponding
     /// instructions file name (e.g. <c>review-pr.instructions.md</c>).
     /// </summary>
     internal static string ToInstructionsFileName(string promptFileName)
     {
-        var nameWithoutExtension = Path.GetFileNameWithoutExtension(promptFileName);
-        return $"{nameWithoutExtension}.instructions.md";
+        const string promptMdSuffix = ".prompt.md";
+        var baseName = promptFileName.EndsWith(promptMdSuffix, StringComparison.OrdinalIgnoreCase)
+            ? promptFileName[..^promptMdSuffix.Length]
+            : Path.GetFileNameWithoutExtension(promptFileName);
+        return $"{baseName}.instructions.md";
     }
 
     /// <summary>

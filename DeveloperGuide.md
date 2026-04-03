@@ -365,8 +365,8 @@ After running `rebuss-pure init`, you get:
 
 ```
 .github/prompts/
-├── review-pr.md
-└── self-review.md
+├── review-pr.prompt.md
+└── self-review.prompt.md
 
 .github/instructions/
 ├── review-pr.instructions.md

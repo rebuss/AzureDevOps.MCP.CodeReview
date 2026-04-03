@@ -952,6 +952,15 @@ namespace REBUSS.Pure.Properties {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Deleted legacy prompt file: {0}.
+        /// </summary>
+        internal static string MsgDeletedLegacyPromptFile {
+            get {
+                return ResourceManager.GetString("MsgDeletedLegacyPromptFile", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Copied {0} prompt file(s) to {1}.
         /// </summary>
         internal static string MsgCopiedPrompts {

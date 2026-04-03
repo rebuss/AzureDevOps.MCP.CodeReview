@@ -352,8 +352,8 @@ Full codebase context is included below (file-role map, dependency graph, DI reg
 | `REBUSS.Pure\Cli\AzureDevOpsCliAuthFlow.cs` | Azure DevOps auth flow: checks for Azure CLI, runs `az login`, caches token; offers to install Azure CLI if not found |
 | `REBUSS.Pure\Cli\GitHubCliAuthFlow.cs` | GitHub auth flow: checks for GitHub CLI, runs `gh auth login --web`, caches token; offers to install GitHub CLI if not found |
 global mode writes to `~/.mcp.json` (Visual Studio) and `%APPDATA%\Code\User\mcp.json` (VS Code) via `ResolveGlobalConfigTargets()`; constants: `McpConfigFileName = "mcp.json"` (VS Code, workspace-level VS), `VsGlobalMcpConfigFileName = ".mcp.json"` (VS global user file)
-| `REBUSS.Pure\Cli\Prompts\review-pr.md` | Embedded resource: PR review prompt template; redesigned for `get_pr_metadata`(with budget) + `get_pr_content` page loop workflow; includes strict "No Repository Exploration" constraint forbidding the agent from using any non-MCP tool to access the codebase; legacy tools documented as available |
-| `REBUSS.Pure\Cli\Prompts\self-review.md` | Embedded resource: self-review prompt template; redesigned for `get_local_content` page loop workflow; legacy tools documented as available |
+| `REBUSS.Pure\Cli\Prompts\review-pr.prompt.md` | Embedded resource: PR review prompt template; redesigned for `get_pr_metadata`(with budget) + `get_pr_content` page loop workflow; includes strict "No Repository Exploration" constraint forbidding the agent from using any non-MCP tool to access the codebase; legacy tools documented as available |
+| `REBUSS.Pure\Cli\Prompts\self-review.prompt.md` | Embedded resource: self-review prompt template; redesigned for `get_local_content` page loop workflow; legacy tools documented as available |
 | `REBUSS.Pure\Cli\Prompts\create-pr.md` | Embedded resource: create-PR prompt template (not yet deployed by `init`; reserved for future `#create-pr` command) |
 
 ### Logging
