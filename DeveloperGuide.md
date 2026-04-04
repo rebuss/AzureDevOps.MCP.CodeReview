@@ -189,7 +189,7 @@ gh auth token
 
 If none of the above methods work, the server returns a clear error message instructing you to run `gh auth login` or configure a PAT.
 
-> **Note:** Local self-review (`get_local_files`, `get_local_file_diff`) works without any authentication.
+> **Note:** Local self-review (`get_local_files`, `get_local_content`) works without any authentication.
 
 ---
 
@@ -293,27 +293,12 @@ Or via environment variable: `ContextWindow__GatewayMaxTokens=0`
 | `get_pr_files(prNumber, [pageReference])` | Returns classified list of changed files with per-file stats and review priority; supports pagination via `pageReference` |
 | `get_file_content_at_ref(path, ref)` | Returns full file content at a specific commit/branch/tag |
 
-#### Legacy tools — single-response (suitable for small PRs)
-
-| Tool | Description |
-|---|---|
-| `get_pr_diff(prNumber, [pageReference])` | Returns the complete diff for all files in the PR; supports pagination via `pageReference` |
-| `get_file_diff(prNumber, path)` | Returns the diff for a single file |
-
 ### Local Self-Review Tools (no authentication needed)
-
-#### Primary tools — pagination-aware (recommended for all change sizes)
 
 | Tool | Description |
 |---|---|
 | `get_local_content(pageNumber, [scope], [modelName], [maxTokens])` | Returns diff content for a specific page of local uncommitted changes. Page allocation is computed internally — no separate metadata call needed |
 | `get_local_files([scope], [pageReference])` | Lists locally changed files with classification metadata; supports pagination via `pageReference` |
-
-#### Legacy tools
-
-| Tool | Description |
-|---|---|
-| `get_local_file_diff(path, [scope])` | Returns structured diff for a single locally changed file |
 
 **Scopes for local tools:**
 
@@ -335,26 +320,10 @@ get_pr_metadata(prNumber, modelName)          ← discovers total pages via cont
     → get_file_content_at_ref(path, ref)      ← only when diff context is insufficient
 ```
 
-### PR Review — simple (small PRs only)
-
-```
-get_pr_metadata(prNumber)
-  → get_pr_files(prNumber)
-    → get_file_diff(prNumber, path)           ← per file, minimal tokens
-      → get_file_content_at_ref(path, ref)    ← only when diff is insufficient
-```
-
 ### Self-Review — paginated (recommended)
 
 ```
 get_local_content(page, scope, modelName)     ← computes pages internally; loop until hasMorePages = false
-```
-
-### Self-Review — simple (small changesets only)
-
-```
-get_local_files(scope)
-  → get_local_file_diff(path, scope)          ← per file
 ```
 
 ---

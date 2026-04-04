@@ -19,9 +19,9 @@ REBUSS.Pure                                          (MCP server app: tool handl
 
 ## 2. Data Flow
 
-### PR Review: `get_pr_diff(prNumber: 42)`
+### PR Review: `get_pr_content(prNumber: 42, pageNumber: 1)`
 ```
-MCP stdin → SDK (JSON-RPC dispatch) → [McpServerTool] method on GetPullRequestDiffToolHandler
+MCP stdin → SDK (JSON-RPC dispatch) → [McpServerTool] method on GetPullRequestContentToolHandler
   → ExecuteAsync
     → IPullRequestDataProvider.GetDiffAsync(42)  [DI → AzureDevOpsScmClient or GitHubScmClient]
       → DiffProvider → API client (HTTP) → Parser (JSON → domain) → StructuredDiffBuilder (hunks)

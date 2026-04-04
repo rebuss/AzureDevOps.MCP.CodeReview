@@ -46,7 +46,7 @@ public static class ToolCallResponseExtensions
 
     /// <summary>
     /// Concatenates all <c>content[*].text</c> blocks into a single string.
-    /// Use for multi-block tool responses (e.g. <c>get_pr_diff</c>) where
+    /// Use for multi-block tool responses (e.g. <c>get_pr_files</c>) where
     /// each file diff is a separate content block.
     /// Throws if the response indicates an error.
     /// </summary>

@@ -268,15 +268,6 @@ namespace REBUSS.Pure.Properties {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Partially included: {0}/{1} hunks fit within budget.
-        /// </summary>
-        internal static string ErrorPartiallyIncludedHunks {
-            get {
-                return ResourceManager.GetString("ErrorPartiallyIncludedHunks", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to prNumber must be greater than 0.
         /// </summary>
         internal static string ErrorPrNumberMustBePositive {
@@ -466,51 +457,6 @@ namespace REBUSS.Pure.Properties {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to [get_file_diff] Completed: PR #{PrNumber}, path='{Path}', ...
-        /// </summary>
-        internal static string LogGetFileDiffCompleted {
-            get {
-                return ResourceManager.GetString("LogGetFileDiffCompleted", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to [get_file_diff] Entry: PR #{PrNumber}, path='{Path}'.
-        /// </summary>
-        internal static string LogGetFileDiffEntry {
-            get {
-                return ResourceManager.GetString("LogGetFileDiffEntry", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to [get_file_diff] Error (prNumber={PrNumber}, path='{Path}').
-        /// </summary>
-        internal static string LogGetFileDiffError {
-            get {
-                return ResourceManager.GetString("LogGetFileDiffError", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to [get_file_diff] File not found in pull request (prNumber={PrNumber}, path='{Path}').
-        /// </summary>
-        internal static string LogGetFileDiffFileNotFound {
-            get {
-                return ResourceManager.GetString("LogGetFileDiffFileNotFound", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to [get_file_diff] Pull request not found (prNumber={PrNumber}, path='{Path}').
-        /// </summary>
-        internal static string LogGetFileDiffPrNotFound {
-            get {
-                return ResourceManager.GetString("LogGetFileDiffPrNotFound", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to [get_local_content] Completed: page {Page}/{TotalPages}, ...
         /// </summary>
         internal static string LogGetLocalContentCompleted {
@@ -534,60 +480,6 @@ namespace REBUSS.Pure.Properties {
         internal static string LogGetLocalContentError {
             get {
                 return ResourceManager.GetString("LogGetLocalContentError", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to [get_local_file_diff] Completed: path='{Path}', scope={Scope}, ...
-        /// </summary>
-        internal static string LogGetLocalFileDiffCompleted {
-            get {
-                return ResourceManager.GetString("LogGetLocalFileDiffCompleted", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to [get_local_file_diff] Entry: path='{Path}', scope={Scope}.
-        /// </summary>
-        internal static string LogGetLocalFileDiffEntry {
-            get {
-                return ResourceManager.GetString("LogGetLocalFileDiffEntry", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to [get_local_file_diff] Error (path='{Path}').
-        /// </summary>
-        internal static string LogGetLocalFileDiffError {
-            get {
-                return ResourceManager.GetString("LogGetLocalFileDiffError", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to [get_local_file_diff] File not found in local changes (path='{Path}').
-        /// </summary>
-        internal static string LogGetLocalFileDiffFileNotFound {
-            get {
-                return ResourceManager.GetString("LogGetLocalFileDiffFileNotFound", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to [get_local_file_diff] Git command failed (path='{Path}').
-        /// </summary>
-        internal static string LogGetLocalFileDiffGitCommandFailed {
-            get {
-                return ResourceManager.GetString("LogGetLocalFileDiffGitCommandFailed", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to [get_local_file_diff] Repository not found.
-        /// </summary>
-        internal static string LogGetLocalFileDiffRepositoryNotFound {
-            get {
-                return ResourceManager.GetString("LogGetLocalFileDiffRepositoryNotFound", resourceCulture);
             }
         }
 
@@ -678,60 +570,6 @@ namespace REBUSS.Pure.Properties {
         internal static string LogGetPrContentPrNotFound {
             get {
                 return ResourceManager.GetString("LogGetPrContentPrNotFound", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to [get_pr_diff] Completed (F003): PR #{PrNumber}, ...
-        /// </summary>
-        internal static string LogGetPrDiffCompletedF003 {
-            get {
-                return ResourceManager.GetString("LogGetPrDiffCompletedF003", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to [get_pr_diff] Completed (F004): PR #{PrNumber}, ...
-        /// </summary>
-        internal static string LogGetPrDiffCompletedF004 {
-            get {
-                return ResourceManager.GetString("LogGetPrDiffCompletedF004", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to [get_pr_diff] Entry: PR #{PrNumber}, pageRef={HasRef}, pageNum={PageNum}.
-        /// </summary>
-        internal static string LogGetPrDiffEntry {
-            get {
-                return ResourceManager.GetString("LogGetPrDiffEntry", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to [get_pr_diff] Error.
-        /// </summary>
-        internal static string LogGetPrDiffError {
-            get {
-                return ResourceManager.GetString("LogGetPrDiffError", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to [get_pr_diff] Could not fetch metadata for fingerprint.
-        /// </summary>
-        internal static string LogGetPrDiffMetadataFingerprintFailed {
-            get {
-                return ResourceManager.GetString("LogGetPrDiffMetadataFingerprintFailed", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to [get_pr_diff] Pull request not found.
-        /// </summary>
-        internal static string LogGetPrDiffPrNotFound {
-            get {
-                return ResourceManager.GetString("LogGetPrDiffPrNotFound", resourceCulture);
             }
         }
 

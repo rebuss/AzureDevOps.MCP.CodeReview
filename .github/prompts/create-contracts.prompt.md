@@ -33,20 +33,19 @@ This file is critical when:
 Read the `GetToolDefinition()` method from **every** tool handler. Extract the exact `ToolInputSchema`: property names, types, descriptions, required/optional, default values, enum values.
 
 **Read these files — focus on `GetToolDefinition()` and `McpTool` return value:**
-- `REBUSS.Pure/Tools/GetPullRequestDiffToolHandler.cs`
-- `REBUSS.Pure/Tools/GetFileDiffToolHandler.cs`
 - `REBUSS.Pure/Tools/GetPullRequestMetadataToolHandler.cs`
 - `REBUSS.Pure/Tools/GetPullRequestFilesToolHandler.cs`
+- `REBUSS.Pure/Tools/GetPullRequestContentToolHandler.cs`
 - `REBUSS.Pure/Tools/GetFileContentAtRefToolHandler.cs`
 - `REBUSS.Pure/Tools/GetLocalChangesFilesToolHandler.cs`
-- `REBUSS.Pure/Tools/GetLocalFileDiffToolHandler.cs`
+- `REBUSS.Pure/Tools/GetLocalContentToolHandler.cs`
 
 ### Step 3: Extract output schemas from DTO models
 
 Read **every** output model file. Document every property: name (as it appears in JSON via `[JsonPropertyName]`), C# type, nullable or not, and semantic meaning.
 
 **Read these files in full:**
-- `REBUSS.Pure/Tools/Models/StructuredDiffResult.cs` — used by `get_pr_diff`, `get_file_diff`, `get_local_file_diff`
+- `REBUSS.Pure/Tools/Models/StructuredDiffResult.cs` — used by `get_pr_content`, `get_local_content`
 - `REBUSS.Pure/Tools/Models/PullRequestMetadataResult.cs` — used by `get_pr_metadata`
 - `REBUSS.Pure/Tools/Models/PullRequestFilesResult.cs` — used by `get_pr_files` (also reused by `get_local_files`)
 - `REBUSS.Pure/Tools/Models/FileContentAtRefResult.cs` — used by `get_file_content_at_ref`
@@ -57,14 +56,14 @@ Read **every** output model file. Document every property: name (as it appears i
 The server uses **two different serialization configs**. Read these to understand the full pipeline:
 
 - The MCP SDK handles transport-layer serialization internally (compact JSON-RPC envelope)
-- `REBUSS.Pure/Tools/GetPullRequestDiffToolHandler.cs` — tool handler layer: `camelCase`, `WriteIndented = true`, `WhenWritingNull`
+- `REBUSS.Pure/Tools/GetPullRequestContentToolHandler.cs` — tool handler layer: `camelCase`, `WriteIndented = true`, `WhenWritingNull`
 
 **Key insight to document:** Tool handlers serialize their output DTOs to a JSON **string** (indented, human-readable). This string is returned from the `[McpServerTool]` method. The MCP SDK then wraps it in the JSON-RPC response envelope with compact serialization. The result is: compact JSON-RPC envelope wrapping a `content[0].text` field that contains a pretty-printed JSON string.
 
 ### Step 5: Extract error contract from tool handlers
 
 Read the error handling pattern from any tool handler (they all follow the same pattern):
-- `REBUSS.Pure/Tools/GetPullRequestDiffToolHandler.cs` — `CreateErrorResult` method
+- `REBUSS.Pure/Tools/GetPullRequestContentToolHandler.cs` — `CreateErrorResult` method
 
 And the models (provided by the MCP SDK — `ModelContextProtocol` NuGet package):
 - The SDK defines `ToolResult`, `ContentItem`, `JsonRpcResponse`, and error types internally
@@ -79,11 +78,11 @@ And the models (provided by the MCP SDK — `ModelContextProtocol` NuGet package
 
 Read the mapping/result-building methods in tool handlers and the assertions in tests to discover semantic rules that aren't visible from DTOs alone:
 
-- `REBUSS.Pure/Tools/GetPullRequestDiffToolHandler.cs` — `BuildStructuredResult` method: how domain model maps to DTO
+- `REBUSS.Pure/Tools/GetPullRequestContentToolHandler.cs` — `BuildStructuredResult` method: how domain model maps to DTO
 - `REBUSS.Pure/Tools/GetPullRequestMetadataToolHandler.cs` — `BuildMetadataResult` method: `MaxDescriptionLength` truncation, `isDraft` mapping
 - `REBUSS.Pure/Tools/GetPullRequestFilesToolHandler.cs` — `BuildResult` method: how file classification maps to output
 - `REBUSS.Pure/Tools/GetFileContentAtRefToolHandler.cs` — `ExecuteAsync`: direct mapping, `encoding` field ("utf-8" vs "base64")
-- `REBUSS.Pure.Tests/Tools/GetPullRequestDiffToolHandlerTests.cs` — JSON assertions: what fields are expected, what's omitted
+- `REBUSS.Pure.Tests/Tools/GetPullRequestContentToolHandlerTests.cs` — JSON assertions: what fields are expected, what's omitted
 - `REBUSS.Pure.SmokeTests/Expectations/GitHubTestExpectations.cs` — expected values for contract tests
 - `REBUSS.Pure.SmokeTests/Expectations/AdoTestExpectations.cs` — expected values for contract tests
 
@@ -156,34 +155,23 @@ Binary/generated/test detection logic (reference FileClassifier).]
 
 ---
 
-### 3.3 `get_pr_diff`
+### 3.3 `get_pr_content`
 
 #### Input
-[Table]
+[Table: prNumber (required) + pageNumber (required)]
 
 #### Output
-[Full JSON example showing files array with hunks. Field table.
-Note: StructuredDiffResult is SHARED by get_pr_diff, get_file_diff, get_local_file_diff.
-prNumber is int? — null for local diffs, omitted via WhenWritingNull.]
+[Full plain text example showing paginated diff content.
+Note: returns paginated unified-diff content as plain text ContentBlocks.]
 
 #### Semantic rules
-[skipReason: when set (binary, generated, full-rewrite), hunks array is empty.
+[Pagination: splits diff content across pages. Each page contains complete file diffs.
+skipReason: when set (binary, generated, full-rewrite), hunks array is empty.
 Line op values: "+", "-", " " (context). Additions/deletions counts.]
 
 ---
 
-### 3.4 `get_file_diff`
-
-#### Input
-[Table: prNumber (required) + path (required)]
-
-#### Output
-[Same StructuredDiffResult shape. Note: files array contains exactly 1 element
-(or tool-level error if file not in PR).]
-
----
-
-### 3.5 `get_file_content_at_ref`
+### 3.4 `get_file_content_at_ref`
 
 #### Input
 [Table: path (required) + ref (required)]
@@ -195,7 +183,7 @@ size: byte count of content.]
 
 ---
 
-### 3.6 `get_local_files`
+### 3.5 `get_local_files`
 
 #### Input
 [Table: scope (optional, default "working-tree"). Document all scope values.]
@@ -207,21 +195,21 @@ Reuses PullRequestFileItem and PullRequestFilesSummaryResult.]
 
 ---
 
-### 3.7 `get_local_file_diff`
+### 3.6 `get_local_content`
 
 #### Input
-[Table: path (required) + scope (optional, default "working-tree")]
+[Table: pageNumber (required) + scope (optional, default "working-tree")]
 
 #### Output
-[Same StructuredDiffResult shape. prNumber is null (omitted from JSON).
-files array contains exactly 1 element.]
+[Paginated plain text diff content for local changes.
+Returns unified-diff content as plain text ContentBlocks.]
 
 ---
 
 ## 4. Shared DTO Reference
 
 [Table of all shared DTOs across tools:
-- StructuredDiffResult — used by: get_pr_diff, get_file_diff, get_local_file_diff
+- StructuredDiffResult — used by: get_pr_content, get_local_content
 - StructuredFileChange — nested in StructuredDiffResult
 - StructuredHunk — nested in StructuredFileChange
 - StructuredLine — nested in StructuredHunk

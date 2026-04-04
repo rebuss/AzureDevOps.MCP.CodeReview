@@ -11,13 +11,10 @@ public class McpServerSmokeTests
 {
     private static readonly string[] ExpectedTools =
     [
-        "get_pr_diff",
-        "get_file_diff",
         "get_pr_metadata",
         "get_pr_files",
         "get_file_content_at_ref",
-        "get_local_files",
-        "get_local_file_diff"
+        "get_local_files"
     ];
 
     [Fact]

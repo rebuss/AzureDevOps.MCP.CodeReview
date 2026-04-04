@@ -38,13 +38,13 @@ Read these to extract the actual patterns (don't guess from docs — verify from
 
 ### Step 3: Understand data flow by tracing a real request
 
-Trace the path for `get_pr_diff(prNumber: 42)` from MCP request to JSON response:
+Trace the path for `get_pr_content(prNumber: 42, pageNumber: 1)` from MCP request to JSON response:
 1. MCP SDK receives JSON-RPC via stdin → dispatches to `[McpServerTool]`-annotated method
-2. SDK resolves `GetPullRequestDiffToolHandler` from DI → calls `ExecuteAsync`
+2. SDK resolves `GetPullRequestContentToolHandler` from DI → calls `ExecuteAsync`
 3. Handler calls `IPullRequestDataProvider.GetDiffAsync(42)`
 4. DI resolves this to `AzureDevOpsScmClient` (or `GitHubScmClient`) → delegates to `DiffProvider`
 5. `DiffProvider` calls API client → parses JSON → builds `PullRequestDiff` via `StructuredDiffBuilder`
-6. Handler maps domain model → `StructuredDiffResult` → serialized to JSON string → returned to SDK
+6. Handler maps domain model → paginated plain text content → returned to SDK
 
 Do the same for `get_local_files` (local review path without network).
 

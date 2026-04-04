@@ -112,7 +112,7 @@ Call MCP tool: `get_local_files` with `scope` set to `baseBranch`.
 
 This returns the list of changed files with classifications, statistics, and the current branch.
 
-For a representative diff, call `get_local_file_diff(path, baseBranch)` for the highest-priority source files (up to 3–5 files). Skip binary, generated, and trivially changed files.
+For a representative diff, call `get_local_content` for the highest-priority source files (up to 3–5 files). Skip binary, generated, and trivially changed files.
 
 ---
 

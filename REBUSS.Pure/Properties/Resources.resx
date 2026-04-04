@@ -128,9 +128,6 @@
   <data name="ErrorPageNumberOutOfRange" xml:space="preserve">
     <value>Page number {0} is out of range. Valid range: 1 to {1}.</value>
   </data>
-  <data name="ErrorPartiallyIncludedHunks" xml:space="preserve">
-    <value>Partially included: {0}/{1} hunks fit within budget</value>
-  </data>
   <data name="ErrorPrNumberMustBePositive" xml:space="preserve">
     <value>prNumber must be greater than 0</value>
   </data>
@@ -194,21 +191,6 @@
   <data name="LogGetFileContentAtRefNotFound" xml:space="preserve">
     <value>[get_file_content_at_ref] File content not found (path='{Path}', ref='{Ref}')</value>
   </data>
-  <data name="LogGetFileDiffCompleted" xml:space="preserve">
-    <value>[get_file_diff] Completed: PR #{PrNumber}, path='{Path}', {ResponseLength} chars, {ElapsedMs}ms</value>
-  </data>
-  <data name="LogGetFileDiffEntry" xml:space="preserve">
-    <value>[get_file_diff] Entry: PR #{PrNumber}, path='{Path}'</value>
-  </data>
-  <data name="LogGetFileDiffError" xml:space="preserve">
-    <value>[get_file_diff] Error (prNumber={PrNumber}, path='{Path}')</value>
-  </data>
-  <data name="LogGetFileDiffFileNotFound" xml:space="preserve">
-    <value>[get_file_diff] File not found in pull request (prNumber={PrNumber}, path='{Path}')</value>
-  </data>
-  <data name="LogGetFileDiffPrNotFound" xml:space="preserve">
-    <value>[get_file_diff] Pull request not found (prNumber={PrNumber}, path='{Path}')</value>
-  </data>
   <data name="LogGetLocalContentCompleted" xml:space="preserve">
     <value>[get_local_content] Completed: page {Page}/{TotalPages}, {FileCount} files, {Ms}ms</value>
   </data>
@@ -217,24 +199,6 @@
   </data>
   <data name="LogGetLocalContentError" xml:space="preserve">
     <value>[get_local_content] Error (pageNumber={PageNumber}, scope={Scope})</value>
-  </data>
-  <data name="LogGetLocalFileDiffCompleted" xml:space="preserve">
-    <value>[get_local_file_diff] Completed: path='{Path}', scope={Scope}, {ResponseLength} chars, {ElapsedMs}ms</value>
-  </data>
-  <data name="LogGetLocalFileDiffEntry" xml:space="preserve">
-    <value>[get_local_file_diff] Entry: path='{Path}', scope={Scope}</value>
-  </data>
-  <data name="LogGetLocalFileDiffError" xml:space="preserve">
-    <value>[get_local_file_diff] Error (path='{Path}')</value>
-  </data>
-  <data name="LogGetLocalFileDiffFileNotFound" xml:space="preserve">
-    <value>[get_local_file_diff] File not found in local changes (path='{Path}')</value>
-  </data>
-  <data name="LogGetLocalFileDiffGitCommandFailed" xml:space="preserve">
-    <value>[get_local_file_diff] Git command failed (path='{Path}')</value>
-  </data>
-  <data name="LogGetLocalFileDiffRepositoryNotFound" xml:space="preserve">
-    <value>[get_local_file_diff] Repository not found</value>
   </data>
   <data name="LogGetLocalFilesCompletedF003" xml:space="preserve">
     <value>[get_local_files] Completed (F003): scope={Scope}, {FileCount} files, {ElapsedMs}ms</value>
@@ -265,24 +229,6 @@
   </data>
   <data name="LogGetPrContentPrNotFound" xml:space="preserve">
     <value>[get_pr_content] PR not found (prNumber={PrNumber})</value>
-  </data>
-  <data name="LogGetPrDiffCompletedF003" xml:space="preserve">
-    <value>[get_pr_diff] Completed (F003): PR #{PrNumber}, {FileCount} files, {ElapsedMs}ms</value>
-  </data>
-  <data name="LogGetPrDiffCompletedF004" xml:space="preserve">
-    <value>[get_pr_diff] Completed (F004): PR #{PrNumber}, page {Page}/{TotalPages}, {FileCount} files on page, {ElapsedMs}ms</value>
-  </data>
-  <data name="LogGetPrDiffEntry" xml:space="preserve">
-    <value>[get_pr_diff] Entry: PR #{PrNumber}, pageRef={HasRef}, pageNum={PageNum}</value>
-  </data>
-  <data name="LogGetPrDiffError" xml:space="preserve">
-    <value>[get_pr_diff] Error</value>
-  </data>
-  <data name="LogGetPrDiffMetadataFingerprintFailed" xml:space="preserve">
-    <value>[get_pr_diff] Could not fetch metadata for fingerprint</value>
-  </data>
-  <data name="LogGetPrDiffPrNotFound" xml:space="preserve">
-    <value>[get_pr_diff] Pull request not found</value>
   </data>
   <data name="LogGetPrFilesCompletedF003" xml:space="preserve">
     <value>[get_pr_files] Completed (F003): PR #{PrNumber}, {FileCount} files, {ElapsedMs}ms</value>

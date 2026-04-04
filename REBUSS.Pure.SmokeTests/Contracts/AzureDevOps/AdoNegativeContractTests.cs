@@ -26,17 +26,6 @@ public class AdoNegativeContractTests
     }
 
     [SkippableFact]
-    public async Task NonExistentPr_Diff_ReturnsError()
-    {
-        Skip.IfNot(TestSettings.IsAdoConfigured, TestSettings.AdoSkipReason);
-
-        var response = await _fixture.Server.SendToolCallAsync(
-            "get_pr_diff", new { prNumber = 999999 });
-
-        Assert.True(response.IsToolError());
-    }
-
-    [SkippableFact]
     public async Task NonExistentPr_Files_ReturnsError()
     {
         Skip.IfNot(TestSettings.IsAdoConfigured, TestSettings.AdoSkipReason);

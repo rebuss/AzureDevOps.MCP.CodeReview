@@ -78,18 +78,15 @@ REBUSS.Pure                                      (MCP server app)
 
 ---
 
-## MCP tools (9 total)
+## MCP tools (6 total)
 
 | Tool name | Handler | What it does |
 |---|---|---|
-| `get_pr_diff` | `GetPullRequestDiffToolHandler` | Returns plain text per-file hunks for a PR; supports pagination (F004) |
-| `get_file_diff` | `GetFileDiffToolHandler` | Returns plain text diff for one file in a PR |
 | `get_pr_metadata` | `GetPullRequestMetadataToolHandler` | Returns PR metadata as plain text; optionally computes content paging info |
 | `get_pr_content` | `GetPullRequestContentToolHandler` | Returns one paginated page of PR diff content as plain text |
 | `get_pr_files` | `GetPullRequestFilesToolHandler` | Returns classified file list for a PR as plain text; supports pagination (F004) |
 | `get_file_content_at_ref` | `GetFileContentAtRefToolHandler` | Returns file content at a specific Git ref as plain text |
 | `get_local_files` | `GetLocalChangesFilesToolHandler` | Lists locally changed files with classification as plain text |
-| `get_local_file_diff` | `GetLocalFileDiffToolHandler` | Returns plain text diff for one local file |
 | `get_local_content` | `GetLocalContentToolHandler` | Returns one paginated page of local diff content as plain text |
 
 ---

@@ -42,8 +42,6 @@ internal static class PlainTextFormatter
 
     /// <summary>
     /// Formats a single diff hunk with a unified-diff <c>@@</c> header line.
-    /// Used both for output and for token-count estimation in
-    /// <see cref="ToolHandlerHelpers.TruncateHunks"/>.
     /// </summary>
     public static string FormatHunk(StructuredHunk hunk)
     {

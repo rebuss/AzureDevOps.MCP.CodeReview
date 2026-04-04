@@ -264,23 +264,19 @@ Full codebase context is included below (file-role map, dependency graph, DI reg
 
 | File | Role | Depends on |
 |---|---|---|
-| `REBUSS.Pure\Tools\GetPullRequestDiffToolHandler.cs` | `[McpServerToolType]` `get_pr_diff` — returns plain text `IEnumerable<ContentBlock>` (one `TextContentBlock` per file + manifest/pagination footer); F004 integration: dual F003/F004 paths, pageReference resume, staleness detection, pageNumber access; prNumber now optional when pageReference is provided; delegates candidate building, sorting, page extraction, manifest construction, and hunk truncation to `ToolHandlerHelpers`; SDK attribute-based registration (`[McpServerTool]`/`[Description]`), throws `McpException` for errors | `IPullRequestDataProvider`, `IPageAllocator`, `IPageReferenceCodec`, `ToolHandlerHelpers`, `PlainTextFormatter`, `StructuredFileChange` models, `PaginationMetadataResult`, `StalenessWarningResult` |
-| `REBUSS.Pure\Tools\GetFileDiffToolHandler.cs` | `[McpServerToolType]` `get_file_diff` — returns plain text `IEnumerable<ContentBlock>` (one `TextContentBlock` per file + manifest footer); delegates candidate building and hunk truncation to `ToolHandlerHelpers`; SDK attribute-based registration (`[McpServerTool]`/`[Description]`), throws `McpException`/`ArgumentException` for errors | `IPullRequestDataProvider`, `IResponsePacker`, `IContextBudgetResolver`, `ITokenEstimator`, `IFileClassifier`, `ToolHandlerHelpers`, `PlainTextFormatter`, `StructuredFileChange` models |
 | `REBUSS.Pure\Tools\GetPullRequestMetadataToolHandler.cs` | `[McpServerToolType]` `get_pr_metadata` — returns plain text `IEnumerable<ContentBlock>` (single `TextContentBlock`); extended with optional `modelName`/`maxTokens` params to compute content paging info formatted as text; Feature 005: replaced `GetFilesAsync + BuildStatBasedCandidates` with `IPullRequestDiffCache.GetOrFetchDiffAsync + FileTokenMeasurement.BuildCandidatesFromDiff` for actual diff-based token measurement; SDK attribute-based registration (`[McpServerTool]`/`[Description]`), throws `McpException` for errors | `IPullRequestDataProvider`, `IPullRequestDiffCache`, `IContextBudgetResolver`, `ITokenEstimator`, `IFileClassifier`, `IPageAllocator`, `PlainTextFormatter` |
 | `REBUSS.Pure\Tools\GetPullRequestContentToolHandler.cs` | `[McpServerToolType]` `get_pr_content` — returns plain text `IEnumerable<ContentBlock>` (file blocks + pagination footer); Feature 005: replaced `IPullRequestDataProvider` with `IPullRequestDiffCache` for diff retrieval; uses `FileTokenMeasurement.BuildCandidatesFromDiff` for actual diff-based token measurement instead of stat-based estimation; SDK attribute-based registration | `IPullRequestDiffCache`, `IContextBudgetResolver`, `ITokenEstimator`, `IFileClassifier`, `IPageAllocator`, `PlainTextFormatter`, `PaginationMetadataResult`, `StalenessWarningResult` |
 | `REBUSS.Pure\Tools\GetLocalContentToolHandler.cs` | `[McpServerToolType]` `get_local_content` — returns plain text `IEnumerable<ContentBlock>` (file blocks + pagination footer); stat-based page allocation, parallel per-file diff fetch via `Task.WhenAll` (only page files); uses `FileTokenMeasurement.MapToStructured` for file mapping; SDK attribute-based registration | `ILocalReviewProvider`, `IContextBudgetResolver`, `ITokenEstimator`, `IFileClassifier`, `IPageAllocator`, `FileTokenMeasurement`, `PlainTextFormatter`, `PaginationMetadataResult` |
-| `REBUSS.Pure\Tools\GetPullRequestFilesToolHandler.cs` | `[McpServerToolType]` `get_pr_files` — returns plain text `IEnumerable<ContentBlock>` (file list block + manifest/pagination footer); F004 integration: same pagination pattern as get_pr_diff; prNumber now optional when pageReference is provided; delegates candidate building, sorting, page extraction, and manifest construction to `ToolHandlerHelpers`; SDK attribute-based registration, throws `McpException` for errors | `IPullRequestDataProvider`, `IPageAllocator`, `IPageReferenceCodec`, `ToolHandlerHelpers`, `PlainTextFormatter`, `PaginationMetadataResult`, `StalenessWarningResult` |
+| `REBUSS.Pure\Tools\GetPullRequestFilesToolHandler.cs` | `[McpServerToolType]` `get_pr_files` — returns plain text `IEnumerable<ContentBlock>` (file list block + manifest/pagination footer); F004 integration: pagination with pageReference resume and staleness detection; prNumber now optional when pageReference is provided; delegates candidate building, sorting, page extraction, and manifest construction to `ToolHandlerHelpers`; SDK attribute-based registration, throws `McpException` for errors | `IPullRequestDataProvider`, `IPageAllocator`, `IPageReferenceCodec`, `ToolHandlerHelpers`, `PlainTextFormatter`, `PaginationMetadataResult`, `StalenessWarningResult` |
 | `REBUSS.Pure\Tools\GetFileContentAtRefToolHandler.cs` | `[McpServerToolType]` `get_file_content_at_ref` — returns plain text `IEnumerable<ContentBlock>` (single `TextContentBlock` with raw file content); SDK attribute-based registration (`[McpServerTool]`/`[Description]`), throws `McpException`/`ArgumentException` for errors | `IFileContentDataProvider` |
 | `REBUSS.Pure\Tools\GetLocalChangesFilesToolHandler.cs` | `[McpServerToolType]` `get_local_files` — returns plain text `IEnumerable<ContentBlock>` (file list block + manifest/pagination footer); F004 integration: pagination support but no staleness (null fingerprint); delegates candidate building, sorting, page extraction, and manifest construction to `ToolHandlerHelpers`; SDK attribute-based registration, throws `McpException` for errors | `ILocalReviewProvider`, `IPageAllocator`, `IPageReferenceCodec`, `ToolHandlerHelpers`, `PlainTextFormatter`, `PaginationMetadataResult` |
-| `REBUSS.Pure\Tools\GetLocalFileDiffToolHandler.cs` | `[McpServerToolType]` `get_local_file_diff` — returns plain text `IEnumerable<ContentBlock>` (one `TextContentBlock` per file); delegates candidate building and hunk truncation to `ToolHandlerHelpers`; SDK attribute-based registration (`[McpServerTool]`/`[Description]`), throws `McpException`/`ArgumentException` for errors | `ILocalReviewProvider`, `IResponsePacker`, `IContextBudgetResolver`, `ITokenEstimator`, `IFileClassifier`, `ToolHandlerHelpers`, `PlainTextFormatter`, `StructuredFileChange` models |
-
 ### Tool shared helpers (REBUSS.Pure\Tools\Shared)
 
 | File | Role | Depends on |
 |---|---|---|
 | `REBUSS.Pure\Tools\Shared\PlainTextFormatter.cs` | Static internal helper: formats all tool output as plain text strings — `FormatFileDiff` (full diff block with `=== path (changeType: +N -N) ===` header), `FormatHunk` (single hunk block), `FormatFileList` (file list table with dynamic column width), `FormatFileEntry` (single file row, accepts `pathWidth` param with truncation for long paths), `FormatManifestBlock` (manifest footer with token budget, dynamic path width), `FormatPaginationBlock` (paginated footer with page ref), `FormatSimplePaginationBlock` (non-paginated footer with optional category breakdown), `FormatMetadata` (PR metadata text) | `StructuredFileChange`, `ContentManifestResult`, `ManifestEntryResult`, `ManifestSummaryResult`, `PaginationMetadataResult`, `StalenessWarningResult` |
 | `REBUSS.Pure\Tools\Shared\FileTokenMeasurement.cs` | Static internal helper (Feature 005): `BuildCandidatesFromDiff` formats each `FileChange` to plain text via `PlainTextFormatter.FormatFileDiff` and measures actual token cost via `ITokenEstimator.EstimateTokenCount`; `MapToStructured` converts domain `FileChange` → `StructuredFileChange` internal model (line op char→string mapping) | `PullRequestDiff`, `ITokenEstimator`, `IFileClassifier`, `PackingCandidate`, `PlainTextFormatter`, `StructuredFileChange` |
-| `REBUSS.Pure\Tools\Shared\ToolHandlerHelpers.cs` | Static internal helper: shared pagination/packing methods extracted from tool handlers — `SortCandidates` (priority sort), `BuildCandidates<T>` (generic plain-text format→estimate→classify), `ExtractPageFiles<T>` (simple and partial-aware overloads), `BuildPageManifest` (manifest DTO from page slice), `TruncateHunks` (budget-limited hunk inclusion) | `PackingPriorityComparer`, `ITokenEstimator`, `IFileClassifier`, `PackingCandidate`, `PageSlice`, `PageAllocation`, `PaginationOrchestrator`, `PlainTextFormatter`, `StructuredFileChange`, `ContentManifestResult`, `ManifestEntryResult` |
+| `REBUSS.Pure\Tools\Shared\ToolHandlerHelpers.cs` | Static internal helper: shared pagination/packing methods extracted from tool handlers — `SortCandidates` (priority sort), `BuildCandidates<T>` (generic plain-text format→estimate→classify), `ExtractPageFiles<T>` (simple and partial-aware overloads), `BuildPageManifest` (manifest DTO from page slice) | `PackingPriorityComparer`, `ITokenEstimator`, `IFileClassifier`, `PackingCandidate`, `PageSlice`, `PageAllocation`, `PaginationOrchestrator`, `PlainTextFormatter`, `StructuredFileChange`, `ContentManifestResult`, `ManifestEntryResult` |
 
 ### Tool output models (REBUSS.Pure\Tools\Models)
 
@@ -378,7 +374,7 @@ global mode writes to `~/.mcp.json` (Visual Studio) and `%APPDATA%\Code\User\mcp
 | `README.md` | Project documentation |
 | `install.ps1` | PowerShell installer: downloads latest `.nupkg` from GitHub Releases (`rebuss/CodeReview.MCP`), installs as global tool (`CodeReview.MCP`) |
 | `install.sh` | Bash installer: same workflow as `install.ps1` for Linux/macOS |
-| `.github\prompts\create-pr.md` | *(Not deployed by `init` — reserved for future release)* GitHub Copilot prompt for creating a pull request; uses `get_local_files`, `get_local_file_diff` MCP tools and `git`/`gh`/`az` CLI |
+| `.github\prompts\create-pr.md` | *(Not deployed by `init` — reserved for future release)* GitHub Copilot prompt for creating a pull request; uses `get_local_files` MCP tool and `git`/`gh`/`az` CLI |
 | `.github\prompts\create-project-conventions.prompt.md` | Meta-prompt: instructs agent how to create/regenerate `ProjectConventions.md` from codebase analysis |
 | `.github\prompts\create-architecture.prompt.md` | Meta-prompt: instructs agent how to create/regenerate `Architecture.md` — deep-dive into MCP protocol, provider internals, auth/config, design rationale |
 | `.github\prompts\create-extension-recipes.prompt.md` | Meta-prompt: instructs agent how to create/regenerate `ExtensionRecipes.md` — detailed cookbook with code templates, validation checklists, pitfalls |
@@ -422,12 +418,9 @@ global mode writes to `~/.mcp.json` (Visual Studio) and `%APPDATA%\Code\User\mcp
 | `REBUSS.Pure.GitHub.Tests\Configuration\GitHubChainedAuthenticationProviderTests.cs` | `GitHubChainedAuthenticationProvider` — PAT precedence, cached tokens, GitHub CLI token acquisition and caching, expired token fallback, null expiry used as valid, `InvalidateCachedToken`, `BuildAuthRequiredMessage` tests read `Resources.ErrorGitHubAuthRequired` directly |
 | `REBUSS.Pure.GitHub.Tests\Configuration\GitHubCliTokenProviderTests.cs` | `GitHubCliTokenProvider.ParseTokenResponse` — valid plain text, whitespace trimming, empty/null/whitespace returns null, `DefaultTokenLifetime` constant (24 hours) |
 | `REBUSS.Pure.GitHub.Tests\Configuration\GitHubCliProcessHelperTests.cs` | `GitHubCliProcessHelper.GetProcessStartArgs` — Windows `cmd.exe /c gh` wrapping, Linux direct `gh` invocation, custom `ghPath`; `TryFindGhCliOnWindows` |
-| `REBUSS.Pure.Tests\Tools\GetPullRequestDiffToolHandlerTests.cs` | `GetPullRequestDiffToolHandler` — plain text output, validation (McpException), provider exceptions; +F004 pagination tests (pageReference, staleness, pageNumber, mutual exclusion) |
-| `REBUSS.Pure.Tests\Tools\GetFileDiffToolHandlerTests.cs` | `GetFileDiffToolHandler` — plain text output, validation (McpException), provider exceptions (McpException), packing manifest |
 | `REBUSS.Pure.Tests\Tools\GetPullRequestFilesToolHandlerTests.cs` | `GetPullRequestFilesToolHandler` — plain text output, validation (McpException), provider exceptions, packing manifest |
 | `REBUSS.Pure.Tests\Tools\GetFileContentAtRefToolHandlerTests.cs` | `GetFileContentAtRefToolHandler` — plain text output, validation (McpException), provider exceptions (McpException) |
 | `REBUSS.Pure.Tests\Tools\GetLocalChangesFilesToolHandlerTests.cs` | `GetLocalChangesFilesToolHandler` — scope parsing, plain text output, error handling (McpException), packing manifest |
-| `REBUSS.Pure.Tests\Tools\GetLocalFileDiffToolHandlerTests.cs` | `GetLocalFileDiffToolHandler` — plain text output, validation (McpException), scope routing, error handling (McpException), packing manifest |
 | `REBUSS.Pure.Tests\Tools\GetPullRequestMetadataToolHandlerTests.cs` | `GetPullRequestMetadataToolHandler` — plain text output, validation (McpException), provider exceptions, +contentPaging computation (diff-based token measurement via `IPullRequestDiffCache` + `FileTokenMeasurement`, page allocation, backward compatibility without budget params), diff-cache verification test (Feature 005: replaced `_dataProvider.GetFilesAsync` mock with `_diffCache` mock, replaced `EstimateFromStats` with `EstimateTokenCount`) |
 | `REBUSS.Pure.Tests\Tools\GetPullRequestContentToolHandlerTests.cs` | `GetPullRequestContentToolHandler` — plain text output, validation (McpException), pagination (page filtering, category breakdown, multi-page, out-of-range), PR not found error; Feature 005: replaced `_dataProvider` with `_diffCache` mock, diff-based token measurement via `EstimateTokenCount`, diff-cache and token-estimation verification tests |
 | `REBUSS.Pure.Tests\Tools\GetLocalContentToolHandlerTests.cs` | `GetLocalContentToolHandler` — plain text output, validation (McpException), pagination (per-file diff fetch, category breakdown, scope routing, multi-page, out-of-range) |
@@ -445,7 +438,6 @@ global mode writes to `~/.mcp.json` (Visual Studio) and `%APPDATA%\Code\User\mcp
 | `REBUSS.Pure.Tests\Services\PullRequestDiffCacheTests.cs` | `PullRequestDiffCache` (Feature 005) — 15 tests: cache miss fetches from provider, cache hit returns same instance, different PRs cached independently, provider exceptions propagate (not cached), failed fetches retried on second call, cancellation token passthrough, staleness detection (commit match → cache hit, commit mismatch → evict + re-fetch, null known commit → no eviction, null cached commit → no eviction, case-insensitive comparison), concurrent deduplication (concurrent miss fetches once, failure propagates to all waiters, failure allows retry) |
 | `REBUSS.Pure.Tests\Tools\Shared\FileTokenMeasurementTests.cs` | `FileTokenMeasurement` (Feature 005) — 18 tests: `BuildCandidatesFromDiff` (correct count/paths/tokens/classifications/total changes, empty diffs, skipped files), `MapToStructured` (path, changeType, skipReason, additions/deletions, hunks, line op char→string, null skipReason) |
 | `REBUSS.Pure.Tests\Logging\FileLoggerProviderTests.cs` | `FileLoggerProvider` — daily rotation, file naming, write content, timestamp, retention/deletion, roll-over, non-log file safety |
-| `REBUSS.Pure.Tests\Integration\EndToEndTests.cs` | Integration: DI-constructed handler → mocked provider → structured JSON result; tests happy path and PR-not-found error |
 | `REBUSS.Pure.Tests\Mcp\McpServerTests.cs` | `McpServer` — initialize, tools/list, tools/call, unknown method, invalid JSON, empty lines, notifications |
 | `REBUSS.Pure.Tests\Mcp\InitializeMethodHandlerTests.cs` | `InitializeMethodHandler` — protocol version negotiation, roots extraction, storage, edge cases |
 | `REBUSS.Pure.Tests\Mcp\McpProtocolVersionNegotiatorTests.cs` | `McpProtocolVersionNegotiator` — exact match, downward negotiation, future/past versions, null/empty input |
@@ -466,17 +458,13 @@ global mode writes to `~/.mcp.json` (Visual Studio) and `%APPDATA%\Code\User\mcp
 | `REBUSS.Pure.SmokeTests\Expectations\AdoTestExpectations.cs` | Expected values from Azure DevOps fixture PR (title, state, file paths, statuses, code fragments) |
 | `REBUSS.Pure.SmokeTests\Expectations\GitHubTestExpectations.cs` | Expected values from GitHub fixture PR (title, state, file paths, statuses, code fragments) |
 | `REBUSS.Pure.SmokeTests\Protocol\InitializeProtocolTests.cs` | Protocol tests (no credentials): MCP initialize handshake — protocol version, server info, capabilities |
-| `REBUSS.Pure.SmokeTests\Protocol\ToolsListProtocolTests.cs` | Protocol tests (no credentials): tools/list — tool count (9), names, schemas; PrNumberTools checks property declaration (not required array) for get_file_diff+get_pr_metadata+get_pr_content, +PaginationEnabledTools array, +2 schema assertions for F004 pagination parameters, +ContentTools_HavePageNumberProperty for get_pr_content/get_local_content |
+| `REBUSS.Pure.SmokeTests\Protocol\ToolsListProtocolTests.cs` | Protocol tests (no credentials): tools/list — tool count (6), names, schemas; PrNumberTools checks property declaration (not required array) for get_pr_metadata+get_pr_content, +PaginationEnabledTools array, +2 schema assertions for F004 pagination parameters, +ContentTools_HavePageNumberProperty for get_pr_content/get_local_content |
 | `REBUSS.Pure.SmokeTests\Contracts\AzureDevOps\AdoMetadataContractTests.cs` | Contract tests (ADO): `get_pr_metadata` plain-text output — PR header/title, state, branches, author/source, stats, SHA lines, description, draft marker |
 | `REBUSS.Pure.SmokeTests\Contracts\AzureDevOps\AdoFilesContractTests.cs` | Contract tests (ADO): `get_pr_files` plain-text output — file-count header, paths/statuses, summary/priorities, non-binary/non-generated markers |
-| `REBUSS.Pure.SmokeTests\Contracts\AzureDevOps\AdoDiffContractTests.cs` | Contract tests (ADO): `get_pr_diff` plain-text output — file blocks, diff markers, and expected code fragment |
-| `REBUSS.Pure.SmokeTests\Contracts\AzureDevOps\AdoFileDiffContractTests.cs` | Contract tests (ADO): `get_file_diff` plain-text output — single file block/path, diff markers, nonexistent file error |
 | `REBUSS.Pure.SmokeTests\Contracts\AzureDevOps\AdoFileContentContractTests.cs` | Contract tests (ADO): `get_file_content_at_ref` plain-text output — content at main/branch, non-binary marker, nonexistent file error |
 | `REBUSS.Pure.SmokeTests\Contracts\AzureDevOps\AdoNegativeContractTests.cs` | Negative tests (ADO): nonexistent PR, invalid/missing prNumber |
 | `REBUSS.Pure.SmokeTests\Contracts\GitHub\GitHubMetadataContractTests.cs` | Contract tests (GitHub): `get_pr_metadata` plain-text output — PR header/title, state, branches, author/source, stats, SHA lines, description, draft marker |
 | `REBUSS.Pure.SmokeTests\Contracts\GitHub\GitHubFilesContractTests.cs` | Contract tests (GitHub): `get_pr_files` plain-text output — file-count header, paths/statuses, summary/priorities, non-binary/non-generated markers |
-| `REBUSS.Pure.SmokeTests\Contracts\GitHub\GitHubDiffContractTests.cs` | Contract tests (GitHub): `get_pr_diff` plain-text output — file blocks, diff markers, and expected code fragment |
-| `REBUSS.Pure.SmokeTests\Contracts\GitHub\GitHubFileDiffContractTests.cs` | Contract tests (GitHub): `get_file_diff` plain-text output — single file block/path, diff markers, nonexistent file error |
 | `REBUSS.Pure.SmokeTests\Contracts\GitHub\GitHubFileContentContractTests.cs` | Contract tests (GitHub): `get_file_content_at_ref` plain-text output — content at main/branch, non-binary marker, nonexistent file error |
 | `REBUSS.Pure.SmokeTests\Contracts\GitHub\GitHubNegativeContractTests.cs` | Negative tests (GitHub): nonexistent PR, invalid/missing prNumber |
 
@@ -495,9 +483,6 @@ PullRequestDiff (+ FileChange, DiffHunk, DiffLine)
   ? GitHubFilesProvider [GitHub]                (consumes: reads FileChange from PR files API; uses .Additions, .Deletions)
   ? GitHubScmClient [GitHub]                    (delegates: passes through from diff/files providers)
   ? LocalReviewProvider [Pure]                   (produces for GetFileDiffAsync; consumes FileChange for files listing)
-  ? GetPullRequestDiffToolHandler [Pure]         (consumes: maps FileChange → StructuredFileChange)
-  ? GetFileDiffToolHandler [Pure]                (consumes: maps FileChange → StructuredFileChange)
-  ? GetLocalFileDiffToolHandler [Pure]           (consumes: maps FileChange → StructuredFileChange)
   ? GetPullRequestMetadataToolHandler [Pure]     (consumes via IPullRequestDiffCache: diff-based token measurement for contentPaging)
   ? GetPullRequestContentToolHandler [Pure]      (consumes via IPullRequestDiffCache: diff-based page allocation and content rendering)
   ? FileTokenMeasurement [Pure]                  (consumes: serializes FileChange to JSON for token measurement)
@@ -552,8 +537,6 @@ IScmClient / IPullRequestDataProvider / IFileContentDataProvider [Core interface
   ? AzureDevOpsScmClient [AzureDevOps]            (implements IScmClient; registered via interface forwarding in ServiceCollectionExtensions)
   ? GitHubScmClient [GitHub]                      (implements IScmClient; registered via interface forwarding in ServiceCollectionExtensions)
   ? ReviewContextOrchestrator [Core]               (consumes IScmClient: fetches all data for analysis)
-  ? GetPullRequestDiffToolHandler [Pure]           (consumes IPullRequestDataProvider)
-  ? GetFileDiffToolHandler [Pure]                  (consumes IPullRequestDataProvider)
   ? GetPullRequestMetadataToolHandler [Pure]       (consumes IPullRequestDataProvider for metadata; diff via IPullRequestDiffCache)
   ? GetPullRequestFilesToolHandler [Pure]          (consumes IPullRequestDataProvider)
   ? GetFileContentAtRefToolHandler [Pure]          (consumes IFileContentDataProvider)
@@ -577,7 +560,6 @@ LocalReviewScope / LocalFileStatus
   ? LocalGitClient [Pure]                          (produces LocalFileStatus)
   ? LocalReviewProvider [Pure]                     (consumes: orchestrates git client + diff builder)
   ? GetLocalChangesFilesToolHandler [Pure]          (consumes scope string ? parse ? pass to provider)
-  ? GetLocalFileDiffToolHandler [Pure]              (consumes scope string + path ? pass to provider)
   ? GetLocalContentToolHandler [Pure]               (consumes scope string + pageNumber ? pass to provider)
 
 LocalReviewFiles
@@ -805,9 +787,9 @@ switch (provider)
 
 // MCP tool handlers
 // SDK-migrated handlers (registered via [McpServerToolType] attribute discovery):
-// GetPullRequestDiffToolHandler, GetPullRequestFilesToolHandler, GetLocalChangesFilesToolHandler,
-// GetFileDiffToolHandler, GetPullRequestMetadataToolHandler, GetFileContentAtRefToolHandler,
-// GetLocalFileDiffToolHandler
+// GetPullRequestFilesToolHandler, GetLocalChangesFilesToolHandler,
+// GetPullRequestMetadataToolHandler, GetFileContentAtRefToolHandler,
+// GetPullRequestContentToolHandler, GetLocalContentToolHandler
 
 // Local self-review pipeline
 services.AddSingleton<ILocalGitClient, LocalGitClient>();
