@@ -27,4 +27,4 @@ specs/
 .vscode/settings.json
 .github/prompts/review-pr.prompt.md
 .github/prompts/self-review.prompt.md
-dotnet-tools.json
+scripts/

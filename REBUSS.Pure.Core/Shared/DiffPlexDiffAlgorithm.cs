@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using DiffPlex;
 
 namespace REBUSS.Pure.Core.Shared;
@@ -10,7 +11,6 @@ public class DiffPlexDiffAlgorithm : IDiffAlgorithm
 {
     public IReadOnlyList<DiffEdit> ComputeEdits(string[] oldLines, string[] newLines)
     {
-        // Create a fresh Differ per call to avoid sharing mutable state across concurrent requests.
         var differ = new Differ();
 
         var oldText = string.Join('\n', oldLines);
@@ -24,8 +24,12 @@ public class DiffPlexDiffAlgorithm : IDiffAlgorithm
 
         foreach (var block in diffResult.DiffBlocks)
         {
-            // Context lines before this block
-            while (oldIdx < block.DeleteStartA && newIdx < block.InsertStartB)
+            // Context lines before this block — gaps must be equal on both sides.
+            Debug.Assert(block.DeleteStartA - oldIdx == block.InsertStartB - newIdx,
+                "Context gap mismatch — diff block indices drifted.");
+
+            int contextCount = block.DeleteStartA - oldIdx;
+            for (int i = 0; i < contextCount; i++)
                 edits.Add(new DiffEdit(' ', oldIdx++, newIdx++));
 
             // Deleted lines
@@ -37,7 +41,10 @@ public class DiffPlexDiffAlgorithm : IDiffAlgorithm
                 edits.Add(new DiffEdit('+', oldIdx, newIdx++));
         }
 
-        // Trailing context lines
+        // Trailing context lines — remaining counts must match.
+        Debug.Assert(oldLines.Length - oldIdx == newLines.Length - newIdx,
+            "Trailing context mismatch — remaining old/new line counts differ.");
+
         while (oldIdx < oldLines.Length && newIdx < newLines.Length)
             edits.Add(new DiffEdit(' ', oldIdx++, newIdx++));
 

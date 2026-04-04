@@ -101,6 +101,7 @@ public class GitHubFilesContractTests
 
         Assert.Contains("Summary:", content);
         Assert.Contains($"{GitHubTestExpectations.TotalFiles} source", content);
+        Assert.DoesNotMatch(new System.Text.RegularExpressions.Regex(@"\d+ test"), content);
     }
 
     [SkippableFact]

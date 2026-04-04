@@ -21,7 +21,7 @@ public class GitHubDiffContractTests
 
         var response = await _fixture.Server.SendToolCallAsync(
             "get_pr_diff", new { prNumber = TestSettings.GhPrNumber });
-        var content = response.GetToolText();
+        var content = response.GetAllToolText();
 
         Assert.Contains(GitHubTestExpectations.FilePaths[0], content);
         Assert.Contains(GitHubTestExpectations.FilePaths[1], content);
@@ -34,7 +34,7 @@ public class GitHubDiffContractTests
 
         var response = await _fixture.Server.SendToolCallAsync(
             "get_pr_diff", new { prNumber = TestSettings.GhPrNumber });
-        var content = response.GetToolText();
+        var content = response.GetAllToolText();
 
         var blockCount = content.Split("=== ", StringSplitOptions.RemoveEmptyEntries).Length;
         Assert.True(blockCount >= GitHubTestExpectations.TotalFiles,
@@ -48,10 +48,11 @@ public class GitHubDiffContractTests
 
         var response = await _fixture.Server.SendToolCallAsync(
             "get_pr_diff", new { prNumber = TestSettings.GhPrNumber });
-        var content = response.GetToolText();
+        var content = response.GetAllToolText();
 
-        Assert.Contains("Calculator.cs", content);
-        Assert.True(content.Contains("+", StringComparison.Ordinal) || content.Contains("-", StringComparison.Ordinal));
+        var calcBlock = content.GetFileBlock("Calculator.cs");
+        Assert.NotNull(calcBlock);
+        Assert.Contains("+", calcBlock, StringComparison.Ordinal);
     }
 
     [SkippableFact]
@@ -61,7 +62,7 @@ public class GitHubDiffContractTests
 
         var response = await _fixture.Server.SendToolCallAsync(
             "get_pr_diff", new { prNumber = TestSettings.GhPrNumber });
-        var content = response.GetToolText();
+        var content = response.GetAllToolText();
 
         Assert.Contains("===", content);
     }
@@ -73,7 +74,7 @@ public class GitHubDiffContractTests
 
         var response = await _fixture.Server.SendToolCallAsync(
             "get_pr_diff", new { prNumber = TestSettings.GhPrNumber });
-        var content = response.GetToolText();
+        var content = response.GetAllToolText();
 
         Assert.True(content.Contains("+", StringComparison.Ordinal) || content.Contains("-", StringComparison.Ordinal));
     }
@@ -85,10 +86,12 @@ public class GitHubDiffContractTests
 
         var response = await _fixture.Server.SendToolCallAsync(
             "get_pr_diff", new { prNumber = TestSettings.GhPrNumber });
-        var content = response.GetToolText();
+        var content = response.GetAllToolText();
 
-        Assert.Contains("Calculator.cs", content);
-        Assert.Contains("+", content, StringComparison.Ordinal);
+        var calcBlock = content.GetFileBlock("Calculator.cs");
+        Assert.NotNull(calcBlock);
+        Assert.Contains("+", calcBlock, StringComparison.Ordinal);
+        Assert.Contains("\n-", calcBlock, StringComparison.Ordinal);
     }
 
     [SkippableFact]
@@ -98,10 +101,12 @@ public class GitHubDiffContractTests
 
         var response = await _fixture.Server.SendToolCallAsync(
             "get_pr_diff", new { prNumber = TestSettings.GhPrNumber });
-        var content = response.GetToolText();
+        var content = response.GetAllToolText();
 
-        Assert.Contains("Logger.cs", content);
-        Assert.Contains("+", content, StringComparison.Ordinal);
+        var loggerBlock = content.GetFileBlock("Logger.cs");
+        Assert.NotNull(loggerBlock);
+        Assert.Contains("+", loggerBlock, StringComparison.Ordinal);
+        Assert.DoesNotContain("\n-", loggerBlock, StringComparison.Ordinal);
     }
 
     [SkippableFact]
@@ -111,7 +116,7 @@ public class GitHubDiffContractTests
 
         var response = await _fixture.Server.SendToolCallAsync(
             "get_pr_diff", new { prNumber = TestSettings.GhPrNumber });
-        var content = response.GetToolText();
+        var content = response.GetAllToolText();
 
         Assert.Contains(GitHubTestExpectations.ExpectedCodeFragment, content, StringComparison.OrdinalIgnoreCase);
     }

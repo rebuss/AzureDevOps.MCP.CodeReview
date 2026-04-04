@@ -22,7 +22,7 @@ public class AdoFileDiffContractTests
         var response = await _fixture.Server.SendToolCallAsync(
             "get_file_diff",
             new { prNumber = TestSettings.AdoPrNumber, path = AdoTestExpectations.FilePaths[0] });
-        var content = response.GetToolText();
+        var content = response.GetAllToolText();
 
         Assert.Contains($"=== {AdoTestExpectations.FilePaths[0]}", content);
     }
@@ -35,7 +35,7 @@ public class AdoFileDiffContractTests
         var response = await _fixture.Server.SendToolCallAsync(
             "get_file_diff",
             new { prNumber = TestSettings.AdoPrNumber, path = AdoTestExpectations.FilePaths[0] });
-        var content = response.GetToolText();
+        var content = response.GetAllToolText();
 
         Assert.Contains(AdoTestExpectations.FilePaths[0], content);
     }
@@ -48,7 +48,7 @@ public class AdoFileDiffContractTests
         var response = await _fixture.Server.SendToolCallAsync(
             "get_file_diff",
             new { prNumber = TestSettings.AdoPrNumber, path = AdoTestExpectations.FilePaths[0] });
-        var content = response.GetToolText();
+        var content = response.GetAllToolText();
 
         Assert.True(content.Contains("+", StringComparison.Ordinal) || content.Contains("-", StringComparison.Ordinal));
     }

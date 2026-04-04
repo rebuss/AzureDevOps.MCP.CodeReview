@@ -69,7 +69,7 @@ Full codebase context is included below (file-role map, dependency graph, DI reg
 |---|---|---|
 | `REBUSS.Pure.Core\Shared\DiffEdit.cs` | Line-level edit operation | � (`readonly record struct DiffEdit`) |
 | `REBUSS.Pure.Core\Shared\IDiffAlgorithm.cs` | Interface: line-level diff algorithm | `DiffEdit` |
-| `REBUSS.Pure.Core\Shared\DiffPlexDiffAlgorithm.cs` | Myers-based diff algorithm backed by DiffPlex NuGet library; creates `Differ` per call to avoid shared mutable state across concurrent requests | `IDiffAlgorithm`, `DiffEdit`, `DiffPlex.Differ` |
+| `REBUSS.Pure.Core\Shared\DiffPlexDiffAlgorithm.cs` | Myers-based diff algorithm backed by DiffPlex NuGet library; includes `Debug.Assert` invariant checks for context gap and trailing line alignment | `IDiffAlgorithm`, `DiffEdit`, `DiffPlex.Differ` |
 | `REBUSS.Pure.Core\Shared\IStructuredDiffBuilder.cs` | Interface: produces `List<DiffHunk>` | `DiffHunk` |
 | `REBUSS.Pure.Core\Shared\StructuredDiffBuilder.cs` | Builds structured hunks from base/target content | `IStructuredDiffBuilder`, `IDiffAlgorithm`, `DiffHunk`, `DiffLine`, `DiffEdit` |
 | `REBUSS.Pure.Core\Shared\IFileClassifier.cs` | Interface: file classifier | `FileClassification` |
@@ -462,7 +462,7 @@ global mode writes to `~/.mcp.json` (Visual Studio) and `%APPDATA%\Code\User\mcp
 | `REBUSS.Pure.SmokeTests\Infrastructure\TestSettings.cs` | Contract test settings: reads env vars (`REBUSS_ADO_*`, `REBUSS_GH_*`), validates completeness, provides skip reasons |
 | `REBUSS.Pure.SmokeTests\Infrastructure\ContractMcpProcessFixture.cs` | Contract test fixture: starts MCP server with provider-specific CLI args (ADO/GitHub/Protocol), performs SDK-compatible handshake (sends `initialize` with `protocolVersion`, `capabilities`, `clientInfo`, then `notifications/initialized`), provides `SendToolCallAsync` |
 | `REBUSS.Pure.SmokeTests\Infrastructure\McpProcessFixtureCollections.cs` | xUnit collection definitions: `AdoMcpProcessFixture`, `GitHubMcpProcessFixture`, `ProtocolMcpProcessFixture` — shared process per collection |
-| `REBUSS.Pure.SmokeTests\Infrastructure\ToolCallResponseExtensions.cs` | Helper extensions for MCP tool-call responses: `GetToolText` (plain-text content with shape validation), legacy `GetToolContent` (JSON), `IsToolError`, `GetToolErrorMessage` |
+| `REBUSS.Pure.SmokeTests\Infrastructure\ToolCallResponseExtensions.cs` | Helper extensions for MCP tool-call responses: `GetToolText` (first content block as plain text), `GetAllToolText` (concatenates all content blocks for multi-block responses), `GetFileBlock` (extracts a file-specific block from diff output), legacy `GetToolContent` (JSON), `IsToolError`, `GetToolErrorMessage` |
 | `REBUSS.Pure.SmokeTests\Expectations\AdoTestExpectations.cs` | Expected values from Azure DevOps fixture PR (title, state, file paths, statuses, code fragments) |
 | `REBUSS.Pure.SmokeTests\Expectations\GitHubTestExpectations.cs` | Expected values from GitHub fixture PR (title, state, file paths, statuses, code fragments) |
 | `REBUSS.Pure.SmokeTests\Protocol\InitializeProtocolTests.cs` | Protocol tests (no credentials): MCP initialize handshake — protocol version, server info, capabilities |

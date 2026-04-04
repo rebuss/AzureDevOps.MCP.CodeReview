@@ -101,6 +101,7 @@ public class AdoFilesContractTests
 
         Assert.Contains("Summary:", content);
         Assert.Contains($"{AdoTestExpectations.TotalFiles} source", content);
+        Assert.DoesNotMatch(new System.Text.RegularExpressions.Regex(@"\d+ test"), content);
     }
 
     [SkippableFact]
