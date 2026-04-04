@@ -73,7 +73,7 @@ Full codebase context is included below (file-role map, dependency graph, DI reg
 | `REBUSS.Pure.Core\Shared\IStructuredDiffBuilder.cs` | Interface: produces `List<DiffHunk>` | `DiffHunk` |
 | `REBUSS.Pure.Core\Shared\StructuredDiffBuilder.cs` | Builds structured hunks from base/target content | `IStructuredDiffBuilder`, `IDiffAlgorithm`, `DiffHunk`, `DiffLine`, `DiffEdit` |
 | `REBUSS.Pure.Core\Shared\IFileClassifier.cs` | Interface: file classifier | `FileClassification` |
-| `REBUSS.Pure.Core\Shared\FileClassifier.cs` | Classifies files by path/extension; review priorities via `ReviewPriorities` constants | `IFileClassifier`, `FileClassification`, `FileCategory`, `ReviewPriorities` |
+| `REBUSS.Pure.Core\Shared\FileClassifier.cs` | Classifies files by path/extension; normalizes paths with leading `/` for pattern matching; review priorities via `ReviewPriorities` constants | `IFileClassifier`, `FileClassification`, `FileCategory`, `ReviewPriorities` |
 
 ### Core exceptions (REBUSS.Pure.Core\Exceptions)
 
@@ -124,7 +124,7 @@ Full codebase context is included below (file-role map, dependency graph, DI reg
 | `REBUSS.Pure.AzureDevOps\Parsers\IIterationInfoParser.cs` | Interface: parses iterations JSON ? `IterationInfo` |
 | `REBUSS.Pure.AzureDevOps\Parsers\IterationInfoParser.cs` | Parses iterations JSON |
 | `REBUSS.Pure.AzureDevOps\Parsers\IFileChangesParser.cs` | Interface: parses file changes JSON ? `List<FileChange>` |
-| `REBUSS.Pure.AzureDevOps\Parsers\FileChangesParser.cs` | Parses iteration changes JSON |
+| `REBUSS.Pure.AzureDevOps\Parsers\FileChangesParser.cs` | Parses iteration changes JSON; strips leading `/` from Azure DevOps paths during parse |
 
 ### Azure DevOps provider � Configuration/Auth (REBUSS.Pure.AzureDevOps\Configuration)
 

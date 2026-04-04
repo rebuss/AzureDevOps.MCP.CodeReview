@@ -59,6 +59,8 @@ public class FileClassifier : IFileClassifier
     public FileClassification Classify(string path)
     {
         var normalizedPath = path.Replace('\\', '/').ToLowerInvariant();
+        if (!normalizedPath.StartsWith('/'))
+            normalizedPath = "/" + normalizedPath;
         var extension = Path.GetExtension(path);
         var fileName = Path.GetFileName(normalizedPath);
 

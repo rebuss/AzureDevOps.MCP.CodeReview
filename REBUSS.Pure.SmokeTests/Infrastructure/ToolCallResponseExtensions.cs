@@ -80,18 +80,29 @@ public static class ToolCallResponseExtensions
 
     /// <summary>
     /// Extracts the text block for a specific file from a multi-block diff response.
-    /// Returns the block whose header matches <c>=== {fileName}</c>.
+    /// Searches for a <c>=== ... ===</c> header line whose path contains <paramref name="fileName"/>.
     /// </summary>
     public static string? GetFileBlock(this string allText, string fileName)
     {
-        var marker = $"=== {fileName}";
-        var start = allText.IndexOf(marker, StringComparison.Ordinal);
-        if (start < 0) return null;
+        var searchPos = 0;
+        while (searchPos < allText.Length)
+        {
+            var blockStart = allText.IndexOf("=== ", searchPos, StringComparison.Ordinal);
+            if (blockStart < 0) return null;
 
-        var nextBlock = allText.IndexOf("\n=== ", start + marker.Length, StringComparison.Ordinal);
-        return nextBlock >= 0
-            ? allText[start..nextBlock]
-            : allText[start..];
+            var lineEnd = allText.IndexOf('\n', blockStart);
+            var header = lineEnd >= 0 ? allText[blockStart..lineEnd] : allText[blockStart..];
+
+            if (header.Contains(fileName, StringComparison.OrdinalIgnoreCase))
+            {
+                var nextBlock = allText.IndexOf("\n=== ", blockStart + 1, StringComparison.Ordinal);
+                return nextBlock >= 0 ? allText[blockStart..nextBlock] : allText[blockStart..];
+            }
+
+            searchPos = (lineEnd >= 0 ? lineEnd : allText.Length) + 1;
+        }
+
+        return null;
     }
 
     /// <summary>
