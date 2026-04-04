@@ -21,8 +21,8 @@ Wire format example (diff tool, 2 files + manifest):
   "jsonrpc": "2.0", "id": 1,
   "result": {
     "content": [
-      {"type":"text","text":"=== src/Foo.cs (edit: +10 -3) ===\n +added line\n-removed line\n context"},
-      {"type":"text","text":"=== src/Bar.cs (edit: +2 -0) ===\n +another line"},
+      {"type":"text","text":"=== src/Foo.cs (edit: +10 -3) ===\n@@ -1,5 +1,7 @@\n +added line\n-removed line\n context"},
+      {"type":"text","text":"=== src/Bar.cs (edit: +2 -0) ===\n@@ -1,3 +1,5 @@\n +another line"},
       {"type":"text","text":"Manifest:\n  src/Foo.cs                                                    ~  150 tokens  Included   Source\nBudget: 300/140000 tokens (0%)"}
     ]
   }
@@ -274,8 +274,11 @@ Auto-generated from `GetPullRequestDiffToolHandler.ExecuteAsync` signature. All 
 
 **Block 1..N:** one `TextContentBlock` per file
 
+Each file block starts with a `=== path (changeType: +additions -deletions) ===` header, followed by one or more hunks. Each hunk begins with a unified-diff `@@ -oldStart,oldCount +newStart,newCount @@` header line, then `+`/`-`/` `-prefixed content lines:
+
 ```
 === src/Cache/CacheService.cs (edit: +5 -2) ===
+@@ -10,4 +10,5 @@
  public class CacheService
 -    private int _ttl = 60;
 +    private int _ttl = 300;
@@ -436,10 +439,11 @@ Auto-generated from `GetPullRequestContentToolHandler.ExecuteAsync` signature. A
 
 #### Output — plain text blocks
 
-**Block 1..N:** one `TextContentBlock` per file (same diff format as `get_pr_diff`)
+**Block 1..N:** one `TextContentBlock` per file (same diff format as `get_pr_diff`, with `@@ -oldStart,oldCount +newStart,newCount @@` hunk headers)
 
 ```
 === src/Cache/CacheService.cs (edit: +5 -2) ===
+@@ -10,4 +10,5 @@
  public class CacheService
 -    private int _ttl = 60;
 +    private int _ttl = 300;

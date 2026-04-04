@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using REBUSS.Pure.SmokeTests.Expectations;
 using REBUSS.Pure.SmokeTests.Infrastructure;
 
@@ -65,6 +66,7 @@ public class GitHubDiffContractTests
         var content = response.GetAllToolText();
 
         Assert.Contains("===", content);
+        Assert.Matches(new Regex(@"@@ -\d+,\d+ \+\d+,\d+ @@"), content);
     }
 
     [SkippableFact]
@@ -76,7 +78,18 @@ public class GitHubDiffContractTests
             "get_pr_diff", new { prNumber = TestSettings.GhPrNumber });
         var content = response.GetAllToolText();
 
-        Assert.True(content.Contains("+", StringComparison.Ordinal) || content.Contains("-", StringComparison.Ordinal));
+        var diffLines = content.Split('\n')
+            .Where(l => l.Length > 0 && !l.StartsWith("===") && !l.StartsWith("@@ ") &&
+                        !l.StartsWith("Manifest") && !l.StartsWith("Budget") &&
+                        !l.StartsWith("Reason:") && !l.StartsWith("---") &&
+                        !l.TrimStart().StartsWith('~'))
+            .Where(l => !string.IsNullOrWhiteSpace(l))
+            .ToList();
+
+        Assert.NotEmpty(diffLines);
+        Assert.All(diffLines, line =>
+            Assert.True(line.StartsWith('+') || line.StartsWith('-') || line.StartsWith(' '),
+                $"Diff line has invalid prefix: '{line}'"));
     }
 
     [SkippableFact]

@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using DiffPlex;
 
 namespace REBUSS.Pure.Core.Shared;
@@ -9,14 +8,14 @@ namespace REBUSS.Pure.Core.Shared;
 /// </summary>
 public class DiffPlexDiffAlgorithm : IDiffAlgorithm
 {
+    private static readonly Differ Differ = new();
+
     public IReadOnlyList<DiffEdit> ComputeEdits(string[] oldLines, string[] newLines)
     {
-        var differ = new Differ();
-
         var oldText = string.Join('\n', oldLines);
         var newText = string.Join('\n', newLines);
 
-        var diffResult = differ.CreateLineDiffs(oldText, newText, ignoreWhitespace: false);
+        var diffResult = Differ.CreateLineDiffs(oldText, newText, ignoreWhitespace: false);
 
         var edits = new List<DiffEdit>(oldLines.Length + newLines.Length);
         int oldIdx = 0;
@@ -25,8 +24,12 @@ public class DiffPlexDiffAlgorithm : IDiffAlgorithm
         foreach (var block in diffResult.DiffBlocks)
         {
             // Context lines before this block — gaps must be equal on both sides.
-            Debug.Assert(block.DeleteStartA - oldIdx == block.InsertStartB - newIdx,
-                "Context gap mismatch — diff block indices drifted.");
+            if (block.DeleteStartA - oldIdx != block.InsertStartB - newIdx)
+            {
+                throw new InvalidOperationException(
+                    $"Context gap mismatch — diff block indices drifted. " +
+                    $"Old gap: {block.DeleteStartA - oldIdx}, New gap: {block.InsertStartB - newIdx}.");
+            }
 
             int contextCount = block.DeleteStartA - oldIdx;
             for (int i = 0; i < contextCount; i++)
@@ -42,8 +45,12 @@ public class DiffPlexDiffAlgorithm : IDiffAlgorithm
         }
 
         // Trailing context lines — remaining counts must match.
-        Debug.Assert(oldLines.Length - oldIdx == newLines.Length - newIdx,
-            "Trailing context mismatch — remaining old/new line counts differ.");
+        if (oldLines.Length - oldIdx != newLines.Length - newIdx)
+        {
+            throw new InvalidOperationException(
+                $"Trailing context mismatch — remaining old/new line counts differ. " +
+                $"Old remaining: {oldLines.Length - oldIdx}, New remaining: {newLines.Length - newIdx}.");
+        }
 
         while (oldIdx < oldLines.Length && newIdx < newLines.Length)
             edits.Add(new DiffEdit(' ', oldIdx++, newIdx++));
