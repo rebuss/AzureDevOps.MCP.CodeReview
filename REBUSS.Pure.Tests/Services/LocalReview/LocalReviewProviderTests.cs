@@ -22,7 +22,7 @@ public class LocalReviewProviderTests
         _provider = new LocalReviewProvider(
             _rootProvider,
             _gitClient,
-            new StructuredDiffBuilder(new LcsDiffAlgorithm(), NullLogger<StructuredDiffBuilder>.Instance),
+            new StructuredDiffBuilder(new DiffPlexDiffAlgorithm(), NullLogger<StructuredDiffBuilder>.Instance),
             new FileClassifier(),
             NullLogger<LocalReviewProvider>.Instance);
     }

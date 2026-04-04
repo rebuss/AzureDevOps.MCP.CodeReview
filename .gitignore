@@ -25,3 +25,6 @@ specs/
 .github/instructions/self-review.instructions.md
 .vscode/mcp.json
 .vscode/settings.json
+.github/prompts/review-pr.prompt.md
+.github/prompts/self-review.prompt.md
+scripts/

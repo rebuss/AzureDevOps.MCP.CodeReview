@@ -45,7 +45,7 @@ public class GitHubDiffProviderTests
             _apiClient,
             new GitHubPullRequestParser(NullLogger<GitHubPullRequestParser>.Instance),
             new GitHubFileChangesParser(NullLogger<GitHubFileChangesParser>.Instance),
-            new StructuredDiffBuilder(new LcsDiffAlgorithm(), NullLogger<StructuredDiffBuilder>.Instance),
+            new StructuredDiffBuilder(new DiffPlexDiffAlgorithm(), NullLogger<StructuredDiffBuilder>.Instance),
             new FileClassifier(),
             NullLogger<GitHubDiffProvider>.Instance);
     }

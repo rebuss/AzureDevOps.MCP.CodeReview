@@ -1,4 +1,4 @@
-using System.Text.Json;
+using System.Text.RegularExpressions;
 using REBUSS.Pure.SmokeTests.Expectations;
 using REBUSS.Pure.SmokeTests.Infrastructure;
 
@@ -22,9 +22,9 @@ public class AdoMetadataContractTests
 
         var response = await _fixture.Server.SendToolCallAsync(
             "get_pr_metadata", new { prNumber = TestSettings.AdoPrNumber });
-        var content = response.GetToolContent();
+        var content = response.GetToolText();
 
-        Assert.Equal(TestSettings.AdoPrNumber, content.GetProperty("prNumber").GetInt32());
+        Assert.Contains($"PR #{TestSettings.AdoPrNumber}:", content);
     }
 
     [SkippableFact]
@@ -34,9 +34,9 @@ public class AdoMetadataContractTests
 
         var response = await _fixture.Server.SendToolCallAsync(
             "get_pr_metadata", new { prNumber = TestSettings.AdoPrNumber });
-        var content = response.GetToolContent();
+        var content = response.GetToolText();
 
-        Assert.Equal(AdoTestExpectations.Title, content.GetProperty("title").GetString());
+        Assert.Contains(AdoTestExpectations.Title, content);
     }
 
     [SkippableFact]
@@ -46,9 +46,10 @@ public class AdoMetadataContractTests
 
         var response = await _fixture.Server.SendToolCallAsync(
             "get_pr_metadata", new { prNumber = TestSettings.AdoPrNumber });
-        var content = response.GetToolContent();
+        var content = response.GetToolText();
 
-        Assert.Equal(AdoTestExpectations.State, content.GetProperty("state").GetString());
+        Assert.Contains("State:", content);
+        Assert.Contains(AdoTestExpectations.State, content, StringComparison.OrdinalIgnoreCase);
     }
 
     [SkippableFact]
@@ -58,13 +59,10 @@ public class AdoMetadataContractTests
 
         var response = await _fixture.Server.SendToolCallAsync(
             "get_pr_metadata", new { prNumber = TestSettings.AdoPrNumber });
-        var content = response.GetToolContent();
+        var content = response.GetToolText();
 
-        var baseRef = content.GetProperty("base").GetProperty("ref").GetString()!;
-        var headRef = content.GetProperty("head").GetProperty("ref").GetString()!;
-
-        Assert.Contains(AdoTestExpectations.TargetBranchContains, baseRef);
-        Assert.Contains(AdoTestExpectations.SourceBranchContains, headRef);
+        Assert.Contains(AdoTestExpectations.TargetBranchContains, content, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(AdoTestExpectations.SourceBranchContains, content, StringComparison.OrdinalIgnoreCase);
     }
 
     [SkippableFact]
@@ -74,10 +72,9 @@ public class AdoMetadataContractTests
 
         var response = await _fixture.Server.SendToolCallAsync(
             "get_pr_metadata", new { prNumber = TestSettings.AdoPrNumber });
-        var content = response.GetToolContent();
+        var content = response.GetToolText();
 
-        var author = content.GetProperty("author");
-        Assert.False(string.IsNullOrWhiteSpace(author.GetProperty("displayName").GetString()));
+        Assert.Contains("Author:", content);
     }
 
     [SkippableFact]
@@ -87,11 +84,10 @@ public class AdoMetadataContractTests
 
         var response = await _fixture.Server.SendToolCallAsync(
             "get_pr_metadata", new { prNumber = TestSettings.AdoPrNumber });
-        var content = response.GetToolContent();
+        var content = response.GetToolText();
 
-        var stats = content.GetProperty("stats");
-        Assert.Equal(AdoTestExpectations.TotalFiles, stats.GetProperty("changedFiles").GetInt32());
-        Assert.True(stats.GetProperty("commits").GetInt32() >= 1);
+        Assert.Contains($"{AdoTestExpectations.TotalFiles} file(s)", content);
+        Assert.Contains("commit(s)", content);
     }
 
     [SkippableFact]
@@ -101,18 +97,10 @@ public class AdoMetadataContractTests
 
         var response = await _fixture.Server.SendToolCallAsync(
             "get_pr_metadata", new { prNumber = TestSettings.AdoPrNumber });
-        var content = response.GetToolContent();
+        var content = response.GetToolText();
 
-        var commitShas = content.GetProperty("commitShas");
-        Assert.True(commitShas.GetArrayLength() > 0, "Expected at least one commit SHA.");
-
-        foreach (var sha in commitShas.EnumerateArray())
-        {
-            var value = sha.GetString()!;
-            Assert.Equal(40, value.Length);
-            Assert.True(value.All(c => "0123456789abcdef".Contains(c)),
-                $"SHA '{value}' contains non-hex characters.");
-        }
+        Assert.Matches(new Regex(@"Head SHA:\s+[0-9a-f]{40}", RegexOptions.IgnoreCase), content);
+        Assert.Matches(new Regex(@"Base SHA:\s+[0-9a-f]{40}", RegexOptions.IgnoreCase), content);
     }
 
     [SkippableFact]
@@ -122,11 +110,9 @@ public class AdoMetadataContractTests
 
         var response = await _fixture.Server.SendToolCallAsync(
             "get_pr_metadata", new { prNumber = TestSettings.AdoPrNumber });
-        var content = response.GetToolContent();
+        var content = response.GetToolText();
 
-        var source = content.GetProperty("source");
-        var repo = source.GetProperty("repository").GetString()!;
-        Assert.Contains(TestSettings.AdoRepo!, repo, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(TestSettings.AdoRepo!, content, StringComparison.OrdinalIgnoreCase);
     }
 
     [SkippableFact]
@@ -136,11 +122,9 @@ public class AdoMetadataContractTests
 
         var response = await _fixture.Server.SendToolCallAsync(
             "get_pr_metadata", new { prNumber = TestSettings.AdoPrNumber });
-        var content = response.GetToolContent();
+        var content = response.GetToolText();
 
-        var description = content.GetProperty("description");
-        var text = description.GetProperty("text").GetString()!;
-        Assert.Contains(AdoTestExpectations.DescriptionFragment, text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(AdoTestExpectations.DescriptionFragment, content, StringComparison.OrdinalIgnoreCase);
     }
 
     [SkippableFact]
@@ -150,8 +134,8 @@ public class AdoMetadataContractTests
 
         var response = await _fixture.Server.SendToolCallAsync(
             "get_pr_metadata", new { prNumber = TestSettings.AdoPrNumber });
-        var content = response.GetToolContent();
+        var content = response.GetToolText();
 
-        Assert.Equal(AdoTestExpectations.IsDraft, content.GetProperty("isDraft").GetBoolean());
+        Assert.Equal(AdoTestExpectations.IsDraft, content.Contains("[draft]", StringComparison.OrdinalIgnoreCase));
     }
 }

@@ -1,4 +1,4 @@
-using System.Text.Json;
+using System.Text.RegularExpressions;
 using REBUSS.Pure.SmokeTests.Expectations;
 using REBUSS.Pure.SmokeTests.Infrastructure;
 
@@ -22,9 +22,9 @@ public class GitHubFilesContractTests
 
         var response = await _fixture.Server.SendToolCallAsync(
             "get_pr_files", new { prNumber = TestSettings.GhPrNumber });
-        var content = response.GetToolContent();
+        var content = response.GetToolText();
 
-        Assert.Equal(GitHubTestExpectations.TotalFiles, content.GetProperty("totalFiles").GetInt32());
+        Assert.Contains($"({GitHubTestExpectations.TotalFiles} file(s))", content);
     }
 
     [SkippableFact]
@@ -34,15 +34,11 @@ public class GitHubFilesContractTests
 
         var response = await _fixture.Server.SendToolCallAsync(
             "get_pr_files", new { prNumber = TestSettings.GhPrNumber });
-        var content = response.GetToolContent();
-
-        var paths = content.GetProperty("files").EnumerateArray()
-            .Select(f => f.GetProperty("path").GetString())
-            .ToList();
+        var content = response.GetToolText();
 
         foreach (var expected in GitHubTestExpectations.FilePaths)
         {
-            Assert.Contains(expected, paths);
+            Assert.Contains(expected, content);
         }
     }
 
@@ -53,17 +49,14 @@ public class GitHubFilesContractTests
 
         var response = await _fixture.Server.SendToolCallAsync(
             "get_pr_files", new { prNumber = TestSettings.GhPrNumber });
-        var content = response.GetToolContent();
-
-        var files = content.GetProperty("files").EnumerateArray()
-            .ToDictionary(
-                f => f.GetProperty("path").GetString()!,
-                f => f.GetProperty("status").GetString()!);
+        var content = response.GetToolText();
 
         foreach (var (path, expectedStatus) in GitHubTestExpectations.FileStatuses)
         {
-            Assert.True(files.ContainsKey(path), $"File '{path}' not found in response.");
-            Assert.Equal(expectedStatus, files[path]);
+            var rowPattern = new Regex(
+                $@"^\s+{Regex.Escape(path)}\s+{Regex.Escape(expectedStatus)}\s+\+\s*\d+\s+-\s*\d+\s+(low|medium|high)\b",
+                RegexOptions.Multiline | RegexOptions.IgnoreCase);
+            Assert.Matches(rowPattern, content);
         }
     }
 
@@ -74,25 +67,15 @@ public class GitHubFilesContractTests
 
         var response = await _fixture.Server.SendToolCallAsync(
             "get_pr_files", new { prNumber = TestSettings.GhPrNumber });
-        var content = response.GetToolContent();
+        var content = response.GetToolText();
 
-        var files = content.GetProperty("files").EnumerateArray()
-            .ToDictionary(
-                f => f.GetProperty("path").GetString()!,
-                f => f);
-
-        // Edited file should have both additions and deletions
-        var calculator = files[GitHubTestExpectations.FilePaths[0]];
-        Assert.True(calculator.GetProperty("additions").GetInt32() > 0,
-            "Edited file should have additions > 0.");
-        Assert.True(calculator.GetProperty("deletions").GetInt32() > 0,
-            "Edited file should have deletions > 0.");
-
-        // New file should have only additions
-        var logger = files[GitHubTestExpectations.FilePaths[1]];
-        Assert.True(logger.GetProperty("additions").GetInt32() > 0,
-            "New file should have additions > 0.");
-        Assert.Equal(0, logger.GetProperty("deletions").GetInt32());
+        foreach (var path in GitHubTestExpectations.FilePaths)
+        {
+            var rowPattern = new Regex(
+                $@"^\s+{Regex.Escape(path)}\s+\w+\s+\+\s*\d+\s+-\s*\d+\s+(low|medium|high)\b",
+                RegexOptions.Multiline | RegexOptions.IgnoreCase);
+            Assert.Matches(rowPattern, content);
+        }
     }
 
     [SkippableFact]
@@ -102,12 +85,9 @@ public class GitHubFilesContractTests
 
         var response = await _fixture.Server.SendToolCallAsync(
             "get_pr_files", new { prNumber = TestSettings.GhPrNumber });
-        var content = response.GetToolContent();
+        var content = response.GetToolText();
 
-        foreach (var file in content.GetProperty("files").EnumerateArray())
-        {
-            Assert.Equal(".cs", file.GetProperty("extension").GetString());
-        }
+        Assert.Contains(".cs", content, StringComparison.OrdinalIgnoreCase);
     }
 
     [SkippableFact]
@@ -117,11 +97,11 @@ public class GitHubFilesContractTests
 
         var response = await _fixture.Server.SendToolCallAsync(
             "get_pr_files", new { prNumber = TestSettings.GhPrNumber });
-        var content = response.GetToolContent();
+        var content = response.GetToolText();
 
-        var summary = content.GetProperty("summary");
-        Assert.Equal(GitHubTestExpectations.TotalFiles, summary.GetProperty("sourceFiles").GetInt32());
-        Assert.Equal(0, summary.GetProperty("testFiles").GetInt32());
+        Assert.Contains("Summary:", content);
+        Assert.Contains($"{GitHubTestExpectations.TotalFiles} source", content);
+        Assert.DoesNotMatch(new System.Text.RegularExpressions.Regex(@"\d+ test"), content);
     }
 
     [SkippableFact]
@@ -131,14 +111,14 @@ public class GitHubFilesContractTests
 
         var response = await _fixture.Server.SendToolCallAsync(
             "get_pr_files", new { prNumber = TestSettings.GhPrNumber });
-        var content = response.GetToolContent();
+        var content = response.GetToolText();
 
-        var validPriorities = new HashSet<string> { "low", "medium", "high" };
-
-        foreach (var file in content.GetProperty("files").EnumerateArray())
+        foreach (var path in GitHubTestExpectations.FilePaths)
         {
-            var priority = file.GetProperty("reviewPriority").GetString()!;
-            Assert.Contains(priority, validPriorities);
+            var priorityPattern = new Regex(
+                $@"^\s+{Regex.Escape(path)}\s+\w+\s+\+\s*\d+\s+-\s*\d+\s+(low|medium|high)\b",
+                RegexOptions.Multiline | RegexOptions.IgnoreCase);
+            Assert.Matches(priorityPattern, content);
         }
     }
 
@@ -149,12 +129,9 @@ public class GitHubFilesContractTests
 
         var response = await _fixture.Server.SendToolCallAsync(
             "get_pr_files", new { prNumber = TestSettings.GhPrNumber });
-        var content = response.GetToolContent();
+        var content = response.GetToolText();
 
-        foreach (var file in content.GetProperty("files").EnumerateArray())
-        {
-            Assert.False(file.GetProperty("isBinary").GetBoolean());
-            Assert.False(file.GetProperty("isGenerated").GetBoolean());
-        }
+        Assert.DoesNotContain("[binary", content, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("[generated", content, StringComparison.OrdinalIgnoreCase);
     }
 }

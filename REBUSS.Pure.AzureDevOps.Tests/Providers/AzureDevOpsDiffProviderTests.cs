@@ -56,7 +56,7 @@ public class AzureDevOpsDiffProviderTests
             new PullRequestMetadataParser(NullLogger<PullRequestMetadataParser>.Instance),
             new IterationInfoParser(NullLogger<IterationInfoParser>.Instance),
             new FileChangesParser(NullLogger<FileChangesParser>.Instance),
-            new StructuredDiffBuilder(new LcsDiffAlgorithm(), NullLogger<StructuredDiffBuilder>.Instance),
+            new StructuredDiffBuilder(new DiffPlexDiffAlgorithm(), NullLogger<StructuredDiffBuilder>.Instance),
             new FileClassifier(),
             NullLogger<AzureDevOpsDiffProvider>.Instance);
     }
@@ -65,8 +65,8 @@ public class AzureDevOpsDiffProviderTests
     public async Task GetDiffAsync_ReturnsDiff_WithCorrectMetadata()
     {
         SetupStandardMocks();
-        _apiClient.GetFileContentAtCommitAsync("bbb222", "/src/File.cs").Returns("old line");
-        _apiClient.GetFileContentAtCommitAsync("aaa111", "/src/File.cs").Returns("new line");
+        _apiClient.GetFileContentAtCommitAsync("bbb222", "src/File.cs").Returns("old line");
+        _apiClient.GetFileContentAtCommitAsync("aaa111", "src/File.cs").Returns("new line");
 
         var result = await _provider.GetDiffAsync(42);
 
@@ -75,7 +75,7 @@ public class AzureDevOpsDiffProviderTests
         Assert.Equal("feature/fix-42", result.SourceBranch);
         Assert.Equal("main", result.TargetBranch);
         Assert.Single(result.Files);
-        Assert.Equal("/src/File.cs", result.Files[0].Path);
+        Assert.Equal("src/File.cs", result.Files[0].Path);
         Assert.Equal("edit", result.Files[0].ChangeType);
     }
 
@@ -83,8 +83,8 @@ public class AzureDevOpsDiffProviderTests
     public async Task GetDiffAsync_GeneratesStructuredDiff_ForModifiedFile()
     {
         SetupStandardMocks();
-        _apiClient.GetFileContentAtCommitAsync("bbb222", "/src/File.cs").Returns("old line");
-        _apiClient.GetFileContentAtCommitAsync("aaa111", "/src/File.cs").Returns("new line");
+        _apiClient.GetFileContentAtCommitAsync("bbb222", "src/File.cs").Returns("old line");
+        _apiClient.GetFileContentAtCommitAsync("aaa111", "src/File.cs").Returns("new line");
 
         var result = await _provider.GetDiffAsync(42);
 
@@ -98,8 +98,8 @@ public class AzureDevOpsDiffProviderTests
     public async Task GetDiffAsync_SetsAdditionsAndDeletions()
     {
         SetupStandardMocks();
-        _apiClient.GetFileContentAtCommitAsync("bbb222", "/src/File.cs").Returns("old line");
-        _apiClient.GetFileContentAtCommitAsync("aaa111", "/src/File.cs").Returns("new line");
+        _apiClient.GetFileContentAtCommitAsync("bbb222", "src/File.cs").Returns("old line");
+        _apiClient.GetFileContentAtCommitAsync("aaa111", "src/File.cs").Returns("new line");
 
         var result = await _provider.GetDiffAsync(42);
 
@@ -149,12 +149,12 @@ public class AzureDevOpsDiffProviderTests
             }
             """;
         _apiClient.GetPullRequestIterationChangesAsync(42, 1).Returns(changesWithFolder);
-        _apiClient.GetFileContentAtCommitAsync(Arg.Any<string>(), "/src/File.cs").Returns("content");
+        _apiClient.GetFileContentAtCommitAsync(Arg.Any<string>(), "src/File.cs").Returns("content");
 
         var result = await _provider.GetDiffAsync(42);
 
         Assert.Single(result.Files);
-        Assert.Equal("/src/File.cs", result.Files[0].Path);
+        Assert.Equal("src/File.cs", result.Files[0].Path);
     }
 
     [Fact]
@@ -191,14 +191,14 @@ public class AzureDevOpsDiffProviderTests
     public async Task GetFileDiffAsync_ReturnsDiff_ForMatchingFile()
     {
         SetupStandardMocks();
-        _apiClient.GetFileContentAtCommitAsync("bbb222", "/src/File.cs").Returns("old line");
-        _apiClient.GetFileContentAtCommitAsync("aaa111", "/src/File.cs").Returns("new line");
+        _apiClient.GetFileContentAtCommitAsync("bbb222", "src/File.cs").Returns("old line");
+        _apiClient.GetFileContentAtCommitAsync("aaa111", "src/File.cs").Returns("new line");
 
-        var result = await _provider.GetFileDiffAsync(42, "/src/File.cs");
+        var result = await _provider.GetFileDiffAsync(42, "src/File.cs");
 
         Assert.Equal("Fix bug #42", result.Title);
         Assert.Single(result.Files);
-        Assert.Equal("/src/File.cs", result.Files[0].Path);
+        Assert.Equal("src/File.cs", result.Files[0].Path);
         var allLines = result.Files[0].Hunks.SelectMany(h => h.Lines).ToList();
         Assert.Contains(allLines, l => l.Op == '-' && l.Text == "old line");
         Assert.Contains(allLines, l => l.Op == '+' && l.Text == "new line");
@@ -208,14 +208,14 @@ public class AzureDevOpsDiffProviderTests
     public async Task GetFileDiffAsync_NormalizesLeadingSlash()
     {
         SetupStandardMocks();
-        _apiClient.GetFileContentAtCommitAsync("bbb222", "/src/File.cs").Returns("old");
-        _apiClient.GetFileContentAtCommitAsync("aaa111", "/src/File.cs").Returns("new");
+        _apiClient.GetFileContentAtCommitAsync("bbb222", "src/File.cs").Returns("old");
+        _apiClient.GetFileContentAtCommitAsync("aaa111", "src/File.cs").Returns("new");
 
-        // Pass path without leading slash while data has leading slash
-        var result = await _provider.GetFileDiffAsync(42, "src/File.cs");
+        // Pass path with leading slash while parsed data has no leading slash
+        var result = await _provider.GetFileDiffAsync(42, "/src/File.cs");
 
         Assert.Single(result.Files);
-        Assert.Equal("/src/File.cs", result.Files[0].Path);
+        Assert.Equal("src/File.cs", result.Files[0].Path);
     }
 
     [Fact]
@@ -254,8 +254,8 @@ public class AzureDevOpsDiffProviderTests
     public async Task GetFileDiffAsync_IsCaseInsensitive()
     {
         SetupStandardMocks();
-        _apiClient.GetFileContentAtCommitAsync("bbb222", "/src/File.cs").Returns("old");
-        _apiClient.GetFileContentAtCommitAsync("aaa111", "/src/File.cs").Returns("new");
+        _apiClient.GetFileContentAtCommitAsync("bbb222", "src/File.cs").Returns("old");
+        _apiClient.GetFileContentAtCommitAsync("aaa111", "src/File.cs").Returns("new");
 
         var result = await _provider.GetFileDiffAsync(42, "/SRC/FILE.CS");
 
@@ -291,7 +291,7 @@ public class AzureDevOpsDiffProviderTests
         Assert.Single(result.Files);
         Assert.Equal(expectedSkipReason, result.Files[0].SkipReason);
         Assert.Empty(result.Files[0].Hunks);
-        await _apiClient.DidNotReceive().GetFileContentAtCommitAsync(Arg.Any<string>(), "/src/File.cs");
+        await _apiClient.DidNotReceive().GetFileContentAtCommitAsync(Arg.Any<string>(), "src/File.cs");
     }
 
     // --- Diff skip: Binary files ---
@@ -356,8 +356,8 @@ public class AzureDevOpsDiffProviderTests
         // Generate content where every line is different and file is >= 10 lines
         var oldContent = string.Join("\n", Enumerable.Range(1, 15).Select(i => $"old line {i}"));
         var newContent = string.Join("\n", Enumerable.Range(1, 15).Select(i => $"new line {i}"));
-        _apiClient.GetFileContentAtCommitAsync("bbb222", "/src/File.cs").Returns(oldContent);
-        _apiClient.GetFileContentAtCommitAsync("aaa111", "/src/File.cs").Returns(newContent);
+        _apiClient.GetFileContentAtCommitAsync("bbb222", "src/File.cs").Returns(oldContent);
+        _apiClient.GetFileContentAtCommitAsync("aaa111", "src/File.cs").Returns(newContent);
 
         var result = await _provider.GetDiffAsync(42);
 
@@ -373,8 +373,8 @@ public class AzureDevOpsDiffProviderTests
         // Change only one line in a multi-line file
         var oldContent = "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\nline9\nline10\nline11";
         var newContent = "line1\nline2\nCHANGED\nline4\nline5\nline6\nline7\nline8\nline9\nline10\nline11";
-        _apiClient.GetFileContentAtCommitAsync("bbb222", "/src/File.cs").Returns(oldContent);
-        _apiClient.GetFileContentAtCommitAsync("aaa111", "/src/File.cs").Returns(newContent);
+        _apiClient.GetFileContentAtCommitAsync("bbb222", "src/File.cs").Returns(oldContent);
+        _apiClient.GetFileContentAtCommitAsync("aaa111", "src/File.cs").Returns(newContent);
 
         var result = await _provider.GetDiffAsync(42);
 
@@ -390,8 +390,8 @@ public class AzureDevOpsDiffProviderTests
         SetupStandardMocks();
 
         // Small file (< 10 lines) with all lines different - should NOT be flagged
-        _apiClient.GetFileContentAtCommitAsync("bbb222", "/src/File.cs").Returns("old1\nold2\nold3");
-        _apiClient.GetFileContentAtCommitAsync("aaa111", "/src/File.cs").Returns("new1\nnew2\nnew3");
+        _apiClient.GetFileContentAtCommitAsync("bbb222", "src/File.cs").Returns("old1\nold2\nold3");
+        _apiClient.GetFileContentAtCommitAsync("aaa111", "src/File.cs").Returns("new1\nnew2\nnew3");
 
         var result = await _provider.GetDiffAsync(42);
 
@@ -417,8 +417,8 @@ public class AzureDevOpsDiffProviderTests
                 ]
             }
             """);
-        _apiClient.GetFileContentAtCommitAsync("bbb222", "/src/Service.cs").Returns("old");
-        _apiClient.GetFileContentAtCommitAsync("aaa111", "/src/Service.cs").Returns("new");
+        _apiClient.GetFileContentAtCommitAsync("bbb222", "src/Service.cs").Returns("old");
+        _apiClient.GetFileContentAtCommitAsync("aaa111", "src/Service.cs").Returns("new");
 
         var result = await _provider.GetDiffAsync(42);
 

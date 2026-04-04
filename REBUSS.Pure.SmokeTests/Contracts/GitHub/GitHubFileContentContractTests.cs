@@ -1,4 +1,3 @@
-using System.Text.Json;
 using REBUSS.Pure.SmokeTests.Expectations;
 using REBUSS.Pure.SmokeTests.Infrastructure;
 
@@ -23,10 +22,9 @@ public class GitHubFileContentContractTests
         var response = await _fixture.Server.SendToolCallAsync(
             "get_file_content_at_ref",
             new { path = GitHubTestExpectations.FilePaths[0], @ref = "main" });
-        var content = response.GetToolContent();
+        var content = response.GetToolText();
 
-        var text = content.GetProperty("content").GetString()!;
-        Assert.Contains(GitHubTestExpectations.OriginalCodeFragment, text);
+        Assert.Contains(GitHubTestExpectations.OriginalCodeFragment, content);
     }
 
     [SkippableFact]
@@ -37,10 +35,9 @@ public class GitHubFileContentContractTests
         var response = await _fixture.Server.SendToolCallAsync(
             "get_file_content_at_ref",
             new { path = GitHubTestExpectations.FilePaths[0], @ref = "test/fixture-pr" });
-        var content = response.GetToolContent();
+        var content = response.GetToolText();
 
-        var text = content.GetProperty("content").GetString()!;
-        Assert.Contains(GitHubTestExpectations.ModifiedCodeFragment, text);
+        Assert.Contains(GitHubTestExpectations.ModifiedCodeFragment, content);
     }
 
     [SkippableFact]
@@ -51,10 +48,10 @@ public class GitHubFileContentContractTests
         var response = await _fixture.Server.SendToolCallAsync(
             "get_file_content_at_ref",
             new { path = GitHubTestExpectations.FilePaths[0], @ref = "main" });
-        var content = response.GetToolContent();
+        var content = response.GetToolText();
 
-        Assert.False(content.GetProperty("isBinary").GetBoolean());
-        Assert.True(content.GetProperty("size").GetInt32() > 0);
+        Assert.DoesNotContain("[binary file", content, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains($"=== {GitHubTestExpectations.FilePaths[0]} @ main ===", content);
     }
 
     [SkippableFact]

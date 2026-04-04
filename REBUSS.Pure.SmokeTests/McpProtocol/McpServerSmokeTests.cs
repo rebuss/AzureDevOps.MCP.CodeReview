@@ -1,4 +1,3 @@
-using System.Text.Json;
 using REBUSS.Pure.SmokeTests.Fixtures;
 
 namespace REBUSS.Pure.SmokeTests.McpProtocol;
@@ -155,11 +154,9 @@ public class McpServerSmokeTests
         var isError = result.TryGetProperty("isError", out var errProp) && errProp.GetBoolean();
         Assert.False(isError);
 
-        // Parse the inner content — should list the changed file
+        // Tool responses are plain text blocks; verify the changed file appears in output.
         var contentText = result.GetProperty("content")[0].GetProperty("text").GetString()!;
-        var inner = JsonDocument.Parse(contentText).RootElement;
-        Assert.True(inner.TryGetProperty("files", out var files));
-        Assert.True(files.GetArrayLength() > 0, "Expected at least one changed file.");
+        Assert.Contains("test.txt", contentText, StringComparison.OrdinalIgnoreCase);
 
         await server.ShutdownAsync();
     }

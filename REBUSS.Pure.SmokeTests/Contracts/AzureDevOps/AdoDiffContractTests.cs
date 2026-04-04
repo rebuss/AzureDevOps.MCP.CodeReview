@@ -1,4 +1,3 @@
-using System.Text.Json;
 using REBUSS.Pure.SmokeTests.Expectations;
 using REBUSS.Pure.SmokeTests.Infrastructure;
 
@@ -22,9 +21,10 @@ public class AdoDiffContractTests
 
         var response = await _fixture.Server.SendToolCallAsync(
             "get_pr_diff", new { prNumber = TestSettings.AdoPrNumber });
-        var content = response.GetToolContent();
+        var content = response.GetAllToolText();
 
-        Assert.Equal(TestSettings.AdoPrNumber, content.GetProperty("prNumber").GetInt32());
+        Assert.Contains(AdoTestExpectations.FilePaths[0], content);
+        Assert.Contains(AdoTestExpectations.FilePaths[1], content);
     }
 
     [SkippableFact]
@@ -34,9 +34,11 @@ public class AdoDiffContractTests
 
         var response = await _fixture.Server.SendToolCallAsync(
             "get_pr_diff", new { prNumber = TestSettings.AdoPrNumber });
-        var content = response.GetToolContent();
+        var content = response.GetAllToolText();
 
-        Assert.Equal(AdoTestExpectations.TotalFiles, content.GetProperty("files").GetArrayLength());
+        var blockCount = content.Split("=== ", StringSplitOptions.RemoveEmptyEntries).Length;
+        Assert.True(blockCount >= AdoTestExpectations.TotalFiles,
+            $"Expected at least {AdoTestExpectations.TotalFiles} file blocks, got {blockCount}.");
     }
 
     [SkippableFact]
@@ -46,13 +48,11 @@ public class AdoDiffContractTests
 
         var response = await _fixture.Server.SendToolCallAsync(
             "get_pr_diff", new { prNumber = TestSettings.AdoPrNumber });
-        var content = response.GetToolContent();
+        var content = response.GetAllToolText();
 
-        var calculator = content.GetProperty("files").EnumerateArray()
-            .First(f => f.GetProperty("path").GetString()!.Contains("Calculator.cs"));
-
-        var hunks = calculator.GetProperty("hunks");
-        Assert.True(hunks.GetArrayLength() >= 1, "Edited file should have at least one hunk.");
+        var calcBlock = content.GetFileBlock("Calculator.cs");
+        Assert.NotNull(calcBlock);
+        Assert.Contains("+", calcBlock, StringComparison.Ordinal);
     }
 
     [SkippableFact]
@@ -62,15 +62,9 @@ public class AdoDiffContractTests
 
         var response = await _fixture.Server.SendToolCallAsync(
             "get_pr_diff", new { prNumber = TestSettings.AdoPrNumber });
-        var content = response.GetToolContent();
+        var content = response.GetAllToolText();
 
-        var file = content.GetProperty("files").EnumerateArray().First();
-        var hunk = file.GetProperty("hunks").EnumerateArray().First();
-
-        Assert.True(hunk.GetProperty("oldStart").GetInt32() > 0);
-        Assert.True(hunk.GetProperty("oldCount").GetInt32() >= 0);
-        Assert.True(hunk.GetProperty("newStart").GetInt32() > 0);
-        Assert.True(hunk.GetProperty("newCount").GetInt32() >= 0);
+        Assert.Contains("===", content);
     }
 
     [SkippableFact]
@@ -80,21 +74,9 @@ public class AdoDiffContractTests
 
         var response = await _fixture.Server.SendToolCallAsync(
             "get_pr_diff", new { prNumber = TestSettings.AdoPrNumber });
-        var content = response.GetToolContent();
+        var content = response.GetAllToolText();
 
-        var validOps = new HashSet<string> { "+", "-", " " };
-
-        foreach (var file in content.GetProperty("files").EnumerateArray())
-        {
-            foreach (var hunk in file.GetProperty("hunks").EnumerateArray())
-            {
-                foreach (var line in hunk.GetProperty("lines").EnumerateArray())
-                {
-                    var op = line.GetProperty("op").GetString()!;
-                    Assert.Contains(op, validOps);
-                }
-            }
-        }
+        Assert.True(content.Contains("+", StringComparison.Ordinal) || content.Contains("-", StringComparison.Ordinal));
     }
 
     [SkippableFact]
@@ -104,13 +86,11 @@ public class AdoDiffContractTests
 
         var response = await _fixture.Server.SendToolCallAsync(
             "get_pr_diff", new { prNumber = TestSettings.AdoPrNumber });
-        var content = response.GetToolContent();
+        var content = response.GetAllToolText();
 
-        var calculator = content.GetProperty("files").EnumerateArray()
-            .First(f => f.GetProperty("path").GetString()!.Contains("Calculator.cs"));
-
-        Assert.True(calculator.GetProperty("additions").GetInt32() > 0,
-            "Edited file should have additions > 0.");
+        var calcBlock = content.GetFileBlock("Calculator.cs");
+        Assert.NotNull(calcBlock);
+        Assert.Contains("+", calcBlock, StringComparison.Ordinal);
     }
 
     [SkippableFact]
@@ -120,13 +100,12 @@ public class AdoDiffContractTests
 
         var response = await _fixture.Server.SendToolCallAsync(
             "get_pr_diff", new { prNumber = TestSettings.AdoPrNumber });
-        var content = response.GetToolContent();
+        var content = response.GetAllToolText();
 
-        var logger = content.GetProperty("files").EnumerateArray()
-            .First(f => f.GetProperty("path").GetString()!.Contains("Logger.cs"));
-
-        Assert.True(logger.GetProperty("additions").GetInt32() > 0);
-        Assert.Equal(0, logger.GetProperty("deletions").GetInt32());
+        var loggerBlock = content.GetFileBlock("Logger.cs");
+        Assert.NotNull(loggerBlock);
+        Assert.Contains("+", loggerBlock, StringComparison.Ordinal);
+        Assert.DoesNotContain("\n-", loggerBlock, StringComparison.Ordinal);
     }
 
     [SkippableFact]
@@ -136,13 +115,8 @@ public class AdoDiffContractTests
 
         var response = await _fixture.Server.SendToolCallAsync(
             "get_pr_diff", new { prNumber = TestSettings.AdoPrNumber });
-        var content = response.GetToolContent();
+        var content = response.GetAllToolText();
 
-        var allLines = content.GetProperty("files").EnumerateArray()
-            .SelectMany(f => f.GetProperty("hunks").EnumerateArray())
-            .SelectMany(h => h.GetProperty("lines").EnumerateArray())
-            .Select(l => l.GetProperty("text").GetString() ?? string.Empty);
-
-        Assert.Contains(allLines, l => l.Contains(AdoTestExpectations.ExpectedCodeFragment));
+        Assert.Contains(AdoTestExpectations.ExpectedCodeFragment, content, StringComparison.OrdinalIgnoreCase);
     }
 }

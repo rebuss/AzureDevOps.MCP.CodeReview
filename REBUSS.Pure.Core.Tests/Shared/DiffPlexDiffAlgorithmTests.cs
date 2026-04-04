@@ -2,9 +2,9 @@ using REBUSS.Pure.Core.Shared;
 
 namespace REBUSS.Pure.Core.Tests.Shared;
 
-public class LcsDiffAlgorithmTests
+public class DiffPlexDiffAlgorithmTests
 {
-    private readonly IDiffAlgorithm _algorithm = new LcsDiffAlgorithm();
+    private readonly IDiffAlgorithm _algorithm = new DiffPlexDiffAlgorithm();
 
     [Fact]
     public void ComputeEdits_EmptyInputs_ReturnsEmptyList()
@@ -82,5 +82,25 @@ public class LcsDiffAlgorithmTests
 
         Assert.Equal(1, deletion.OldIdx);
         Assert.Equal(1, insertion.NewIdx);
+    }
+
+    [Fact]
+    public async Task ComputeEdits_ConcurrentCalls_AreStable()
+    {
+        string[] oldLines = ["line1", "line2", "line3", "line4"];
+        string[] newLines = ["line1", "line2-changed", "line3", "line5"];
+
+        var expected = _algorithm.ComputeEdits(oldLines, newLines)
+            .Select(e => (e.Kind, e.OldIdx, e.NewIdx))
+            .ToArray();
+
+        var tasks = Enumerable.Range(0, 32)
+            .Select(_ => Task.Run(() => _algorithm.ComputeEdits(oldLines, newLines)
+                .Select(e => (e.Kind, e.OldIdx, e.NewIdx))
+                .ToArray()));
+
+        var results = await Task.WhenAll(tasks);
+
+        Assert.All(results, result => Assert.Equal(expected, result));
     }
 }

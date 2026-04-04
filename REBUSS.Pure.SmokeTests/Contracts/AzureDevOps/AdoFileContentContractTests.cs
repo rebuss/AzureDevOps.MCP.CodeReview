@@ -1,4 +1,3 @@
-using System.Text.Json;
 using REBUSS.Pure.SmokeTests.Expectations;
 using REBUSS.Pure.SmokeTests.Infrastructure;
 
@@ -23,10 +22,9 @@ public class AdoFileContentContractTests
         var response = await _fixture.Server.SendToolCallAsync(
             "get_file_content_at_ref",
             new { path = AdoTestExpectations.FilePaths[0], @ref = "main" });
-        var content = response.GetToolContent();
+        var content = response.GetToolText();
 
-        var text = content.GetProperty("content").GetString()!;
-        Assert.Contains(AdoTestExpectations.OriginalCodeFragment, text);
+        Assert.Contains(AdoTestExpectations.OriginalCodeFragment, content);
     }
 
     [SkippableFact]
@@ -37,10 +35,9 @@ public class AdoFileContentContractTests
         var response = await _fixture.Server.SendToolCallAsync(
             "get_file_content_at_ref",
             new { path = AdoTestExpectations.FilePaths[0], @ref = "test/fixture-pr" });
-        var content = response.GetToolContent();
+        var content = response.GetToolText();
 
-        var text = content.GetProperty("content").GetString()!;
-        Assert.Contains(AdoTestExpectations.ModifiedCodeFragment, text);
+        Assert.Contains(AdoTestExpectations.ModifiedCodeFragment, content);
     }
 
     [SkippableFact]
@@ -51,10 +48,10 @@ public class AdoFileContentContractTests
         var response = await _fixture.Server.SendToolCallAsync(
             "get_file_content_at_ref",
             new { path = AdoTestExpectations.FilePaths[0], @ref = "main" });
-        var content = response.GetToolContent();
+        var content = response.GetToolText();
 
-        Assert.False(content.GetProperty("isBinary").GetBoolean());
-        Assert.True(content.GetProperty("size").GetInt32() > 0);
+        Assert.DoesNotContain("[binary file", content, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains($"=== {AdoTestExpectations.FilePaths[0]} @ main ===", content);
     }
 
     [SkippableFact]

@@ -148,7 +148,7 @@ namespace REBUSS.Pure
             services.AddSingleton<IWorkspaceRootProvider, McpWorkspaceRootProvider>();
 
             // Shared services (provider-agnostic)
-            services.AddSingleton<IDiffAlgorithm, LcsDiffAlgorithm>();
+            services.AddSingleton<IDiffAlgorithm, DiffPlexDiffAlgorithm>();
             services.AddSingleton<IStructuredDiffBuilder, StructuredDiffBuilder>();
             services.AddSingleton<IFileClassifier, FileClassifier>();
 

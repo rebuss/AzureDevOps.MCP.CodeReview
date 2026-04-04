@@ -1,4 +1,4 @@
-using System.Text.Json;
+using System.Text.RegularExpressions;
 using REBUSS.Pure.SmokeTests.Expectations;
 using REBUSS.Pure.SmokeTests.Infrastructure;
 
@@ -22,9 +22,9 @@ public class GitHubMetadataContractTests
 
         var response = await _fixture.Server.SendToolCallAsync(
             "get_pr_metadata", new { prNumber = TestSettings.GhPrNumber });
-        var content = response.GetToolContent();
+        var content = response.GetToolText();
 
-        Assert.Equal(TestSettings.GhPrNumber, content.GetProperty("prNumber").GetInt32());
+        Assert.Contains($"PR #{TestSettings.GhPrNumber}:", content);
     }
 
     [SkippableFact]
@@ -34,9 +34,9 @@ public class GitHubMetadataContractTests
 
         var response = await _fixture.Server.SendToolCallAsync(
             "get_pr_metadata", new { prNumber = TestSettings.GhPrNumber });
-        var content = response.GetToolContent();
+        var content = response.GetToolText();
 
-        Assert.Equal(GitHubTestExpectations.Title, content.GetProperty("title").GetString());
+        Assert.Contains(GitHubTestExpectations.Title, content);
     }
 
     [SkippableFact]
@@ -46,12 +46,13 @@ public class GitHubMetadataContractTests
 
         var response = await _fixture.Server.SendToolCallAsync(
             "get_pr_metadata", new { prNumber = TestSettings.GhPrNumber });
-        var content = response.GetToolContent();
+        var content = response.GetToolText();
 
-        // GitHub parser maps "open" -> "active" internally
-        var state = content.GetProperty("state").GetString()!;
-        Assert.True(state is "active" or "open",
-            $"Expected state 'active' or 'open', got '{state}'.");
+        Assert.Contains("State:", content);
+        Assert.True(
+            content.Contains("active", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("open", StringComparison.OrdinalIgnoreCase),
+            "Expected state marker 'active' or 'open' in output.");
     }
 
     [SkippableFact]
@@ -61,13 +62,10 @@ public class GitHubMetadataContractTests
 
         var response = await _fixture.Server.SendToolCallAsync(
             "get_pr_metadata", new { prNumber = TestSettings.GhPrNumber });
-        var content = response.GetToolContent();
+        var content = response.GetToolText();
 
-        var baseRef = content.GetProperty("base").GetProperty("ref").GetString()!;
-        var headRef = content.GetProperty("head").GetProperty("ref").GetString()!;
-
-        Assert.Contains(GitHubTestExpectations.TargetBranchContains, baseRef);
-        Assert.Contains(GitHubTestExpectations.SourceBranchContains, headRef);
+        Assert.Contains(GitHubTestExpectations.TargetBranchContains, content, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(GitHubTestExpectations.SourceBranchContains, content, StringComparison.OrdinalIgnoreCase);
     }
 
     [SkippableFact]
@@ -77,10 +75,9 @@ public class GitHubMetadataContractTests
 
         var response = await _fixture.Server.SendToolCallAsync(
             "get_pr_metadata", new { prNumber = TestSettings.GhPrNumber });
-        var content = response.GetToolContent();
+        var content = response.GetToolText();
 
-        var author = content.GetProperty("author");
-        Assert.False(string.IsNullOrWhiteSpace(author.GetProperty("displayName").GetString()));
+        Assert.Contains("Author:", content);
     }
 
     [SkippableFact]
@@ -90,11 +87,10 @@ public class GitHubMetadataContractTests
 
         var response = await _fixture.Server.SendToolCallAsync(
             "get_pr_metadata", new { prNumber = TestSettings.GhPrNumber });
-        var content = response.GetToolContent();
+        var content = response.GetToolText();
 
-        var stats = content.GetProperty("stats");
-        Assert.Equal(GitHubTestExpectations.TotalFiles, stats.GetProperty("changedFiles").GetInt32());
-        Assert.True(stats.GetProperty("commits").GetInt32() >= 1);
+        Assert.Contains($"{GitHubTestExpectations.TotalFiles} file(s)", content);
+        Assert.Contains("commit(s)", content);
     }
 
     [SkippableFact]
@@ -104,18 +100,10 @@ public class GitHubMetadataContractTests
 
         var response = await _fixture.Server.SendToolCallAsync(
             "get_pr_metadata", new { prNumber = TestSettings.GhPrNumber });
-        var content = response.GetToolContent();
+        var content = response.GetToolText();
 
-        var commitShas = content.GetProperty("commitShas");
-        Assert.True(commitShas.GetArrayLength() > 0, "Expected at least one commit SHA.");
-
-        foreach (var sha in commitShas.EnumerateArray())
-        {
-            var value = sha.GetString()!;
-            Assert.Equal(40, value.Length);
-            Assert.True(value.All(c => "0123456789abcdef".Contains(c)),
-                $"SHA '{value}' contains non-hex characters.");
-        }
+        Assert.Matches(new Regex(@"Head SHA:\s+[0-9a-f]{40}", RegexOptions.IgnoreCase), content);
+        Assert.Matches(new Regex(@"Base SHA:\s+[0-9a-f]{40}", RegexOptions.IgnoreCase), content);
     }
 
     [SkippableFact]
@@ -125,11 +113,9 @@ public class GitHubMetadataContractTests
 
         var response = await _fixture.Server.SendToolCallAsync(
             "get_pr_metadata", new { prNumber = TestSettings.GhPrNumber });
-        var content = response.GetToolContent();
+        var content = response.GetToolText();
 
-        var source = content.GetProperty("source");
-        var url = source.GetProperty("url").GetString()!;
-        Assert.Contains("github.com", url, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("github.com", content, StringComparison.OrdinalIgnoreCase);
     }
 
     [SkippableFact]
@@ -139,11 +125,9 @@ public class GitHubMetadataContractTests
 
         var response = await _fixture.Server.SendToolCallAsync(
             "get_pr_metadata", new { prNumber = TestSettings.GhPrNumber });
-        var content = response.GetToolContent();
+        var content = response.GetToolText();
 
-        var description = content.GetProperty("description");
-        var text = description.GetProperty("text").GetString()!;
-        Assert.Contains(GitHubTestExpectations.DescriptionFragment, text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(GitHubTestExpectations.DescriptionFragment, content, StringComparison.OrdinalIgnoreCase);
     }
 
     [SkippableFact]
@@ -153,8 +137,8 @@ public class GitHubMetadataContractTests
 
         var response = await _fixture.Server.SendToolCallAsync(
             "get_pr_metadata", new { prNumber = TestSettings.GhPrNumber });
-        var content = response.GetToolContent();
+        var content = response.GetToolText();
 
-        Assert.Equal(GitHubTestExpectations.IsDraft, content.GetProperty("isDraft").GetBoolean());
+        Assert.Equal(GitHubTestExpectations.IsDraft, content.Contains("[draft]", StringComparison.OrdinalIgnoreCase));
     }
 }

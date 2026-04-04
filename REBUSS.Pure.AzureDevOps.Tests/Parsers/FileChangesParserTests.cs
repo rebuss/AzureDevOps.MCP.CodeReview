@@ -23,9 +23,9 @@ public class FileChangesParserTests
         var result = _parser.Parse(json);
 
         Assert.Equal(2, result.Count);
-        Assert.Equal("/src/A.cs", result[0].Path);
+        Assert.Equal("src/A.cs", result[0].Path);
         Assert.Equal("edit", result[0].ChangeType);
-        Assert.Equal("/src/B.cs", result[1].Path);
+        Assert.Equal("src/B.cs", result[1].Path);
         Assert.Equal("add", result[1].ChangeType);
     }
 
@@ -43,7 +43,7 @@ public class FileChangesParserTests
         var result = _parser.Parse(json);
 
         Assert.Single(result);
-        Assert.Equal("/old/File.cs", result[0].Path);
+        Assert.Equal("old/File.cs", result[0].Path);
         Assert.Equal("delete", result[0].ChangeType);
     }
 
@@ -62,7 +62,7 @@ public class FileChangesParserTests
         var result = _parser.Parse(json);
 
         Assert.Single(result);
-        Assert.Equal("/src/A.cs", result[0].Path);
+        Assert.Equal("src/A.cs", result[0].Path);
     }
 
     [Fact]
@@ -80,7 +80,7 @@ public class FileChangesParserTests
         var result = _parser.Parse(json);
 
         Assert.Single(result);
-        Assert.Equal("/src/A.cs", result[0].Path);
+        Assert.Equal("src/A.cs", result[0].Path);
     }
 
     [Fact]

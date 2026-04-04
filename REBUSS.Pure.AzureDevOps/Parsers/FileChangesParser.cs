@@ -62,7 +62,7 @@ namespace REBUSS.Pure.AzureDevOps.Parsers
                 return null;
 
             var changeType = GetString(change, "changeType", "edit");
-            return new FileChange { Path = path, ChangeType = MapChangeType(changeType) };
+            return new FileChange { Path = path.TrimStart('/'), ChangeType = MapChangeType(changeType) };
         }
 
         private static string GetString(JsonElement element, string property, string fallback) =>

@@ -45,7 +45,7 @@ public class GitHubScmClientTests
 
         var prParser = new GitHubPullRequestParser(NullLogger<GitHubPullRequestParser>.Instance);
         var changesParser = new GitHubFileChangesParser(NullLogger<GitHubFileChangesParser>.Instance);
-        var diffBuilder = new StructuredDiffBuilder(new LcsDiffAlgorithm(), NullLogger<StructuredDiffBuilder>.Instance);
+        var diffBuilder = new StructuredDiffBuilder(new DiffPlexDiffAlgorithm(), NullLogger<StructuredDiffBuilder>.Instance);
         var fileClassifier = new FileClassifier();
 
         var diffProvider = new GitHubDiffProvider(

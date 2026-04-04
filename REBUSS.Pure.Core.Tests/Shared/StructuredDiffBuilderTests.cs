@@ -7,7 +7,7 @@ namespace REBUSS.Pure.Core.Tests.Shared;
 public class StructuredDiffBuilderTests
 {
     private readonly IStructuredDiffBuilder _builder =
-        new StructuredDiffBuilder(new LcsDiffAlgorithm(), NullLogger<StructuredDiffBuilder>.Instance);
+        new StructuredDiffBuilder(new DiffPlexDiffAlgorithm(), NullLogger<StructuredDiffBuilder>.Instance);
 
     [Fact]
     public void Build_ReturnsEmpty_WhenBothContentIdentical()
