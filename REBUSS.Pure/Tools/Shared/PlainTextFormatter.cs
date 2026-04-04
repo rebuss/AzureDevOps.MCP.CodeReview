@@ -12,6 +12,7 @@ namespace REBUSS.Pure.Tools.Shared;
 internal static class PlainTextFormatter
 {
     private const int MaxDescriptionLength = 800;
+    private const int DefaultPathWidth = 60;
 
     // ─── Diff ─────────────────────────────────────────────────────────────────────
 
@@ -21,6 +22,7 @@ internal static class PlainTextFormatter
     /// </summary>
     public static string FormatFileDiff(StructuredFileChange file)
     {
+        ArgumentNullException.ThrowIfNull(file);
         var sb = new StringBuilder();
 
         if (!string.IsNullOrEmpty(file.SkipReason))
@@ -45,6 +47,7 @@ internal static class PlainTextFormatter
     /// </summary>
     public static string FormatHunk(StructuredHunk hunk)
     {
+        ArgumentNullException.ThrowIfNull(hunk);
         var sb = new StringBuilder();
         sb.AppendLine($"@@ -{hunk.OldStart},{hunk.OldCount} +{hunk.NewStart},{hunk.NewCount} @@");
         foreach (var line in hunk.Lines)
@@ -58,7 +61,7 @@ internal static class PlainTextFormatter
     // ─── File list ────────────────────────────────────────────────────────────────
 
     /// <summary>Returns a single-line representation used for token-size estimation.</summary>
-    public static string FormatFileEntry(PullRequestFileInfo f, int pathWidth = 60)
+    public static string FormatFileEntry(PullRequestFileInfo f, int pathWidth = DefaultPathWidth)
     {
         var flags = new List<string>(3);
         if (f.IsTestFile) flags.Add("test");
@@ -78,7 +81,9 @@ internal static class PlainTextFormatter
         PullRequestFilesSummary summary,
         string context)
     {
-        var pathWidth = Math.Max(60, files.Count > 0 ? files.Max(f => f.Path.Length) + 2 : 60);
+        ArgumentNullException.ThrowIfNull(files);
+        ArgumentNullException.ThrowIfNull(summary);
+        var pathWidth = Math.Max(DefaultPathWidth, files.Count > 0 ? files.Max(f => f.Path.Length) + 2 : DefaultPathWidth);
         var sb = new StringBuilder();
         sb.AppendLine($"Changed files: {context} ({files.Count} file(s))");
         sb.AppendLine($"  {"Path".PadRight(pathWidth)} {"Status",-10} {"  +Add",6} {"  -Del",6}  {"Priority",-8} Flags");
@@ -117,6 +122,7 @@ internal static class PlainTextFormatter
         int prNumber,
         (int TotalPages, int TotalFiles, int BudgetPerPage, IReadOnlyList<(int Page, int Count)> ByPage)? paging = null)
     {
+        ArgumentNullException.ThrowIfNull(m);
         var sb = new StringBuilder();
         sb.AppendLine($"PR #{prNumber}: {m.Title}");
         sb.AppendLine($"State:    {m.Status}{(m.IsDraft ? " [draft]" : string.Empty)}");
@@ -161,6 +167,7 @@ internal static class PlainTextFormatter
 
     public static string FormatFileContent(FileContent f)
     {
+        ArgumentNullException.ThrowIfNull(f);
         var sb = new StringBuilder();
         sb.AppendLine($"=== {f.Path} @ {f.Ref} ===");
 
@@ -184,6 +191,7 @@ internal static class PlainTextFormatter
         PaginationMetadataResult pag,
         StalenessWarningResult? staleness = null)
     {
+        ArgumentNullException.ThrowIfNull(pag);
         var parts = new List<string>
         {
             $"Page {pag.CurrentPage} of {pag.TotalPages}",
@@ -261,7 +269,8 @@ internal static class PlainTextFormatter
         ContentManifestResult manifest,
         string? pageContext = null)
     {
-        var pathWidth = Math.Max(60, manifest.Items.Count > 0 ? manifest.Items.Max(i => i.Path.Length) + 2 : 60);
+        ArgumentNullException.ThrowIfNull(manifest);
+        var pathWidth = Math.Max(DefaultPathWidth, manifest.Items.Count > 0 ? manifest.Items.Max(i => i.Path.Length) + 2 : DefaultPathWidth);
         var sb = new StringBuilder();
         var header = pageContext != null ? $"Manifest ({pageContext})" : "Manifest";
         sb.AppendLine($"{header}:");

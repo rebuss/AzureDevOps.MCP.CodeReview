@@ -85,6 +85,21 @@ public class DiffPlexDiffAlgorithmTests
     }
 
     [Fact]
+    public void ComputeEdits_UnicodeContent_ProducesCorrectEdits()
+    {
+        string[] oldLines = ["こんにちは", "世界", "🚀 launch"];
+        string[] newLines = ["こんにちは", "世界!", "🚀 launch"];
+
+        var result = _algorithm.ComputeEdits(oldLines, newLines);
+
+        Assert.Equal(4, result.Count);
+        Assert.Equal(' ', result[0].Kind); // "こんにちは" unchanged
+        Assert.Equal('-', result[1].Kind); // "世界" removed
+        Assert.Equal('+', result[2].Kind); // "世界!" added
+        Assert.Equal(' ', result[3].Kind); // "🚀 launch" unchanged
+    }
+
+    [Fact]
     public async Task ComputeEdits_ConcurrentCalls_AreStable()
     {
         string[] oldLines = ["line1", "line2", "line3", "line4"];
