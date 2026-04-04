@@ -39,12 +39,14 @@ internal static class PlainTextFormatter
     }
 
     /// <summary>
-    /// Formats a single diff hunk. Used both for output and for token-count
-    /// estimation in <see cref="ToolHandlerHelpers.TruncateHunks"/>.
+    /// Formats a single diff hunk with a unified-diff <c>@@</c> header line.
+    /// Used both for output and for token-count estimation in
+    /// <see cref="ToolHandlerHelpers.TruncateHunks"/>.
     /// </summary>
     public static string FormatHunk(StructuredHunk hunk)
     {
         var sb = new StringBuilder();
+        sb.AppendLine($"@@ -{hunk.OldStart},{hunk.OldCount} +{hunk.NewStart},{hunk.NewCount} @@");
         foreach (var line in hunk.Lines)
         {
             var prefix = line.Op switch { "+" => "+", "-" => "-", _ => " " };
@@ -193,8 +195,12 @@ internal static class PlainTextFormatter
 
         if (staleness != null)
         {
-            var orig = staleness.OriginalFingerprint?[..Math.Min(8, staleness.OriginalFingerprint.Length)] ?? "?";
-            var curr = staleness.CurrentFingerprint?[..Math.Min(8, staleness.CurrentFingerprint.Length)] ?? "?";
+            var orig = staleness.OriginalFingerprint is { } origFp
+                ? origFp[..Math.Min(8, origFp.Length)]
+                : "?";
+            var curr = staleness.CurrentFingerprint is { } currFp
+                ? currFp[..Math.Min(8, currFp.Length)]
+                : "?";
             parts.Add($"STALE: head changed ({orig}\u2026 \u2192 {curr}\u2026)");
         }
 

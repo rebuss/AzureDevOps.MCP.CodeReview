@@ -101,6 +101,7 @@ public class GetPullRequestDiffToolHandlerTests
 
         Assert.NotEmpty(blocks);
         Assert.Contains("/src/A.cs", text);
+        Assert.Contains("@@ -1,1 +1,1 @@", text);
         Assert.Contains("-old", text);
         Assert.Contains("+new", text);
     }
