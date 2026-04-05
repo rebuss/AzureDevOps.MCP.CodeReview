@@ -91,7 +91,7 @@ Non-critical but valuable improvements.
 Optional enhancements.
 
 ## Review Notes
-Pages reviewed so far, skipped files, and any full-file retrieval done.
+Pages reviewed so far and skipped files with reasons.
 
 ---
 
