@@ -274,4 +274,12 @@ public class GetPullRequestContentToolHandlerTests
 
         _tokenEstimator.Received(3).EstimateTokenCount(Arg.Any<string>());
     }
+
+    [Fact]
+    public async Task ExecuteAsync_CallsCodeProcessorForEachFile()
+    {
+        await _handler.ExecuteAsync(prNumber: 42, pageNumber: 1);
+
+        await _codeProcessor.Received(3).AddBeforeAfterContext(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
 }

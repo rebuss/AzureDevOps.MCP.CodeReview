@@ -50,8 +50,10 @@ public static partial class CallSiteTargetExtractor
 
         foreach (var line in lines)
         {
-            // Skip removed methods (dead code — no point searching for call sites)
-            if (line.Contains("removed:") || line.Contains("removed "))
+            // Skip removed members (dead code — no point searching for call sites)
+            // Check for ⚠ emoji prefix which marks removals, not generic "removed" text
+            // (method names may contain "removed" — e.g., "ProcessRemoved")
+            if (line.TrimStart().StartsWith("\u26a0"))
                 continue;
 
             var sigMatch = SignatureChangedRegex().Match(line);

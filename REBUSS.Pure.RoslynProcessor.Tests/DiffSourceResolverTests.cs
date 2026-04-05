@@ -101,4 +101,57 @@ public class DiffSourceResolverTests : IDisposable
 
         Assert.Null(result);
     }
+
+    [Fact]
+    public async Task ResolveAsync_MultiHunkDiff_ReconstructsBeforeCorrectly()
+    {
+        var wrapperDir = Path.Combine(_tempDir, "repo-abc123");
+        var srcDir = Path.Combine(wrapperDir, "src");
+        Directory.CreateDirectory(srcDir);
+
+        var afterCode = "line1\nline2\nNEW\nline4\nline5\nNEW2\nline7";
+        File.WriteAllText(Path.Combine(srcDir, "File.cs"), afterCode);
+        _orchestrator.GetExtractedPathAsync(Arg.Any<CancellationToken>()).Returns(_tempDir);
+
+        // Multi-hunk diff: two separate changes
+        var diff = "=== src/File.cs (edit: +2 -2) ===\n@@ -1,3 +1,3 @@\n line1\n line2\n-OLD\n+NEW\n line4\n@@ -5,3 +5,3 @@\n line5\n-OLD2\n+NEW2\n line7";
+        var result = await _resolver.ResolveAsync(diff);
+
+        Assert.NotNull(result);
+        // Before code should contain: line1, line2, OLD, line4, line5, OLD2, line7
+        Assert.Contains("OLD", result.BeforeCode);
+        Assert.Contains("OLD2", result.BeforeCode);
+        Assert.DoesNotContain("NEW", result.BeforeCode);
+        // Context lines should be in before
+        Assert.Contains("line1", result.BeforeCode);
+        Assert.Contains("line4", result.BeforeCode);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_CrlfDiff_NormalizedCorrectly()
+    {
+        var wrapperDir = Path.Combine(_tempDir, "repo-abc123");
+        var srcDir = Path.Combine(wrapperDir, "src");
+        Directory.CreateDirectory(srcDir);
+
+        var afterCode = "class C { void Foo() { } }";
+        File.WriteAllText(Path.Combine(srcDir, "File.cs"), afterCode);
+        _orchestrator.GetExtractedPathAsync(Arg.Any<CancellationToken>()).Returns(_tempDir);
+
+        // CRLF diff
+        var diff = "=== src/File.cs (edit: +1 -1) ===\r\n@@ -1,1 +1,1 @@\r\n-class C { void Bar() { } }\r\n+class C { void Foo() { } }";
+        var result = await _resolver.ResolveAsync(diff);
+
+        Assert.NotNull(result);
+        Assert.Contains("Bar", result.BeforeCode);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_NoDiffHeader_ReturnsNull()
+    {
+        var diff = "just some random text without a diff header";
+        var result = await _resolver.ResolveAsync(diff);
+
+        Assert.Null(result);
+    }
 }

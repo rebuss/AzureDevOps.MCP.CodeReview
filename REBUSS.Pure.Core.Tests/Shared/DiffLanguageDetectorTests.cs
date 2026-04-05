@@ -91,7 +91,70 @@ public class DiffLanguageDetectorTests
     [Fact]
     public void IsSkipped_NormalFile_ReturnsFalse()
     {
-        var diff = "=== src/File.cs (edit: +1 -1) ===\n@@ -1,1 +1,1 @@\n-old\n+new";
+        var diff = "=== src/File.cs (edit: +1 -1) ===\n@@ -1,1 +1,1 ===\n-old\n+new";
         Assert.False(DiffLanguageDetector.IsSkipped(diff));
+    }
+
+    [Fact]
+    public void Detect_KtFile_ReturnsKotlin()
+    {
+        var diff = "=== src/Main.kt (modified: +1 -1) ===\n@@";
+        Assert.Equal(DiffLanguage.Kotlin, DiffLanguageDetector.Detect(diff));
+    }
+
+    [Fact]
+    public void Detect_KtsFile_ReturnsKotlin()
+    {
+        var diff = "=== build.gradle.kts (modified: +1 -1) ===\n@@";
+        Assert.Equal(DiffLanguage.Kotlin, DiffLanguageDetector.Detect(diff));
+    }
+
+    [Fact]
+    public void Detect_RbFile_ReturnsRuby()
+    {
+        var diff = "=== app/main.rb (modified: +1 -1) ===\n@@";
+        Assert.Equal(DiffLanguage.Ruby, DiffLanguageDetector.Detect(diff));
+    }
+
+    [Fact]
+    public void Detect_SwiftFile_ReturnsSwift()
+    {
+        var diff = "=== Sources/App.swift (modified: +1 -1) ===\n@@";
+        Assert.Equal(DiffLanguage.Swift, DiffLanguageDetector.Detect(diff));
+    }
+
+    [Fact]
+    public void Detect_PhpFile_ReturnsPhp()
+    {
+        var diff = "=== src/index.php (modified: +1 -1) ===\n@@";
+        Assert.Equal(DiffLanguage.Php, DiffLanguageDetector.Detect(diff));
+    }
+
+    [Fact]
+    public void Detect_CppFile_ReturnsCpp()
+    {
+        var diff = "=== src/main.cpp (modified: +1 -1) ===\n@@";
+        Assert.Equal(DiffLanguage.Cpp, DiffLanguageDetector.Detect(diff));
+    }
+
+    [Fact]
+    public void Detect_HFile_ReturnsCpp()
+    {
+        var diff = "=== include/types.h (modified: +1 -1) ===\n@@";
+        Assert.Equal(DiffLanguage.Cpp, DiffLanguageDetector.Detect(diff));
+    }
+
+    [Fact]
+    public void Detect_JsFile_ReturnsJavaScript()
+    {
+        var diff = "=== src/app.js (modified: +1 -1) ===\n@@";
+        Assert.Equal(DiffLanguage.JavaScript, DiffLanguageDetector.Detect(diff));
+    }
+
+    [Fact]
+    public void Detect_MjsFile_ReturnsJavaScript()
+    {
+        var diff = "=== src/utils.mjs (modified: +1 -1) ===\n@@";
+        Assert.Equal(DiffLanguage.JavaScript, DiffLanguageDetector.Detect(diff));
     }
 }

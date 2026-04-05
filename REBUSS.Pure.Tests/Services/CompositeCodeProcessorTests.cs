@@ -91,4 +91,44 @@ public class CompositeCodeProcessorTests
 
         Assert.Equal("input", result);
     }
+
+    [Fact]
+    public async Task AddBeforeAfterContext_OperationCancelled_Propagates()
+    {
+        _enricher1.CanEnrich("input").Returns(true);
+        _enricher1.EnrichAsync("input", Arg.Any<CancellationToken>())
+            .ThrowsAsync(new OperationCanceledException());
+        _enricher2.CanEnrich(Arg.Any<string>()).Returns(true);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => _processor.AddBeforeAfterContext("input"));
+
+        // Enricher2 should NOT have been called — cancellation short-circuits
+        await _enricher2.DidNotReceive().EnrichAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task AddBeforeAfterContext_ThreeEnrichers_FirstFails_SecondAndThirdGetOriginal()
+    {
+        var enricher3 = Substitute.For<IDiffEnricher>();
+        enricher3.Order.Returns(300);
+        var processor = new CompositeCodeProcessor(
+            new[] { _enricher1, _enricher2, enricher3 },
+            NullLogger<CompositeCodeProcessor>.Instance);
+
+        _enricher1.CanEnrich("input").Returns(true);
+        _enricher1.EnrichAsync("input", Arg.Any<CancellationToken>())
+            .ThrowsAsync(new InvalidOperationException("boom"));
+
+        // After enricher1 fails, enricher2 and enricher3 get "input" (unchanged)
+        _enricher2.CanEnrich("input").Returns(true);
+        _enricher2.EnrichAsync("input", Arg.Any<CancellationToken>()).Returns("after-200");
+
+        enricher3.CanEnrich("after-200").Returns(true);
+        enricher3.EnrichAsync("after-200", Arg.Any<CancellationToken>()).Returns("after-300");
+
+        var result = await processor.AddBeforeAfterContext("input");
+
+        Assert.Equal("after-300", result);
+    }
 }

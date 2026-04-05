@@ -285,4 +285,12 @@ public class GetLocalContentToolHandlerTests
 
         _tokenEstimator.DidNotReceive().EstimateFromStats(0, 0);
     }
+
+    [Fact]
+    public async Task ExecuteAsync_CallsCodeProcessorForEachFile()
+    {
+        await _handler.ExecuteAsync(pageNumber: 1);
+
+        await _codeProcessor.Received().AddBeforeAfterContext(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
 }

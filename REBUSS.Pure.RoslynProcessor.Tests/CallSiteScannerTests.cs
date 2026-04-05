@@ -176,4 +176,26 @@ public class CallSiteScannerTests : IDisposable
         // The key guarantee: no InvocationExpression or MemberAccessExpression parents
         Assert.Equal(0, results[0].TotalCount);
     }
+
+    [Fact]
+    public async Task ScanAsync_ConstructorUsage_ReturnsLocation()
+    {
+        WriteFile("src/Caller.cs", "class Caller { void Run() { var svc = new OrderService(); } }");
+        var targets = new[] { new CallSiteTarget { Name = "OrderService", Reason = "new type", Kind = CallSiteTargetKind.Type } };
+
+        var results = await _scanner.ScanAsync(_tempDir, targets, null, CancellationToken.None);
+
+        Assert.True(results[0].TotalCount > 0, "Constructor usage (new OrderService()) should be detected");
+    }
+
+    [Fact]
+    public async Task ScanAsync_BaseClassReference_ReturnsLocation()
+    {
+        WriteFile("src/Derived.cs", "class Derived : OrderService { }");
+        var targets = new[] { new CallSiteTarget { Name = "OrderService", Reason = "new type", Kind = CallSiteTargetKind.Type } };
+
+        var results = await _scanner.ScanAsync(_tempDir, targets, null, CancellationToken.None);
+
+        Assert.True(results[0].TotalCount > 0, "Base class reference should be detected");
+    }
 }

@@ -197,4 +197,43 @@ public class StructuralChangeDetectorTests
 
         Assert.Contains(changes, c => c.Kind == StructuralChangeKind.TypeRemoved);
     }
+
+    [Fact]
+    public void DetectChanges_OverloadedMethods_FirstOccurrenceMatched()
+    {
+        // Overloaded methods have same name — MemberKey matches first occurrence
+        var before = "class C { void Process(int x) { } void Process(string s) { } }";
+        var after = "class C { void Process(int x, bool flag) { } void Process(string s) { } }";
+
+        var changes = Detect(before, after);
+
+        // Should detect signature change for the first overload
+        Assert.Contains(changes, c => c.Kind == StructuralChangeKind.SignatureChanged
+                                      && c.Description.Contains("Process"));
+    }
+
+    [Fact]
+    public void DetectChanges_FieldAdded_ReturnsMemberAdded()
+    {
+        var before = "class C { }";
+        var after = "class C { private readonly int _count; }";
+
+        var changes = Detect(before, after);
+
+        var change = Assert.Single(changes);
+        Assert.Equal(StructuralChangeKind.MemberAdded, change.Kind);
+        Assert.Contains("_count", change.Description);
+    }
+
+    [Fact]
+    public void DetectChanges_ReturnTypeChanged_ReturnsSignatureChanged()
+    {
+        var before = "class C { void Run() { } }";
+        var after = "class C { int Run() { return 0; } }";
+
+        var changes = Detect(before, after);
+
+        var change = Assert.Single(changes);
+        Assert.Equal(StructuralChangeKind.SignatureChanged, change.Kind);
+    }
 }

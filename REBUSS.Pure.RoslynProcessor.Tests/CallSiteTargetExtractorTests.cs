@@ -84,4 +84,17 @@ public class CallSiteTargetExtractorTests
 
         Assert.Equal(3, targets.Count);
     }
+
+    [Fact]
+    public void ExtractTargets_MethodNameContainsRemoved_StillExtracted()
+    {
+        // Regression: method named "ProcessRemoved" should NOT be skipped
+        // The "removed" keyword check should only match the ⚠ emoji prefix, not method names
+        var diff = "=== src/Svc.cs (edit) ===\n[structural-changes]\n  \U0001f504 Method signature changed: ProcessRemoved(Order) \u2192 ProcessRemoved(Order, Token)\n[/structural-changes]\n@@";
+        var targets = CallSiteTargetExtractor.ExtractTargets(diff);
+
+        var target = Assert.Single(targets);
+        Assert.Equal("ProcessRemoved", target.Name);
+        Assert.Equal("signature changed", target.Reason);
+    }
 }

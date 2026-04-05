@@ -13,7 +13,9 @@ public class McpServerSmokeTests
     [
         "get_pr_metadata",
         "get_pr_files",
-        "get_local_files"
+        "get_local_files",
+        "get_pr_content",
+        "get_local_content"
     ];
 
     [Fact]

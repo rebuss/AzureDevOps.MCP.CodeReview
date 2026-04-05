@@ -166,4 +166,72 @@ class Svc
     {
         Assert.Null(Resolve("", 1));
     }
+
+    [Fact]
+    public void Resolve_LineInIndexer_ReturnsIndexerSignature()
+    {
+        var source = @"
+class Collection
+{
+    public int this[int index]
+    {
+        get { return 0; } // line 6
+    }
+}";
+        var result = Resolve(source, 6);
+        Assert.NotNull(result);
+        Assert.Contains("Collection", result);
+        Assert.Contains("this[", result);
+    }
+
+    [Fact]
+    public void Resolve_LineInEventDeclaration_ReturnsEventScope()
+    {
+        var source = @"
+class Svc
+{
+    public event EventHandler Changed
+    {
+        add { } // line 6
+        remove { }
+    }
+}";
+        var result = Resolve(source, 6);
+        Assert.NotNull(result);
+        Assert.Contains("Svc", result);
+        Assert.Contains("Changed", result);
+    }
+
+    [Fact]
+    public void Resolve_LineInOperator_ReturnsOperatorScope()
+    {
+        var source = @"
+class Money
+{
+    public static Money operator +(Money a, Money b)
+    {
+        return a; // line 6
+    }
+}";
+        var result = Resolve(source, 6);
+        Assert.NotNull(result);
+        Assert.Contains("Money", result);
+        Assert.Contains("operator", result);
+    }
+
+    [Fact]
+    public void Resolve_LineInDestructor_ReturnsDestructorScope()
+    {
+        var source = @"
+class Resource
+{
+    ~Resource()
+    {
+        // cleanup line 6
+    }
+}";
+        var result = Resolve(source, 6);
+        Assert.NotNull(result);
+        Assert.Contains("Resource", result);
+    }
 }
