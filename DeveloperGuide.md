@@ -20,6 +20,7 @@ rebuss-pure init --provider azuredevops
 # Force specific IDE target (skips auto-detection)
 rebuss-pure init --ide vscode
 rebuss-pure init --ide vs
+rebuss-pure init --ide claude
 
 # Global mode — writes user-level config (~\.mcp.json & %APPDATA%\Code\User\mcp.json)
 rebuss-pure init -g
@@ -39,12 +40,16 @@ rebuss-pure init -g
 |---|---|
 | `.vscode/` or `*.code-workspace` only | `.vscode/mcp.json` |
 | `.vs/` or `*.sln` only | `.vs/mcp.json` |
-| Both or neither | Both locations |
+| `.claude/` or `CLAUDE.md` only | `.claude/.mcp.json` (uses `mcpServers` key) |
+| Multiple IDEs detected | All detected locations |
+| No markers found | `.vscode/mcp.json` + `.vs/mcp.json` |
+
+> **Note:** Claude Code uses `mcpServers` as the top-level key (not `servers`). The `init` command handles this automatically.
 
 **Global mode (`-g` / `--global`):**
 
-When the `-g` flag is used, the MCP configuration is written to the user's home directory
-(`~/.mcp.json` for Visual Studio and `%APPDATA%\Code\User\mcp.json` for VS Code on Windows, `~/.config/Code/User/mcp.json` on Linux/macOS) instead of the repository-local directories.
+When the `-g` flag is used, the MCP configuration is written to the user-level directories
+(`~/.mcp.json` for Visual Studio, `%APPDATA%\Code\User\mcp.json` for VS Code on Windows / `~/.config/Code/User/mcp.json` on Linux/macOS, and `~/.claude/.mcp.json` for Claude Code) instead of the repository-local directories.
 The `--repo` argument in the config points to the current repository's git root.
 
 This is useful when Visual Studio does not detect the local `.vs/mcp.json` file.
@@ -338,6 +343,9 @@ After running `rebuss-pure init`, you get:
 .github/instructions/
 ├── review-pr.instructions.md
 └── self-review.instructions.md
+
+# If Claude Code is detected (.claude/ or CLAUDE.md):
+.claude/.mcp.json          ← uses "mcpServers" key
 ```
 
 > **Note for contributors:** The files in `.github/prompts/` and `.github/instructions/` are **generated** by `rebuss-pure init` from embedded resources compiled into the tool (`REBUSS.Pure/Cli/Prompts/*.md`). The embedded files in `REBUSS.Pure/Cli/Prompts/` are the **source of truth**. Always edit the embedded source files — do **not** edit the deployed files directly, as `init` **always overwrites** them on every run to ensure prompt updates are deployed.

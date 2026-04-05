@@ -23,16 +23,20 @@ namespace REBUSS.Pure.Cli;
 /// When <c>--ide</c> is not specified, the target is determined by IDE auto-detection:
 /// VS Code → <c>.vscode/mcp.json</c>;
 /// Visual Studio → <c>.vs/mcp.json</c>;
-/// both written when both IDEs are detected.
-/// Falls back to VS Code when no IDE markers are found.
+/// Claude Code → <c>.claude/.mcp.json</c> (uses <c>mcpServers</c> key);
+/// VS Code + Visual Studio are written when both are detected or when no markers are found.
+/// Claude Code is written only when <c>.claude/</c> or <c>CLAUDE.md</c> is detected.
 /// </para>
 /// </summary>
 public class InitCommand : ICliCommand
 {
     private const string VsCodeDir = ".vscode";
     private const string VisualStudioDir = ".vs";
+    private const string ClaudeCodeDir = ".claude";
     private const string McpConfigFileName = "mcp.json";
+    private const string ClaudeCodeMcpConfigFileName = ".mcp.json";
     private const string VsGlobalMcpConfigFileName = ".mcp.json";
+    private const string ClaudeCodeMarkerFile = "CLAUDE.md";
     private const string ResourcePrefix = AppConstants.ServerName + ".Cli.Prompts.";
 
     private static readonly string[] PromptFileNames =
@@ -130,13 +134,13 @@ public class InitCommand : ICliCommand
             if (File.Exists(target.ConfigPath))
             {
                 var existing = await File.ReadAllTextAsync(target.ConfigPath, cancellationToken);
-                newContent = MergeConfigContent(existing, _executablePath, gitRoot, _pat);
+                newContent = MergeConfigContent(existing, _executablePath, gitRoot, _pat, target.UseMcpServersKey);
                 await File.WriteAllTextAsync(target.ConfigPath, newContent, cancellationToken);
                 await _output.WriteLineAsync(string.Format(Resources.MsgUpdatedMcpConfiguration, target.IdeName, target.ConfigPath));
             }
             else
             {
-                newContent = BuildConfigContent(normalizedExePath, normalizedRepoPath, _pat);
+                newContent = BuildConfigContent(normalizedExePath, normalizedRepoPath, _pat, target.UseMcpServersKey);
                 await File.WriteAllTextAsync(target.ConfigPath, newContent, cancellationToken);
                 await _output.WriteLineAsync(string.Format(Resources.MsgCreatedMcpConfiguration, target.IdeName, target.ConfigPath));
             }
@@ -320,15 +324,26 @@ public class InitCommand : ICliCommand
                         Path.Combine(gitRoot, VisualStudioDir),
                         Path.Combine(gitRoot, VisualStudioDir, McpConfigFileName))
                 ];
+
+            if (string.Equals(ide, "claude", StringComparison.OrdinalIgnoreCase))
+                return
+                [
+                    new McpConfigTarget(
+                        "Claude Code",
+                        Path.Combine(gitRoot, ClaudeCodeDir),
+                        Path.Combine(gitRoot, ClaudeCodeDir, ClaudeCodeMcpConfigFileName),
+                        UseMcpServersKey: true)
+                ];
         }
 
         var targets = new List<McpConfigTarget>();
 
         bool hasVsCode = DetectsVsCode(gitRoot);
         bool hasVisualStudio = DetectsVisualStudio(gitRoot);
+        bool hasClaudeCode = DetectsClaudeCode(gitRoot);
 
-        bool writeVsCode = hasVsCode || !hasVisualStudio;
-        bool writeVisualStudio = hasVisualStudio || !hasVsCode;
+        bool writeVsCode = hasVsCode || (!hasVisualStudio && !hasClaudeCode);
+        bool writeVisualStudio = hasVisualStudio || (!hasVsCode && !hasClaudeCode);
 
         if (writeVsCode)
             targets.Add(new McpConfigTarget(
@@ -341,6 +356,13 @@ public class InitCommand : ICliCommand
                 "Visual Studio",
                 Path.Combine(gitRoot, VisualStudioDir),
                 Path.Combine(gitRoot, VisualStudioDir, McpConfigFileName)));
+
+        if (hasClaudeCode)
+            targets.Add(new McpConfigTarget(
+                "Claude Code",
+                Path.Combine(gitRoot, ClaudeCodeDir),
+                Path.Combine(gitRoot, ClaudeCodeDir, ClaudeCodeMcpConfigFileName),
+                UseMcpServersKey: true));
 
         return targets;
     }
@@ -367,7 +389,13 @@ public class InitCommand : ICliCommand
             new McpConfigTarget(
                 "VS Code (global)",
                 Path.Combine(appData, "Code", "User"),
-                Path.Combine(appData, "Code", "User", McpConfigFileName))
+                Path.Combine(appData, "Code", "User", McpConfigFileName)),
+
+            new McpConfigTarget(
+                "Claude Code (global)",
+                Path.Combine(userHome, ClaudeCodeDir),
+                Path.Combine(userHome, ClaudeCodeDir, ClaudeCodeMcpConfigFileName),
+                UseMcpServersKey: true)
         ];
     }
 
@@ -379,15 +407,21 @@ public class InitCommand : ICliCommand
         Directory.Exists(Path.Combine(gitRoot, VisualStudioDir)) ||
         Directory.EnumerateFiles(gitRoot, "*.sln", SearchOption.TopDirectoryOnly).Any();
 
-    internal static string BuildConfigContent(string normalizedExePath, string normalizedRepoPath, string? pat = null)
+    internal static bool DetectsClaudeCode(string gitRoot) =>
+        Directory.Exists(Path.Combine(gitRoot, ClaudeCodeDir)) ||
+        File.Exists(Path.Combine(gitRoot, ClaudeCodeMarkerFile));
+
+    internal static string BuildConfigContent(string normalizedExePath, string normalizedRepoPath, string? pat = null, bool useMcpServersKey = false)
     {
         var patArgs = string.IsNullOrWhiteSpace(pat)
             ? string.Empty
             : $", \"--pat\", \"{pat}\"";
 
+        var serversKey = useMcpServersKey ? "mcpServers" : "servers";
+
         return $$"""
             {
-              "servers": {
+              "{{serversKey}}": {
                 "REBUSS.Pure": {
                   "type": "stdio",
                   "command": "{{normalizedExePath}}",
@@ -408,8 +442,11 @@ public class InitCommand : ICliCommand
         string existingJson,
         string rawExePath,
         string rawRepoPath,
-        string? pat = null)
+        string? pat = null,
+        bool useMcpServersKey = false)
     {
+        var serversKey = useMcpServersKey ? "mcpServers" : "servers";
+
         try
         {
             using var doc = System.Text.Json.JsonDocument.Parse(existingJson);
@@ -421,19 +458,19 @@ public class InitCommand : ICliCommand
             {
                 writer.WriteStartObject();
 
-                // Copy all top-level properties except "servers" verbatim
+                // Copy all top-level properties except the servers key verbatim
                 foreach (var prop in root.EnumerateObject())
                 {
-                    if (prop.Name != "servers")
+                    if (prop.Name != serversKey)
                         prop.WriteTo(writer);
                 }
 
-                // Write merged "servers" block
-                writer.WritePropertyName("servers");
+                // Write merged servers block
+                writer.WritePropertyName(serversKey);
                 writer.WriteStartObject();
 
                 // Copy existing servers except REBUSS.Pure
-                if (root.TryGetProperty("servers", out var serversEl))
+                if (root.TryGetProperty(serversKey, out var serversEl))
                 {
                     foreach (var server in serversEl.EnumerateObject())
                     {
@@ -446,7 +483,7 @@ public class InitCommand : ICliCommand
                 // If no PAT was supplied, carry over any existing PAT from the current config.
                 var effectivePat = pat;
                 if (string.IsNullOrWhiteSpace(effectivePat))
-                    effectivePat = ExtractExistingPat(root);
+                    effectivePat = ExtractExistingPat(root, serversKey);
 
                 writer.WritePropertyName("REBUSS.Pure");
                 writer.WriteStartObject();
@@ -475,7 +512,7 @@ public class InitCommand : ICliCommand
             // Existing file is not valid JSON — replace it entirely
             var normalizedExePath = rawExePath.Replace("\\", "\\\\");
             var normalizedRepoPath = rawRepoPath.Replace("\\", "\\\\");
-            return BuildConfigContent(normalizedExePath, normalizedRepoPath, pat);
+            return BuildConfigContent(normalizedExePath, normalizedRepoPath, pat, useMcpServersKey);
         }
     }
 
@@ -483,9 +520,9 @@ public class InitCommand : ICliCommand
     /// Extracts the <c>--pat</c> argument value from an existing REBUSS.Pure server entry,
     /// or returns <c>null</c> if no PAT is present.
     /// </summary>
-    private static string? ExtractExistingPat(System.Text.Json.JsonElement root)
+    private static string? ExtractExistingPat(System.Text.Json.JsonElement root, string serversKey = "servers")
     {
-        if (!root.TryGetProperty("servers", out var servers))
+        if (!root.TryGetProperty(serversKey, out var servers))
             return null;
 
         if (!servers.TryGetProperty("REBUSS.Pure", out var entry))
@@ -613,4 +650,4 @@ public class InitCommand : ICliCommand
 /// <summary>
 /// Describes a single MCP configuration file target to be written by <see cref="InitCommand"/>.
 /// </summary>
-internal sealed record McpConfigTarget(string IdeName, string Directory, string ConfigPath);
+internal sealed record McpConfigTarget(string IdeName, string Directory, string ConfigPath, bool UseMcpServersKey = false);
