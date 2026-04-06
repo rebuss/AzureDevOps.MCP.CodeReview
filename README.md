@@ -62,7 +62,7 @@ LLM → MCP → high-signal context only
 ## ✨ Key Features
 
 - 🔹 Azure DevOps and GitHub Pull Request integration
-- 🔹 High-signal, diff-based AI context
+- 🔹 High-signal, diff-based AI context (currently **C# only** — see [Language Support](#-language-support))
 - 🔹 Local self-review (no network required)
 - 🔹 No repo cloning needed
 - 🔹 Incremental, on-demand data access
@@ -71,6 +71,20 @@ LLM → MCP → high-signal context only
 - 🔹 Authentication via Azure CLI, GitHub CLI (`gh auth`), or PAT
 - 🔹 Auto-detects VS Code and Visual Studio
 - 🔹 Auto-detects provider from Git remote URL
+
+---
+
+## 🌐 Language Support
+
+High-signal context enrichment (scope detection, surrounding usings, call sites, language-aware classification) is currently implemented for **C#** only. Pull requests and local changes in other languages are still fully supported, but the AI agent receives them as **plain unified diffs** without language-specific enrichment.
+
+Planned (near-term):
+
+- C / C++
+- TypeScript / JavaScript
+- F#
+
+Contributions adding analyzers for additional languages are welcome — see `.github/ExtensionRecipes.md`.
 
 ---
 

@@ -545,8 +545,16 @@ public class InitCommand : ICliCommand
 
         await DeleteLegacyPromptFilesAsync(promptsTargetDir);
 
+        // Claude Code loads slash commands from .claude/commands/<name>.md.
+        // Write a copy there too so prompts like /review-pr are invocable from the Claude CLI.
+        var claudeCommandsDir = Path.Combine(gitRoot, ClaudeCodeDir, "commands");
+        var writeClaudeCommands = DetectsClaudeCode(gitRoot);
+        if (writeClaudeCommands)
+            Directory.CreateDirectory(claudeCommandsDir);
+
         var assembly = Assembly.GetExecutingAssembly();
         var promptsWritten = 0;
+        var claudeCommandsWritten = 0;
 
         foreach (var promptFileName in PromptFileNames)
         {
@@ -566,10 +574,24 @@ public class InitCommand : ICliCommand
             var promptPath = Path.Combine(promptsTargetDir, promptFileName);
             await File.WriteAllTextAsync(promptPath, content, cancellationToken);
             promptsWritten++;
+
+            if (writeClaudeCommands)
+            {
+                // Strip ".prompt" so review-pr.prompt.md → review-pr.md, exposing /review-pr in Claude Code.
+                var commandFileName = promptFileName.EndsWith(".prompt.md", StringComparison.OrdinalIgnoreCase)
+                    ? promptFileName[..^".prompt.md".Length] + ".md"
+                    : promptFileName;
+                var commandPath = Path.Combine(claudeCommandsDir, commandFileName);
+                await File.WriteAllTextAsync(commandPath, content, cancellationToken);
+                claudeCommandsWritten++;
+            }
         }
 
         if (promptsWritten > 0)
             await _output.WriteLineAsync(string.Format(Resources.MsgCopiedPrompts, promptsWritten, promptsTargetDir));
+
+        if (claudeCommandsWritten > 0)
+            await _output.WriteLineAsync(string.Format(Resources.MsgCopiedPrompts, claudeCommandsWritten, claudeCommandsDir));
     }
 
     private async Task DeleteLegacyPromptFilesAsync(string promptsTargetDir)

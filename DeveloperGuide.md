@@ -31,7 +31,7 @@ rebuss-pure init -g
 1. Finds the Git repository root
 2. Authenticates (Azure CLI or PAT)
 3. Detects IDEs and writes `mcp.json` to the appropriate directory
-4. Copies prompt files to `.github/prompts/`
+4. Copies prompt files to `.github/prompts/` (and to `.claude/commands/` as `<name>.md` slash commands when Claude Code is detected — e.g. `review-pr.prompt.md` becomes `/review-pr`)
 
 **IDE detection logic (local mode):**
 
@@ -341,6 +341,9 @@ After running `rebuss-pure init`, you get:
 
 # If Claude Code is detected (.claude/ or CLAUDE.md):
 .claude/.mcp.json          ← uses "mcpServers" key
+.claude/commands/
+├── review-pr.md           ← invocable as /review-pr
+└── self-review.md         ← invocable as /self-review
 ```
 
 > **Note for contributors:** The files in `.github/prompts/` are **generated** by `rebuss-pure init` from embedded resources compiled into the tool (`REBUSS.Pure/Cli/Prompts/*.md`). The embedded files in `REBUSS.Pure/Cli/Prompts/` are the **source of truth**. Always edit the embedded source files — do **not** edit the deployed files directly, as `init` **always overwrites** them on every run to ensure prompt updates are deployed. `init` does **not** create or modify `.github/instructions/` — any instruction files there are owned by you.
