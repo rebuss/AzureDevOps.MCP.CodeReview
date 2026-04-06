@@ -39,7 +39,7 @@ rebuss-pure init -g
 |---|---|
 | `.vscode/` or `*.code-workspace` only | `.vscode/mcp.json` |
 | `.vs/` or `*.sln` only | `.vs/mcp.json` |
-| `.claude/` or `CLAUDE.md` only | `.claude/.mcp.json` (uses `mcpServers` key) |
+| `.claude/` or `CLAUDE.md` only | `.mcp.json` at the repo root (uses `mcpServers` key) |
 | Multiple IDEs detected | All detected locations |
 | No markers found | `.vscode/mcp.json` + `.vs/mcp.json` |
 
@@ -48,7 +48,7 @@ rebuss-pure init -g
 **Global mode (`-g` / `--global`):**
 
 When the `-g` flag is used, the MCP configuration is written to the user-level directories
-(`~/.mcp.json` for Visual Studio, `%APPDATA%\Code\User\mcp.json` for VS Code on Windows / `~/.config/Code/User/mcp.json` on Linux/macOS, and `~/.claude/.mcp.json` for Claude Code) instead of the repository-local directories.
+(`~/.mcp.json` for Visual Studio, `%APPDATA%\Code\User\mcp.json` for VS Code on Windows / `~/.config/Code/User/mcp.json` on Linux/macOS, and `~/.claude.json` for Claude Code — merged into the existing `mcpServers` key, preserving all other top-level settings) instead of the repository-local directories.
 The `--repo` argument in the config points to the current repository's git root.
 
 This is useful when Visual Studio does not detect the local `.vs/mcp.json` file.
@@ -340,7 +340,7 @@ After running `rebuss-pure init`, you get:
 └── self-review.prompt.md
 
 # If Claude Code is detected (.claude/ or CLAUDE.md):
-.claude/.mcp.json          ← uses "mcpServers" key
+.mcp.json                  ← at repo root, uses "mcpServers" key
 .claude/commands/
 ├── review-pr.md           ← invocable as /review-pr
 └── self-review.md         ← invocable as /self-review

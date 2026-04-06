@@ -904,7 +904,7 @@ public class InitCommandTests
             var exitCode = await command.ExecuteAsync();
 
             Assert.Equal(0, exitCode);
-            var claudeConfig = Path.Combine(tempDir, ".claude", ".mcp.json");
+            var claudeConfig = Path.Combine(tempDir, ".mcp.json");
             Assert.True(File.Exists(claudeConfig), $"Expected Claude Code config at {claudeConfig}");
             Assert.Contains("Claude Code", output.ToString());
 
@@ -912,6 +912,55 @@ public class InitCommandTests
             Assert.Contains("\"mcpServers\"", content);
             Assert.Contains("\"REBUSS.Pure\"", content);
             Assert.DoesNotContain("\"servers\"", content);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_CreatesBackupFile_WhenOverwritingExistingConfig()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(Path.Combine(tempDir, ".git"));
+        Directory.CreateDirectory(Path.Combine(tempDir, ".claude"));
+        var claudeConfig = Path.Combine(tempDir, ".mcp.json");
+
+        // Pre-existing config with an unrelated top-level key that must survive merge.
+        var originalContent = """
+            {
+              "someUserSetting": "preserve me",
+              "mcpServers": {
+                "OtherServer": { "type": "stdio", "command": "other.exe" }
+              }
+            }
+            """;
+        await File.WriteAllTextAsync(claudeConfig, originalContent);
+
+        try
+        {
+            var output = new StringWriter();
+            var command = CreateCommand(output, tempDir, "rebuss-pure.exe");
+
+            var exitCode = await command.ExecuteAsync();
+
+            Assert.Equal(0, exitCode);
+
+            // Backup file exists with the original content verbatim.
+            var backupPath = claudeConfig + ".bak";
+            Assert.True(File.Exists(backupPath), $"Expected backup file at {backupPath}");
+            Assert.Equal(originalContent, await File.ReadAllTextAsync(backupPath));
+
+            // Merged file preserves the unrelated key and the other server,
+            // and adds our REBUSS.Pure entry.
+            var mergedContent = await File.ReadAllTextAsync(claudeConfig);
+            Assert.Contains("\"someUserSetting\"", mergedContent);
+            Assert.Contains("\"OtherServer\"", mergedContent);
+            Assert.Contains("\"REBUSS.Pure\"", mergedContent);
+
+            // User saw the backup notice in the output.
+            Assert.Contains("Backed up", output.ToString());
         }
         finally
         {
@@ -934,7 +983,7 @@ public class InitCommandTests
             var exitCode = await command.ExecuteAsync();
 
             Assert.Equal(0, exitCode);
-            var claudeConfig = Path.Combine(tempDir, ".claude", ".mcp.json");
+            var claudeConfig = Path.Combine(tempDir, ".mcp.json");
             Assert.True(File.Exists(claudeConfig));
 
             var content = await File.ReadAllTextAsync(claudeConfig);
@@ -963,14 +1012,14 @@ public class InitCommandTests
 
             Assert.Equal(0, exitCode);
             Assert.True(File.Exists(Path.Combine(tempDir, ".vscode", "mcp.json")));
-            Assert.True(File.Exists(Path.Combine(tempDir, ".claude", ".mcp.json")));
+            Assert.True(File.Exists(Path.Combine(tempDir, ".mcp.json")));
             Assert.False(File.Exists(Path.Combine(tempDir, ".vs", "mcp.json")));
 
             // VS Code uses "servers", Claude Code uses "mcpServers"
             var vsCodeContent = await File.ReadAllTextAsync(Path.Combine(tempDir, ".vscode", "mcp.json"));
             Assert.Contains("\"servers\"", vsCodeContent);
 
-            var claudeContent = await File.ReadAllTextAsync(Path.Combine(tempDir, ".claude", ".mcp.json"));
+            var claudeContent = await File.ReadAllTextAsync(Path.Combine(tempDir, ".mcp.json"));
             Assert.Contains("\"mcpServers\"", claudeContent);
         }
         finally
@@ -995,7 +1044,7 @@ public class InitCommandTests
 
             Assert.Equal(0, exitCode);
             Assert.True(File.Exists(Path.Combine(tempDir, ".vscode", "mcp.json")));
-            Assert.False(File.Exists(Path.Combine(tempDir, ".claude", ".mcp.json")));
+            Assert.False(File.Exists(Path.Combine(tempDir, ".mcp.json")));
         }
         finally
         {
@@ -1017,7 +1066,7 @@ public class InitCommandTests
             var exitCode = await command.ExecuteAsync();
 
             Assert.Equal(0, exitCode);
-            Assert.True(File.Exists(Path.Combine(tempDir, ".claude", ".mcp.json")));
+            Assert.True(File.Exists(Path.Combine(tempDir, ".mcp.json")));
             Assert.False(File.Exists(Path.Combine(tempDir, ".vscode", "mcp.json")));
             Assert.False(File.Exists(Path.Combine(tempDir, ".vs", "mcp.json")));
             Assert.Contains("Claude Code", output.ToString());
@@ -1044,7 +1093,8 @@ public class InitCommandTests
 
             Assert.Single(targets);
             Assert.Equal("Claude Code", targets[0].IdeName);
-            Assert.Contains(".claude", targets[0].Directory);
+            Assert.Equal(tempDir, targets[0].Directory);
+            Assert.Equal(Path.Combine(tempDir, ".mcp.json"), targets[0].ConfigPath);
             Assert.True(targets[0].UseMcpServersKey);
         }
         finally
@@ -1222,7 +1272,7 @@ public class InitCommandTests
         Assert.True(claudeTarget.UseMcpServersKey);
 
         var userHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        Assert.Equal(Path.Combine(userHome, ".claude", ".mcp.json"), claudeTarget.ConfigPath);
+        Assert.Equal(Path.Combine(userHome, ".claude.json"), claudeTarget.ConfigPath);
     }
 
     [Fact]
@@ -1955,7 +2005,7 @@ public class InitCommandTests
         Assert.Equal(0, exitCode);
         Assert.False(File.Exists(Path.Combine(ctx.RepoDir, ".vscode", "mcp.json")));
         Assert.False(File.Exists(Path.Combine(ctx.RepoDir, ".vs", "mcp.json")));
-        Assert.False(File.Exists(Path.Combine(ctx.RepoDir, ".claude", ".mcp.json")));
+        Assert.False(File.Exists(Path.Combine(ctx.RepoDir, ".mcp.json")));
     }
 
     [Fact]
@@ -2018,7 +2068,7 @@ public class InitCommandTests
         var appData  = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
         Assert.Contains(targets, t => t.ConfigPath == Path.Combine(userHome, ".mcp.json"));
         Assert.Contains(targets, t => t.ConfigPath == Path.Combine(appData, "Code", "User", "mcp.json"));
-        Assert.Contains(targets, t => t.ConfigPath == Path.Combine(userHome, ".claude", ".mcp.json"));
+        Assert.Contains(targets, t => t.ConfigPath == Path.Combine(userHome, ".claude.json"));
     }
 
     // -------------------------------------------------------------------------
@@ -2221,13 +2271,12 @@ public class InitCommandTests
             GlobalVsConfig = Path.Combine(GlobalDir, ".mcp.json");
             var globalVsCodeDir = Path.Combine(GlobalDir, "Code", "User");
             GlobalVsCodeConfig = Path.Combine(globalVsCodeDir, "mcp.json");
-            var globalClaudeCodeDir = Path.Combine(GlobalDir, ".claude");
-            GlobalClaudeCodeConfig = Path.Combine(globalClaudeCodeDir, ".mcp.json");
+            GlobalClaudeCodeConfig = Path.Combine(GlobalDir, ".claude.json");
             GlobalTargets =
             [
                 new McpConfigTarget("Visual Studio (global)", GlobalDir, GlobalVsConfig),
                 new McpConfigTarget("VS Code (global)", globalVsCodeDir, GlobalVsCodeConfig),
-                new McpConfigTarget("Claude Code (global)", globalClaudeCodeDir, GlobalClaudeCodeConfig, UseMcpServersKey: true)
+                new McpConfigTarget("Claude Code (global)", GlobalDir, GlobalClaudeCodeConfig, UseMcpServersKey: true)
             ];
         }
 

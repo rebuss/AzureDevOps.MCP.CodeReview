@@ -727,6 +727,24 @@ namespace REBUSS.Pure.Properties {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Backed up existing MCP configuration to: {0}.
+        /// </summary>
+        internal static string MsgBackedUpMcpConfiguration {
+            get {
+                return ResourceManager.GetString("MsgBackedUpMcpConfiguration", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Could not write MCP configuration ({0}) at {1}: the file is locked, likely because the MCP client (e.g. Claude Code) is currently running. Close the client and rerun 'rebuss-pure init'. Underlying error: {2}.
+        /// </summary>
+        internal static string ErrMcpConfigLocked {
+            get {
+                return ResourceManager.GetString("ErrMcpConfigLocked", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Created MCP configuration ({0}): {1}.
         /// </summary>
         internal static string MsgCreatedMcpConfiguration {
