@@ -72,7 +72,31 @@ namespace REBUSS.Pure.Tools
                 var safeBudget = budget.SafeBudgetTokens;
 
                 var localFiles = await _localProvider.GetFilesAsync(parsedScope, cancellationToken);
-                var candidates = BuildStatBasedCandidates(localFiles.Files);
+
+                // Fetch every file's diff upfront so we can enrich and measure against
+                // the post-enrichment text. Pagination must reflect the size that will
+                // actually be emitted; stat-based estimation under-counts dramatically
+                // once enrichers inject scope/structural/call-site annotations and
+                // before/after windows, causing pages to blow past the budget.
+                var diffByPath = new Dictionary<string, FileChange>(StringComparer.OrdinalIgnoreCase);
+                var fetchTasks = localFiles.Files
+                    .Select(f => _localProvider.GetFileDiffAsync(f.Path, parsedScope, cancellationToken))
+                    .ToList();
+                await Task.WhenAll(fetchTasks);
+                foreach (var task in fetchTasks)
+                {
+                    var fc = task.Result.Files.FirstOrDefault();
+                    if (fc != null)
+                        diffByPath[fc.Path] = fc;
+                }
+
+                var aggregatedDiff = new PullRequestDiff
+                {
+                    Files = diffByPath.Values.ToList()
+                };
+
+                var (candidates, enrichedByPath) = await FileTokenMeasurement.BuildEnrichedCandidatesAsync(
+                    aggregatedDiff, _tokenEstimator, _fileClassifier, _codeProcessor, cancellationToken);
                 candidates.Sort(PackingPriorityComparer.Instance);
 
                 var allocation = _pageAllocator.Allocate(candidates, safeBudget);
@@ -83,28 +107,12 @@ namespace REBUSS.Pure.Tools
 
                 var pageSlice = allocation.Pages[pageNumber.Value - 1];
 
-                var diffTasks = pageSlice.Items
-                    .Select(item => (
-                        Index: item.OriginalIndex,
-                        Task: _localProvider.GetFileDiffAsync(
-                            candidates[item.OriginalIndex].Path, parsedScope, cancellationToken)))
-                    .ToList();
-
-                await Task.WhenAll(diffTasks.Select(d => d.Task));
-
-                var pageFiles = new List<StructuredFileChange>(diffTasks.Count);
-                var pageCandidateIndices = new List<int>(diffTasks.Count);
-                foreach (var (index, task) in diffTasks)
-                {
-                    pageCandidateIndices.Add(index);
-                    var fileChange = task.Result.Files.FirstOrDefault();
-                    if (fileChange != null)
-                        pageFiles.Add(FileTokenMeasurement.MapToStructured(fileChange));
-                }
+                var pageCandidateIndices = pageSlice.Items.Select(i => i.OriginalIndex).ToList();
+                var pagePaths = pageCandidateIndices.Select(i => candidates[i].Path).ToList();
 
                 var categories = BuildCategoryBreakdown(pageCandidateIndices, candidates);
 
-                var blocks = new List<ContentBlock>(pageFiles.Count + 2);
+                var blocks = new List<ContentBlock>(pagePaths.Count + 2);
                 blocks.Add(new TextContentBlock
                 {
                     Text = PlainTextFormatter.FormatLocalContentHeader(
@@ -112,21 +120,21 @@ namespace REBUSS.Pure.Tools
                         localFiles.CurrentBranch,
                         parsedScope.ToString())
                 });
-                foreach (var f in pageFiles)
-                    blocks.Add(new TextContentBlock { Text = await _codeProcessor.AddBeforeAfterContext(PlainTextFormatter.FormatFileDiff(f), cancellationToken) });
+                foreach (var path in pagePaths)
+                    blocks.Add(new TextContentBlock { Text = enrichedByPath[path] });
 
                 blocks.Add(new TextContentBlock
                 {
                     Text = PlainTextFormatter.FormatSimplePaginationBlock(
                         pageNumber.Value, allocation.TotalPages,
-                        pageFiles.Count, allocation.TotalItems,
+                        pagePaths.Count, allocation.TotalItems,
                         pageSlice.BudgetUsed,
                         categories)
                 });
 
                 sw.Stop();
                 _logger.LogInformation(Resources.LogGetLocalContentCompleted,
-                    pageNumber, allocation.TotalPages, pageFiles.Count, sw.ElapsedMilliseconds);
+                    pageNumber, allocation.TotalPages, pagePaths.Count, sw.ElapsedMilliseconds);
 
                 return blocks;
             }
@@ -136,24 +144,6 @@ namespace REBUSS.Pure.Tools
                 _logger.LogError(ex, Resources.LogGetLocalContentError, pageNumber, scope);
                 throw new McpException(string.Format(Resources.ErrorRetrievingLocalContent, ex.Message));
             }
-        }
-
-        private List<PackingCandidate> BuildStatBasedCandidates(List<PullRequestFileInfo> files)
-        {
-            var candidates = new List<PackingCandidate>(files.Count);
-            foreach (var file in files)
-            {
-                var estimatedTokens = file.Changes > 0
-                    ? _tokenEstimator.EstimateFromStats(file.Additions, file.Deletions)
-                    : PaginationConstants.FallbackEstimateWhenLinecountsUnknown;
-                var classification = _fileClassifier.Classify(file.Path);
-                candidates.Add(new PackingCandidate(
-                    file.Path,
-                    estimatedTokens,
-                    classification.Category,
-                    file.Additions + file.Deletions));
-            }
-            return candidates;
         }
 
         private static Dictionary<string, int> BuildCategoryBreakdown(

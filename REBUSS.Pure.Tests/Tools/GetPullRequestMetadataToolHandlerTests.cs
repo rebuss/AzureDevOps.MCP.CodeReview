@@ -22,6 +22,7 @@ public class GetPullRequestMetadataToolHandlerTests
     private readonly IPageAllocator _pageAllocator = Substitute.For<IPageAllocator>();
     private readonly IPullRequestDiffCache _diffCache = Substitute.For<IPullRequestDiffCache>();
     private readonly IRepositoryDownloadOrchestrator _downloadOrchestrator = Substitute.For<IRepositoryDownloadOrchestrator>();
+    private readonly ICodeProcessor _codeProcessor = Substitute.For<ICodeProcessor>();
     private readonly GetPullRequestMetadataToolHandler _handler;
 
     private static readonly FullPullRequestMetadata SampleMetadata = new()
@@ -104,6 +105,9 @@ public class GetPullRequestMetadataToolHandlerTests
         _pageAllocator.Allocate(Arg.Any<IReadOnlyList<PackingCandidate>>(), Arg.Any<int>())
             .Returns(new PageAllocation(new[] { pageSlice }, 1, 2));
 
+        _codeProcessor.AddBeforeAfterContext(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(ci => ci.ArgAt<string>(0));
+
         _handler = new GetPullRequestMetadataToolHandler(
             _dataProvider,
             _budgetResolver,
@@ -112,6 +116,7 @@ public class GetPullRequestMetadataToolHandlerTests
             _pageAllocator,
             _diffCache,
             _downloadOrchestrator,
+            _codeProcessor,
             NullLogger<GetPullRequestMetadataToolHandler>.Instance);
     }
 

@@ -187,8 +187,11 @@ public class GetLocalContentToolHandlerTests
     }
 
     [Fact]
-    public async Task ExecuteAsync_OnlyFetchesDiffsForPageFiles()
+    public async Task ExecuteAsync_FetchesAllFileDiffsUpfrontForAccurateMeasurement()
     {
+        // Pagination must reflect post-enrichment text size, so all diffs are fetched
+        // and enriched up front before allocation — even files that won't appear on
+        // the requested page.
         var slice1 = new PageSlice(1, 0, 1,
             new[] { new PageSliceItem(0, PackingItemStatus.Included, 500) },
             500, 139500);
@@ -203,7 +206,7 @@ public class GetLocalContentToolHandlerTests
 
         await _localProvider.Received(1).GetFileDiffAsync(
             "src/A.cs", Arg.Any<LocalReviewScope>(), Arg.Any<CancellationToken>());
-        await _localProvider.DidNotReceive().GetFileDiffAsync(
+        await _localProvider.Received(1).GetFileDiffAsync(
             "src/B.cs", Arg.Any<LocalReviewScope>(), Arg.Any<CancellationToken>());
 
         Assert.Contains("src/A.cs", text);
@@ -243,47 +246,6 @@ public class GetLocalContentToolHandlerTests
         await _handler.ExecuteAsync(pageNumber: 1, modelName: "gpt-4o", maxTokens: 50000);
 
         _budgetResolver.Received(1).Resolve(50000, "gpt-4o");
-    }
-
-    // --- Fallback estimate for unknown line counts ---
-
-    [Fact]
-    public async Task ExecuteAsync_FileWithZeroChanges_UsesFallbackTokenEstimate()
-    {
-        var filesWithZeroCounts = new LocalReviewFiles
-        {
-            RepositoryRoot = "C:\\Projects\\MyRepo",
-            CurrentBranch = "feature/my-branch",
-            Scope = "working-tree",
-            Files = new List<PullRequestFileInfo>
-            {
-                new() { Path = "src/A.cs", Additions = 0, Deletions = 0, Changes = 0, Extension = ".cs" }
-            }
-        };
-        _localProvider.GetFilesAsync(Arg.Any<LocalReviewScope>(), Arg.Any<CancellationToken>())
-            .Returns(filesWithZeroCounts);
-        _localProvider.GetFileDiffAsync("src/A.cs", Arg.Any<LocalReviewScope>(), Arg.Any<CancellationToken>())
-            .Returns(MakeFileDiff("src/A.cs", 0, 0));
-
-        _pageAllocator.Allocate(
-            Arg.Any<IReadOnlyList<PackingCandidate>>(), Arg.Any<int>())
-            .Returns(call =>
-            {
-                var candidates = call.Arg<IReadOnlyList<PackingCandidate>>();
-                var slice = new PageSlice(1, 0, 1,
-                    new[] { new PageSliceItem(0, PackingItemStatus.Included, candidates[0].EstimatedTokens) },
-                    candidates[0].EstimatedTokens, 139700);
-                return new PageAllocation(new[] { slice }, 1, 1);
-            });
-
-        await _handler.ExecuteAsync(pageNumber: 1);
-
-        _pageAllocator.Received(1).Allocate(
-            Arg.Is<IReadOnlyList<PackingCandidate>>(list =>
-                list.Count == 1 && list[0].EstimatedTokens == 300),
-            Arg.Any<int>());
-
-        _tokenEstimator.DidNotReceive().EstimateFromStats(0, 0);
     }
 
     [Fact]

@@ -72,7 +72,11 @@ namespace REBUSS.Pure.Tools
                 var safeBudget = budget.SafeBudgetTokens;
 
                 var diff = await _diffCache.GetOrFetchDiffAsync(prNumber.Value, ct: cancellationToken);
-                var candidates = FileTokenMeasurement.BuildCandidatesFromDiff(diff, _tokenEstimator, _fileClassifier);
+                // Enrich first, then measure: pagination must reflect the post-enrichment
+                // text size, otherwise pages can blow well past the budget once enrichers
+                // inject scope/structural/call-site annotations and before/after windows.
+                var (candidates, enrichedByPath) = await FileTokenMeasurement.BuildEnrichedCandidatesAsync(
+                    diff, _tokenEstimator, _fileClassifier, _codeProcessor, cancellationToken);
                 candidates.Sort(PackingPriorityComparer.Instance);
 
                 var allocation = _pageAllocator.Allocate(candidates, safeBudget);
@@ -91,12 +95,11 @@ namespace REBUSS.Pure.Tools
 
                 var pageFiles = diff.Files
                     .Where(f => pageFilePaths.Contains(f.Path))
-                    .Select(f => FileTokenMeasurement.MapToStructured(f))
                     .ToList();
 
                 var blocks = new List<ContentBlock>(pageFiles.Count + 1);
                 foreach (var f in pageFiles)
-                    blocks.Add(new TextContentBlock { Text = await _codeProcessor.AddBeforeAfterContext(PlainTextFormatter.FormatFileDiff(f), cancellationToken) });
+                    blocks.Add(new TextContentBlock { Text = enrichedByPath[f.Path] });
 
                 blocks.Add(new TextContentBlock
                 {

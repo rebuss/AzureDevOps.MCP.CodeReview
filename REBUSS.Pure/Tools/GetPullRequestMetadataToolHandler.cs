@@ -31,6 +31,7 @@ namespace REBUSS.Pure.Tools
         private readonly IPageAllocator _pageAllocator;
         private readonly IPullRequestDiffCache _diffCache;
         private readonly IRepositoryDownloadOrchestrator _downloadOrchestrator;
+        private readonly ICodeProcessor _codeProcessor;
         private readonly ILogger<GetPullRequestMetadataToolHandler> _logger;
 
         public GetPullRequestMetadataToolHandler(
@@ -41,6 +42,7 @@ namespace REBUSS.Pure.Tools
             IPageAllocator pageAllocator,
             IPullRequestDiffCache diffCache,
             IRepositoryDownloadOrchestrator downloadOrchestrator,
+            ICodeProcessor codeProcessor,
             ILogger<GetPullRequestMetadataToolHandler> logger)
         {
             _metadataProvider = metadataProvider;
@@ -50,6 +52,7 @@ namespace REBUSS.Pure.Tools
             _pageAllocator = pageAllocator;
             _diffCache = diffCache;
             _downloadOrchestrator = downloadOrchestrator;
+            _codeProcessor = codeProcessor;
             _logger = logger;
         }
 
@@ -119,7 +122,10 @@ namespace REBUSS.Pure.Tools
             var budget = _budgetResolver.Resolve(maxTokens, modelName);
             var safeBudget = budget.SafeBudgetTokens;
 
-            var candidates = FileTokenMeasurement.BuildCandidatesFromDiff(diff, _tokenEstimator, _fileClassifier);
+            // Measure against the post-enrichment text so totalPages reported in metadata
+            // matches what get_pr_content will actually emit.
+            var (candidates, _) = await FileTokenMeasurement.BuildEnrichedCandidatesAsync(
+                diff, _tokenEstimator, _fileClassifier, _codeProcessor, ct);
             candidates.Sort(PackingPriorityComparer.Instance);
 
             var allocation = _pageAllocator.Allocate(candidates, safeBudget);
