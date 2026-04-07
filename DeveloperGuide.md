@@ -290,6 +290,30 @@ Or via environment variable: `ContextWindow__GatewayMaxTokens=50000`. To disable
 
 > **Behavior change:** prior to this version, the gateway cap clamped *all* budget sources including explicit `maxTokens` per call. Explicit per-call values now bypass the cap by design — callers passing `maxTokens` are treated as authoritative.
 
+### Workflow timeouts (Progressive PR Metadata)
+
+For large PRs the diff fetch + enrichment pipeline can exceed the host's hard ~30 s tool-call ceiling. The **Progressive PR Metadata** workflow handles this:
+
+1. `get_pr_metadata` enforces an internal 28 s timeout. On timeout it returns the basic-summary response with an explicit "Content paging: not yet available" indicator instead of failing — the host never sees a tool-call timeout.
+2. Background enrichment continues to run in the singleton `PrEnrichmentOrchestrator` even after the metadata response has returned.
+3. A follow-up `get_pr_content` call gets its own fresh 28 s budget and serves the result from the orchestrator's cache. The effective end-to-end processing budget for one review is therefore >60 s without any host-visible timeout.
+4. If even the content call cannot complete in time — or the background job has failed — both handlers return a friendly plain-text status block via `PlainTextFormatter.FormatFriendlyStatus(...)`. The MCP tool response is always a successful payload.
+
+Configuration in `appsettings.json`:
+
+```json
+{
+  "Workflow": {
+    "MetadataInternalTimeoutMs": 28000,
+    "ContentInternalTimeoutMs": 28000
+  }
+}
+```
+
+Or via environment variables: `Workflow__MetadataInternalTimeoutMs`, `Workflow__ContentInternalTimeoutMs`. Both must be strictly less than the host's hard tool-call ceiling so the response has time to serialize. Default 28 000 ms leaves a 2 s margin under the typical 30 s ceiling.
+
+The orchestrator's load-bearing semantic — caller cancellation never cancels the background body — is asserted by `PrEnrichmentOrchestratorTests.CallerCancellation_DoesNotCancelBackgroundBody`. Do not regress it.
+
 ---
 
 ## MCP Tools Reference

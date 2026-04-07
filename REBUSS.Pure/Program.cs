@@ -14,6 +14,7 @@ using REBUSS.Pure.Logging;
 using REBUSS.Pure.Services;
 using REBUSS.Pure.Services.ContextWindow;
 using REBUSS.Pure.Services.LocalReview;
+using REBUSS.Pure.Services.PrEnrichment;
 using AzureDevOpsNames = REBUSS.Pure.AzureDevOps.Names;
 using GitHubNames = REBUSS.Pure.GitHub.Names;
 using ResponsePacking = REBUSS.Pure.Services.ResponsePacking;
@@ -161,6 +162,10 @@ namespace REBUSS.Pure
             services.AddSingleton<CallSiteScanner>();
             services.AddSingleton<IDiffEnricher, CallSiteEnricher>();            // Order=300
             services.AddSingleton<ICodeProcessor, CompositeCodeProcessor>();
+
+            // Workflow timeouts (progressive PR metadata feature)
+            services.Configure<WorkflowOptions>(configuration.GetSection(WorkflowOptions.SectionName));
+            services.AddSingleton<IPrEnrichmentOrchestrator, PrEnrichmentOrchestrator>();
 
             // Context Window Awareness
             services.Configure<ContextWindowOptions>(configuration.GetSection(ContextWindowOptions.SectionName));

@@ -383,6 +383,93 @@ get_pr_metadata → MetadataHandler
   `rebuss-repo-*` directories, extracts PID from name, deletes if process not running.
 - **Temporary storage**: `{Path.GetTempPath()}/rebuss-repo-{Environment.ProcessId}/`
 
+## 6a. Progressive PR Metadata (PrEnrichmentOrchestrator)
+
+### Why this exists
+
+The MCP host enforces a hard ~30 s tool-call timeout. For large PRs, computing
+content paging requires fetching the diff *and* running the enrichment pipeline
+(`CompositeCodeProcessor` → Roslyn-backed enrichers → per-file before/after
+windows + structural change blocks), which on big repos can exceed that ceiling.
+Without the orchestrator, `get_pr_metadata` for an oversized PR would return a
+raw timeout error and the review could not start.
+
+### Flow
+
+```
+get_pr_metadata(prNumber, modelName)
+  ├─> _metadataProvider.GetMetadataAsync (fast)
+  ├─> _orchestrator.TriggerEnrichment(prNumber, headSha, safeBudget)   ── fire-and-forget
+  │     └─> Task.Run(BackgroundBodyAsync) under _shutdownToken         ── runs to completion
+  │           ├─> _diffCache.GetOrFetchDiffAsync
+  │           ├─> FileTokenMeasurement.BuildEnrichedCandidatesAsync
+  │           ├─> PackingPriorityComparer.Instance.Sort
+  │           └─> _pageAllocator.Allocate → PrEnrichmentResult cached
+  └─> WaitForEnrichmentAsync(prNumber, linkedCts.Token)                ── linkedCts.CancelAfter(28 000 ms)
+        ├─> Ready in time:  emit "Content paging:" block
+        ├─> OperationCanceledException (internal timeout, !callerCt):
+        │     return basic summary + "Content paging: not yet available" (FR-004)
+        └─> Failed snapshot or wait threw:
+              return basic summary + FormatFriendlyStatus failure block (FR-017)
+
+(later)
+
+get_pr_content(prNumber, pageNumber)
+  ├─> snapshot = _orchestrator.TryGetSnapshot(prNumber)
+  ├─> Failed?            return FormatFriendlyStatus failure block (no retrigger)
+  ├─> null?              cold-start: GetMetadataAsync → TriggerEnrichment
+  ├─> Ready w/ stale     supersede: TriggerEnrichment with new safeBudget
+  │   safeBudget?
+  ├─> WaitForEnrichmentAsync(linkedCts.Token, 28 000 ms)
+  ├─> success:           BuildPageBlocks from result.Allocation + result.EnrichedByPath
+  └─> internal timeout:  return FormatFriendlyStatus "still preparing" (FR-014/FR-016)
+```
+
+### Load-bearing semantic: caller cancellation never cancels background body
+
+The orchestrator captures `IHostApplicationLifetime.ApplicationStopping` once at
+construction and uses *only* that token (or a CTS linked to it) for the
+background body. The caller's `CancellationToken` is passed exclusively to
+`Task.WaitAsync(ct)` inside `WaitForEnrichmentAsync`, which governs the *wait*
+but **never** the work itself. This is what enables a metadata call to return
+a basic summary at second 28, leave the background body running, and a
+follow-up content call ten seconds later to find the result in cache.
+
+This semantic is asserted by `PrEnrichmentOrchestratorTests
+.CallerCancellation_DoesNotCancelBackgroundBody` — do not regress it.
+
+### Job lifecycle
+
+| Status | Transition |
+|---|---|
+| `FetchingDiff` | Set when `BackgroundBodyAsync` enters; about to await `_diffCache.GetOrFetchDiffAsync` |
+| `Enriching` | Set after diff fetch returns; about to call `BuildEnrichedCandidatesAsync` |
+| `Ready` | Set after `_pageAllocator.Allocate` succeeds; `Result` populated |
+| `Failed` | Set on any exception other than shutdown-derived `OperationCanceledException`; `Failure` populated via `PrEnrichmentFailure.From(ex)` (sanitized; no stack trace; `%LOCALAPPDATA%` redacted per Principle VIII) |
+
+Idempotency:
+- Same `(prNumber, headSha)` re-trigger → no-op (existing job reused)
+- Different `headSha` for same `prNumber` → old job's CTS cancelled, new job started
+- `Failed` state for same SHA → next `TriggerEnrichment` starts a fresh job (FR-018)
+
+### Configuration
+
+`appsettings.json` `Workflow` section:
+- `MetadataInternalTimeoutMs` (default `28000`)
+- `ContentInternalTimeoutMs` (default `28000`)
+
+Both must be strictly less than the host's hard tool-call ceiling (typically
+30 000 ms) to leave a serialization margin. Tunable per environment.
+
+### Constitution deviation
+
+Mutable per-PR state on a singleton instance (Principle VI says services must
+be stateless). This deviation mirrors `RepositoryDownloadOrchestrator` exactly
+and is documented in `specs/net-specific/plan.md` *Complexity Tracking*. Both
+orchestrators exist because `IOptions<T>` cannot express in-flight `Task`
+lifecycles, and a static class would make tests impossible without process
+restart.
+
 ## 7. Local Review Pipeline
 
 ### Scope Model

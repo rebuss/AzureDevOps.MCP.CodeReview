@@ -118,7 +118,8 @@ internal static class PlainTextFormatter
     public static string FormatMetadata(
         FullPullRequestMetadata m,
         int prNumber,
-        (int TotalPages, int TotalFiles, int BudgetPerPage, IReadOnlyList<(int Page, int Count)> ByPage)? paging = null)
+        (int TotalPages, int TotalFiles, int BudgetPerPage, IReadOnlyList<(int Page, int Count)> ByPage)? paging = null,
+        bool pagingDeferred = false)
     {
         ArgumentNullException.ThrowIfNull(m);
         var sb = new StringBuilder();
@@ -157,7 +158,37 @@ internal static class PlainTextFormatter
             var pageSummary = string.Join(", ", p.ByPage.Select(x => $"p{x.Page}:{x.Count}f"));
             sb.AppendLine($"Files per page: {pageSummary}");
         }
+        else if (pagingDeferred)
+        {
+            // FR-004: explicit indicator that paging is not yet available because
+            // background enrichment did not complete within the metadata tool's
+            // internal timeout. Tells the agent to follow up with get_pr_content.
+            sb.AppendLine();
+            sb.AppendLine("Content paging: not yet available — background enrichment is still running.");
+            sb.AppendLine("Action: call get_pr_content with pageNumber=1 to retrieve the enriched content.");
+        }
 
+        return sb.ToString().TrimEnd();
+    }
+
+    /// <summary>
+    /// Formats a "friendly status" plain-text block for cases where the tool
+    /// cannot produce its real result yet (e.g. background enrichment is still
+    /// running, or has failed). The MCP tool response remains a successful
+    /// payload — never an exception or error tool-call.
+    ///
+    /// Used by progressive PR metadata pipeline (FR-014, FR-015, FR-016, FR-017).
+    /// </summary>
+    public static string FormatFriendlyStatus(string headline, string explanation, string suggestedNextAction)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(headline);
+        ArgumentException.ThrowIfNullOrWhiteSpace(explanation);
+        ArgumentException.ThrowIfNullOrWhiteSpace(suggestedNextAction);
+
+        var sb = new StringBuilder();
+        sb.AppendLine($"Status: {headline}");
+        sb.AppendLine($"Detail: {explanation}");
+        sb.AppendLine($"Suggested next: {suggestedNextAction}");
         return sb.ToString().TrimEnd();
     }
 

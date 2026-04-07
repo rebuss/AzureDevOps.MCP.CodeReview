@@ -1,16 +1,14 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using REBUSS.Pure.Core;
 using REBUSS.Pure.Core.Exceptions;
-using REBUSS.Pure.Core.Models;
-using REBUSS.Pure.Core.Models.ResponsePacking;
-using REBUSS.Pure.Core.Shared;
 using REBUSS.Pure.Properties;
-using REBUSS.Pure.Services.ResponsePacking;
+using REBUSS.Pure.Services.PrEnrichment;
 using REBUSS.Pure.Tools.Shared;
 
 namespace REBUSS.Pure.Tools
@@ -19,40 +17,37 @@ namespace REBUSS.Pure.Tools
     /// Handles the execution of the get_pr_metadata MCP tool.
     /// Validates input, delegates to <see cref="IPullRequestDataProvider"/>,
     /// and formats the result as a plain-text response.
-    /// When budget parameters are provided, also computes pagination info.
+    ///
+    /// When budget parameters are provided, kicks off a background enrichment
+    /// job via <see cref="IPrEnrichmentOrchestrator"/> and waits up to
+    /// <c>WorkflowOptions.MetadataInternalTimeoutMs</c> for it to complete.
+    /// On internal timeout, falls back to a basic-summary response with an
+    /// explicit "paging not yet available" indicator (FR-002, FR-004) so the
+    /// host never sees a tool-call timeout regardless of PR size.
     /// </summary>
     [McpServerToolType]
     public class GetPullRequestMetadataToolHandler
     {
         private readonly IPullRequestDataProvider _metadataProvider;
         private readonly IContextBudgetResolver _budgetResolver;
-        private readonly ITokenEstimator _tokenEstimator;
-        private readonly IFileClassifier _fileClassifier;
-        private readonly IPageAllocator _pageAllocator;
-        private readonly IPullRequestDiffCache _diffCache;
         private readonly IRepositoryDownloadOrchestrator _downloadOrchestrator;
-        private readonly ICodeProcessor _codeProcessor;
+        private readonly IPrEnrichmentOrchestrator _enrichmentOrchestrator;
+        private readonly IOptions<WorkflowOptions> _workflowOptions;
         private readonly ILogger<GetPullRequestMetadataToolHandler> _logger;
 
         public GetPullRequestMetadataToolHandler(
             IPullRequestDataProvider metadataProvider,
             IContextBudgetResolver budgetResolver,
-            ITokenEstimator tokenEstimator,
-            IFileClassifier fileClassifier,
-            IPageAllocator pageAllocator,
-            IPullRequestDiffCache diffCache,
             IRepositoryDownloadOrchestrator downloadOrchestrator,
-            ICodeProcessor codeProcessor,
+            IPrEnrichmentOrchestrator enrichmentOrchestrator,
+            IOptions<WorkflowOptions> workflowOptions,
             ILogger<GetPullRequestMetadataToolHandler> logger)
         {
             _metadataProvider = metadataProvider;
             _budgetResolver = budgetResolver;
-            _tokenEstimator = tokenEstimator;
-            _fileClassifier = fileClassifier;
-            _pageAllocator = pageAllocator;
-            _diffCache = diffCache;
             _downloadOrchestrator = downloadOrchestrator;
-            _codeProcessor = codeProcessor;
+            _enrichmentOrchestrator = enrichmentOrchestrator;
+            _workflowOptions = workflowOptions;
             _logger = logger;
         }
 
@@ -61,7 +56,10 @@ namespace REBUSS.Pure.Tools
             "Returns a plain-text block with PR details including title, author, state, " +
             "branches, stats, commit SHAs, and description. " +
             "When modelName or maxTokens is provided, also returns content paging info " +
-            "with page count and per-page file breakdown for use with get_pr_content.")]
+            "with page count and per-page file breakdown for use with get_pr_content. " +
+            "If background enrichment cannot complete within the internal timeout, the response " +
+            "still returns the basic summary with an explicit 'paging not yet available' indicator " +
+            "so the host never times out — call get_pr_content to retrieve the enriched content.")]
         public async Task<IEnumerable<ContentBlock>> ExecuteAsync(
             [Description("The Pull Request number/ID to retrieve metadata for")] int? prNumber = null,
             [Description("Model name for context budget resolution (e.g. 'gpt-4o'). Triggers pagination info.")] string? modelName = null,
@@ -89,15 +87,39 @@ namespace REBUSS.Pure.Tools
                     _downloadOrchestrator.TriggerDownloadAsync(prNumber.Value, downloadCommitRef);
 
                 (int TotalPages, int TotalFiles, int BudgetPerPage, IReadOnlyList<(int Page, int Count)> ByPage)? paging = null;
-                if (modelName != null || maxTokens != null)
-                    paging = await BuildContentPagingAsync(prNumber.Value, metadata.LastMergeSourceCommitId, modelName, maxTokens, cancellationToken);
+                bool pagingDeferred = false;
+                PrEnrichmentFailure? enrichmentFailure = null;
 
-                var text = PlainTextFormatter.FormatMetadata(metadata, prNumber.Value, paging);
+                if (modelName != null || maxTokens != null)
+                {
+                    var pagingResult = await TryBuildContentPagingAsync(
+                        prNumber.Value, metadata.LastMergeSourceCommitId ?? string.Empty, modelName, maxTokens, cancellationToken);
+
+                    paging = pagingResult.Paging;
+                    pagingDeferred = pagingResult.Deferred;
+                    enrichmentFailure = pagingResult.Failure;
+                }
+
+                var text = PlainTextFormatter.FormatMetadata(metadata, prNumber.Value, paging, pagingDeferred);
                 sw.Stop();
 
                 _logger.LogInformation(Resources.LogGetPrMetadataCompleted, prNumber, text.Length, sw.ElapsedMilliseconds);
 
-                return [new TextContentBlock { Text = text }];
+                var blocks = new List<ContentBlock>(2) { new TextContentBlock { Text = text } };
+
+                // FR-017: surface enrichment failures via the friendly-status pipeline.
+                if (enrichmentFailure is not null)
+                {
+                    blocks.Add(new TextContentBlock
+                    {
+                        Text = PlainTextFormatter.FormatFriendlyStatus(
+                            headline: $"Background enrichment failed for PR #{prNumber}",
+                            explanation: $"{enrichmentFailure.ExceptionTypeName}: {enrichmentFailure.SanitizedMessage}",
+                            suggestedNextAction: "Retry get_pr_metadata or call get_pr_content with pageNumber=1")
+                    });
+                }
+
+                return blocks;
             }
             catch (PullRequestNotFoundException ex)
             {
@@ -115,27 +137,52 @@ namespace REBUSS.Pure.Tools
             }
         }
 
-        private async Task<(int TotalPages, int TotalFiles, int BudgetPerPage, IReadOnlyList<(int Page, int Count)> ByPage)>
-            BuildContentPagingAsync(int prNumber, string? knownHeadCommitId, string? modelName, int? maxTokens, CancellationToken ct)
+        private async Task<PagingFetchResult> TryBuildContentPagingAsync(
+            int prNumber, string headSha, string? modelName, int? maxTokens, CancellationToken callerCt)
         {
-            var diff = await _diffCache.GetOrFetchDiffAsync(prNumber, knownHeadCommitId, ct);
             var budget = _budgetResolver.Resolve(maxTokens, modelName);
             var safeBudget = budget.SafeBudgetTokens;
 
-            // Measure against the post-enrichment text so totalPages reported in metadata
-            // matches what get_pr_content will actually emit.
-            var (candidates, _) = await FileTokenMeasurement.BuildEnrichedCandidatesAsync(
-                diff, _tokenEstimator, _fileClassifier, _codeProcessor, ct);
-            candidates.Sort(PackingPriorityComparer.Instance);
+            // Fast-path: if a prior call already produced a Failed snapshot for this PR,
+            // surface the failure immediately without retriggering.
+            var existing = _enrichmentOrchestrator.TryGetSnapshot(prNumber);
+            if (existing is { Status: PrEnrichmentStatus.Failed, HeadSha: var sha } && sha == headSha)
+            {
+                return new PagingFetchResult(null, Deferred: false, Failure: existing.Failure);
+            }
 
-            var allocation = _pageAllocator.Allocate(candidates, safeBudget);
+            _enrichmentOrchestrator.TriggerEnrichment(prNumber, headSha, safeBudget);
 
-            var byPage = allocation.Pages
-                .Select(p => (Page: p.PageNumber, Count: p.Items.Count))
-                .ToArray();
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(callerCt);
+            linkedCts.CancelAfter(_workflowOptions.Value.MetadataInternalTimeoutMs);
 
-            return (allocation.TotalPages, allocation.TotalItems, safeBudget, byPage);
+            try
+            {
+                var result = await _enrichmentOrchestrator.WaitForEnrichmentAsync(prNumber, linkedCts.Token);
+                var byPage = result.Allocation.Pages
+                    .Select(p => (Page: p.PageNumber, Count: p.Items.Count))
+                    .ToArray();
+                var paging = (result.Allocation.TotalPages, result.Allocation.TotalItems, safeBudget, (IReadOnlyList<(int Page, int Count)>)byPage);
+                return new PagingFetchResult(paging, Deferred: false, Failure: null);
+            }
+            catch (OperationCanceledException) when (!callerCt.IsCancellationRequested)
+            {
+                _logger.LogInformation(
+                    "PR {PrNumber} enrichment did not complete within {TimeoutMs}ms internal timeout; returning basic summary",
+                    prNumber, _workflowOptions.Value.MetadataInternalTimeoutMs);
+                return new PagingFetchResult(null, Deferred: true, Failure: null);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // Background body raised — turn it into a friendly failure block, not a tool-call error.
+                var failure = PrEnrichmentFailure.From(ex);
+                return new PagingFetchResult(null, Deferred: false, Failure: failure);
+            }
         }
+
+        private readonly record struct PagingFetchResult(
+            (int TotalPages, int TotalFiles, int BudgetPerPage, IReadOnlyList<(int Page, int Count)> ByPage)? Paging,
+            bool Deferred,
+            PrEnrichmentFailure? Failure);
     }
 }
-

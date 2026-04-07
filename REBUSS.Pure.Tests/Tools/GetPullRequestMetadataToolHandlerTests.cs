@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 using NSubstitute;
@@ -8,7 +9,7 @@ using REBUSS.Pure.Core.Exceptions;
 using REBUSS.Pure.Core.Models;
 using REBUSS.Pure.Core.Models.Pagination;
 using REBUSS.Pure.Core.Models.ResponsePacking;
-using REBUSS.Pure.Core.Shared;
+using REBUSS.Pure.Services.PrEnrichment;
 using REBUSS.Pure.Tools;
 
 namespace REBUSS.Pure.Tests.Tools;
@@ -17,12 +18,10 @@ public class GetPullRequestMetadataToolHandlerTests
 {
     private readonly IPullRequestDataProvider _dataProvider = Substitute.For<IPullRequestDataProvider>();
     private readonly IContextBudgetResolver _budgetResolver = Substitute.For<IContextBudgetResolver>();
-    private readonly ITokenEstimator _tokenEstimator = Substitute.For<ITokenEstimator>();
-    private readonly IFileClassifier _fileClassifier = Substitute.For<IFileClassifier>();
-    private readonly IPageAllocator _pageAllocator = Substitute.For<IPageAllocator>();
-    private readonly IPullRequestDiffCache _diffCache = Substitute.For<IPullRequestDiffCache>();
     private readonly IRepositoryDownloadOrchestrator _downloadOrchestrator = Substitute.For<IRepositoryDownloadOrchestrator>();
-    private readonly ICodeProcessor _codeProcessor = Substitute.For<ICodeProcessor>();
+    private readonly IPrEnrichmentOrchestrator _enrichmentOrchestrator = Substitute.For<IPrEnrichmentOrchestrator>();
+    private readonly IOptions<WorkflowOptions> _workflowOptions =
+        Options.Create(new WorkflowOptions { MetadataInternalTimeoutMs = 28_000, ContentInternalTimeoutMs = 28_000 });
     private readonly GetPullRequestMetadataToolHandler _handler;
 
     private static readonly FullPullRequestMetadata SampleMetadata = new()
@@ -49,81 +48,49 @@ public class GetPullRequestMetadataToolHandlerTests
         WebUrl = "https://example.com/pr/42"
     };
 
-    private static readonly PullRequestDiff SampleDiff = new()
+    private static PrEnrichmentResult SampleEnrichmentResult(int safeBudget = 140_000)
     {
-        Title = "Fix the bug",
-        Status = "active",
-        SourceBranch = "feature/x",
-        TargetBranch = "main",
-        Files = new List<FileChange>
+        var slice = new PageSlice(1, 0, 2,
+            new[] { new PageSliceItem(0, PackingItemStatus.Included, 500), new PageSliceItem(1, PackingItemStatus.Included, 500) },
+            1000, safeBudget - 1000);
+        return new PrEnrichmentResult
         {
-            new()
-            {
-                Path = "src/A.cs", ChangeType = "edit", Additions = 30, Deletions = 5,
-                Hunks = new List<DiffHunk>
-                {
-                    new()
-                    {
-                        OldStart = 1, OldCount = 5, NewStart = 1, NewCount = 10,
-                        Lines = new List<DiffLine> { new() { Op = '+', Text = "new line" } }
-                    }
-                }
-            },
-            new()
-            {
-                Path = "src/B.cs", ChangeType = "edit", Additions = 20, Deletions = 5,
-                Hunks = new List<DiffHunk>
-                {
-                    new()
-                    {
-                        OldStart = 1, OldCount = 5, NewStart = 1, NewCount = 10,
-                        Lines = new List<DiffLine> { new() { Op = '+', Text = "another line" } }
-                    }
-                }
-            }
-        }
-    };
+            PrNumber = 42,
+            HeadSha = "abc123",
+            SortedCandidates = Array.Empty<PackingCandidate>(),
+            EnrichedByPath = new Dictionary<string, string>(),
+            Allocation = new PageAllocation(new[] { slice }, 1, 2),
+            SafeBudgetTokens = safeBudget,
+            CompletedAt = DateTimeOffset.UtcNow,
+        };
+    }
 
     public GetPullRequestMetadataToolHandlerTests()
     {
         _dataProvider.GetMetadataAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns(SampleMetadata);
 
-        _diffCache.GetOrFetchDiffAsync(Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
-            .Returns(SampleDiff);
-
         _budgetResolver.Resolve(Arg.Any<int?>(), Arg.Any<string?>())
-            .Returns(new BudgetResolutionResult(200000, 140000, BudgetSource.Default, Array.Empty<string>()));
-        _tokenEstimator.EstimateTokenCount(Arg.Any<string>())
-            .Returns(500);
-        _fileClassifier.Classify(Arg.Any<string>())
-            .Returns(new FileClassification { Category = FileCategory.Source });
+            .Returns(new BudgetResolutionResult(200_000, 140_000, BudgetSource.Default, Array.Empty<string>()));
 
-        var pageSlice = new PageSlice(1, 0, 2,
-            new[] { new PageSliceItem(0, PackingItemStatus.Included, 500), new PageSliceItem(1, PackingItemStatus.Included, 500) },
-            1000, 139000);
-        _pageAllocator.Allocate(Arg.Any<IReadOnlyList<PackingCandidate>>(), Arg.Any<int>())
-            .Returns(new PageAllocation(new[] { pageSlice }, 1, 2));
-
-        _codeProcessor.AddBeforeAfterContext(Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(ci => ci.ArgAt<string>(0));
+        // Default: orchestrator returns Ready immediately.
+        _enrichmentOrchestrator.WaitForEnrichmentAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(SampleEnrichmentResult());
+        _enrichmentOrchestrator.TryGetSnapshot(Arg.Any<int>()).Returns((PrEnrichmentJobSnapshot?)null);
 
         _handler = new GetPullRequestMetadataToolHandler(
             _dataProvider,
             _budgetResolver,
-            _tokenEstimator,
-            _fileClassifier,
-            _pageAllocator,
-            _diffCache,
             _downloadOrchestrator,
-            _codeProcessor,
+            _enrichmentOrchestrator,
+            _workflowOptions,
             NullLogger<GetPullRequestMetadataToolHandler>.Instance);
     }
 
     private static string AllText(IEnumerable<ContentBlock> blocks) =>
         string.Join("\n", blocks.Cast<TextContentBlock>().Select(b => b.Text));
 
-    // --- Existing behavior (backward compatibility) ---
+    // ─── Existing behavior (backward compatibility) ───────────────────────────
 
     [Fact]
     public async Task ExecuteAsync_WithoutBudgetParams_ReturnsMetadataWithoutPaging()
@@ -148,81 +115,124 @@ public class GetPullRequestMetadataToolHandlerTests
         Assert.Contains("3 file(s)", text);
     }
 
-    // --- Pagination info (diff-based measurement) ---
+    [Fact]
+    public async Task ExecuteAsync_NoPagingRequested_DoesNotTriggerOrchestrator()
+    {
+        await _handler.ExecuteAsync(prNumber: 42);
+
+        _enrichmentOrchestrator.DidNotReceiveWithAnyArgs().TriggerEnrichment(0, null!, 0);
+    }
+
+    // ─── Orchestrator integration (paging requested) ──────────────────────────
 
     [Fact]
-    public async Task ExecuteAsync_WithModelName_ReturnsContentPaging()
+    public async Task Execute_PagingRequested_OrchestratorReady_ReturnsPagingBlock()
     {
         var blocks = (await _handler.ExecuteAsync(prNumber: 42, modelName: "gpt-4o")).ToList();
         var text = AllText(blocks);
 
+        _enrichmentOrchestrator.Received(1).TriggerEnrichment(42, "abc123", 140_000);
         Assert.Contains("Content paging:", text);
         Assert.Contains("1 page(s)", text);
         Assert.Contains("2 file(s)", text);
         Assert.Contains("140000 tokens/page", text);
+        Assert.DoesNotContain("not yet available", text);
     }
 
     [Fact]
-    public async Task ExecuteAsync_WithMaxTokens_ReturnsContentPaging()
+    public async Task Execute_PagingRequested_WithMaxTokens_ReturnsPagingBlock()
     {
-        var blocks = (await _handler.ExecuteAsync(prNumber: 42, maxTokens: 50000)).ToList();
+        var blocks = (await _handler.ExecuteAsync(prNumber: 42, maxTokens: 50_000)).ToList();
         var text = AllText(blocks);
 
         Assert.Contains("Content paging:", text);
     }
 
     [Fact]
-    public async Task ExecuteAsync_ContentPaging_FilesByPage_HasCorrectShape()
+    public async Task Execute_PagingRequested_OrchestratorTimesOut_ReturnsBasicSummaryWithDeferredIndicator()
     {
-        var blocks = (await _handler.ExecuteAsync(prNumber: 42, modelName: "gpt-4o")).ToList();
-        var text = AllText(blocks);
-
-        Assert.Contains("p1:2f", text);
-    }
-
-    [Fact]
-    public async Task ExecuteAsync_ContentPaging_MultiplePages_AllPagesListed()
-    {
-        var slice1 = new PageSlice(1, 0, 1,
-            new[] { new PageSliceItem(0, PackingItemStatus.Included, 500) }, 500, 139500);
-        var slice2 = new PageSlice(2, 1, 2,
-            new[] { new PageSliceItem(1, PackingItemStatus.Included, 500) }, 500, 139500);
-        _pageAllocator.Allocate(Arg.Any<IReadOnlyList<PackingCandidate>>(), Arg.Any<int>())
-            .Returns(new PageAllocation(new[] { slice1, slice2 }, 2, 2));
+        // Simulate the linked-cts internal timeout: orchestrator throws OCE.
+        _enrichmentOrchestrator.WaitForEnrichmentAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns<Task<PrEnrichmentResult>>(_ => throw new OperationCanceledException());
 
         var blocks = (await _handler.ExecuteAsync(prNumber: 42, modelName: "gpt-4o")).ToList();
         var text = AllText(blocks);
 
-        Assert.Contains("2 page(s)", text);
-        Assert.Contains("p1:1f", text);
-        Assert.Contains("p2:1f", text);
+        // Basic summary still present.
+        Assert.Contains("PR #42: Fix the bug", text);
+        // FR-004: explicit indicator that paging is deferred.
+        Assert.Contains("not yet available", text);
+        Assert.Contains("get_pr_content", text);
+        Assert.DoesNotContain("Content paging: 1 page", text);
+
+        // No exception escapes — tool returns a successful response.
+        Assert.NotEmpty(blocks);
     }
 
     [Fact]
-    public async Task ExecuteAsync_WithPaging_CallsFileClassifierForEachFile()
+    public async Task Execute_PagingRequested_OrchestratorFailedSnapshot_ReturnsBasicSummaryPlusFriendlyStatus()
     {
-        await _handler.ExecuteAsync(prNumber: 42, modelName: "gpt-4o");
+        var failure = new PrEnrichmentFailure
+        {
+            ExceptionTypeName = "BoomException",
+            SanitizedMessage = "something went wrong",
+            FailedAt = DateTimeOffset.UtcNow,
+        };
+        _enrichmentOrchestrator.TryGetSnapshot(42).Returns(new PrEnrichmentJobSnapshot
+        {
+            PrNumber = 42,
+            HeadSha = "abc123",
+            Status = PrEnrichmentStatus.Failed,
+            Failure = failure,
+        });
 
-        _fileClassifier.Received(2).Classify(Arg.Any<string>());
+        var blocks = (await _handler.ExecuteAsync(prNumber: 42, modelName: "gpt-4o")).ToList();
+        var text = AllText(blocks);
+
+        // Basic summary block present.
+        Assert.Contains("PR #42: Fix the bug", text);
+        // Friendly-status block present and references the failure.
+        Assert.Contains("Background enrichment failed", text);
+        Assert.Contains("BoomException", text);
+        Assert.Contains("something went wrong", text);
+        // Did NOT retrigger enrichment (fast-path on cached failure).
+        _enrichmentOrchestrator.DidNotReceiveWithAnyArgs().TriggerEnrichment(0, null!, 0);
     }
 
     [Fact]
-    public async Task ExecuteAsync_WithPaging_CallsEstimateTokenCountForEachFile()
+    public async Task Execute_PagingRequested_BackgroundExceptionDuringWait_ReturnsBasicSummaryPlusFriendlyStatus()
     {
-        await _handler.ExecuteAsync(prNumber: 42, modelName: "gpt-4o");
+        // Background body raised a non-cancellation exception that propagated through WaitAsync.
+        _enrichmentOrchestrator.WaitForEnrichmentAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns<Task<PrEnrichmentResult>>(_ => throw new InvalidOperationException("provider exploded"));
 
-        _tokenEstimator.Received(2).EstimateTokenCount(Arg.Any<string>());
+        var blocks = (await _handler.ExecuteAsync(prNumber: 42, modelName: "gpt-4o")).ToList();
+        var text = AllText(blocks);
+
+        Assert.Contains("PR #42: Fix the bug", text);
+        Assert.Contains("Background enrichment failed", text);
+        Assert.Contains("InvalidOperationException", text);
+        Assert.Contains("provider exploded", text);
     }
 
     [Fact]
-    public async Task ExecuteAsync_WithPaging_UsesDiffCacheNotFilesApi()
+    public async Task Execute_CallerCancellation_PropagatesAsMcpException()
     {
-        await _handler.ExecuteAsync(prNumber: 42, modelName: "gpt-4o");
+        using var callerCts = new CancellationTokenSource();
+        callerCts.Cancel();
+        // The orchestrator wait would normally observe the linked token; simulate by throwing OCE
+        // tied to caller's already-cancelled token.
+        _enrichmentOrchestrator.WaitForEnrichmentAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns<Task<PrEnrichmentResult>>(_ => throw new OperationCanceledException(callerCts.Token));
 
-        await _diffCache.Received(1).GetOrFetchDiffAsync(42, Arg.Any<string?>(), Arg.Any<CancellationToken>());
+        // Caller-cancellation propagates through the catch (not Mcp wrapped) — handler should rethrow OCE,
+        // which is then wrapped by the generic catch in ExecuteAsync as McpException. Either way the
+        // host sees a failure when the host itself cancelled, which is fine.
+        await Assert.ThrowsAsync<McpException>(
+            () => _handler.ExecuteAsync(prNumber: 42, modelName: "gpt-4o", cancellationToken: callerCts.Token));
     }
 
-    // --- Repository download (base branch) ---
+    // ─── Repository download (base branch) ────────────────────────────────────
 
     [Fact]
     public async Task ExecuteAsync_TriggersDownload_WithTargetCommitId()
@@ -274,7 +284,7 @@ public class GetPullRequestMetadataToolHandlerTests
         _downloadOrchestrator.DidNotReceive().TriggerDownloadAsync(Arg.Any<int>(), Arg.Any<string>());
     }
 
-    // --- Error handling ---
+    // ─── Error handling ───────────────────────────────────────────────────────
 
     [Fact]
     public async Task ExecuteAsync_NullPrNumber_ThrowsMcpException()
@@ -319,29 +329,5 @@ public class GetPullRequestMetadataToolHandlerTests
         var text = AllText(blocks);
 
         Assert.Contains("... [truncated]", text);
-    }
-
-    [Fact]
-    public async Task ExecuteAsync_WithPaging_EmptyDiffFiles_ProducesEmptyPaging()
-    {
-        var emptyDiff = new PullRequestDiff
-        {
-            Title = "Empty",
-            Status = "active",
-            SourceBranch = "feature/empty",
-            TargetBranch = "main",
-            Files = new List<FileChange>()
-        };
-        _diffCache.GetOrFetchDiffAsync(Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
-            .Returns(emptyDiff);
-        _pageAllocator.Allocate(Arg.Any<IReadOnlyList<PackingCandidate>>(), Arg.Any<int>())
-            .Returns(new PageAllocation(Array.Empty<PageSlice>(), 0, 0));
-
-        var blocks = (await _handler.ExecuteAsync(prNumber: 42, modelName: "gpt-4o")).ToList();
-        var text = AllText(blocks);
-
-        Assert.Contains("Content paging:", text);
-        Assert.Contains("0 page(s)", text);
-        Assert.Contains("0 file(s)", text);
     }
 }
