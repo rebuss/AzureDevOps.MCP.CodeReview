@@ -79,7 +79,7 @@ Full codebase context is included below (file-role map, dependency graph, DI reg
 | `REBUSS.Pure.Core\Shared\StructuredDiffBuilder.cs` | Builds structured hunks from base/target content | `IStructuredDiffBuilder`, `IDiffAlgorithm`, `DiffHunk`, `DiffLine`, `DiffEdit` |
 | `REBUSS.Pure.Core\Shared\ICodeProcessor.cs` | Interface: async diff processing pipeline hook for enriching/transforming diffs at specific stages | `ICodeProcessor` — `AddBeforeAfterContext(string diff, CancellationToken ct) → Task<string>` |
 | `REBUSS.Pure.Core\Shared\IDiffEnricher.cs` | Interface: a unit of diff enrichment with ordering and applicability check; chained by `CompositeCodeProcessor` | `IDiffEnricher` — `Order`, `CanEnrich(string)`, `EnrichAsync(string, CancellationToken)` |
-| `REBUSS.Pure.Core\Shared\DiffLanguage.cs` | `DiffLanguage` enum (13 languages + Unknown) + `DiffLanguageDetector` static class: centralized language detection from diff headers; used by all enrichers for `CanEnrich` | `DiffLanguageDetector` — `Detect(string)`, `IsCSharp(string)`, `IsSkipped(string)` |
+| `REBUSS.Pure.Core\Shared\DiffLanguage.cs` | `DiffLanguage` enum (13 languages + Unknown) + `DiffLanguageDetector` static class: centralized language detection from diff headers; used by all enrichers for `CanEnrich`. Also exposes `IsAlreadyEnriched(string)` for the centralized idempotence short-circuit in `CompositeCodeProcessor` (feature 011) | `DiffLanguageDetector` — `Detect(string)`, `IsCSharp(string)`, `IsSkipped(string)`, `IsAlreadyEnriched(string)` |
 | `REBUSS.Pure.Core\Shared\IFileClassifier.cs` | Interface: file classifier | `FileClassification` |
 | `REBUSS.Pure.Core\Shared\FileClassifier.cs` | Classifies files by path/extension; normalizes paths with leading `/` for pattern matching; review priorities via `ReviewPriorities` constants | `IFileClassifier`, `FileClassification`, `FileCategory`, `ReviewPriorities` |
 
@@ -234,7 +234,7 @@ Full codebase context is included below (file-role map, dependency graph, DI reg
 | `REBUSS.Pure.RoslynProcessor\BeforeAfterEnricher.cs` | `IDiffEnricher` (Order=100): enriches C# diffs with before/after context lines using Roslyn syntax analysis | `DiffSourceResolver`, `BeforeAfterAnalyzer`, `DiffParser` |
 | `REBUSS.Pure.RoslynProcessor\ScopeAnnotatorEnricher.cs` | `IDiffEnricher` (Order=150): annotates each hunk header with enclosing scope `[scope: Class.Method(Params)]` | `DiffSourceResolver`, `ScopeResolver`, `DiffParser` |
 | `REBUSS.Pure.RoslynProcessor\ScopeResolver.cs` | Static scope resolver: finds enclosing member/type/namespace for a line number in a syntax tree | `Microsoft.CodeAnalysis.CSharp` |
-| `REBUSS.Pure.RoslynProcessor\StructuralChangeEnricher.cs` | `IDiffEnricher` (Order=200): detects and annotates structural C# changes (signature changes, added/removed members/types, base type changes) | `DiffSourceResolver`, `StructuralChangeDetector` |
+| `REBUSS.Pure.RoslynProcessor\StructuralChangeEnricher.cs` | `IDiffEnricher` (Order=200): detects and annotates structural C# changes (signature changes, added/removed members/types, base type changes). Bails out on zero-hunk inputs (e.g. renames) to avoid spurious blocks (feature 011) | `DiffSourceResolver`, `StructuralChangeDetector`, `DiffParser` |
 | `REBUSS.Pure.RoslynProcessor\StructuralChangeDetector.cs` | Static syntax-only detector: compares before/after syntax trees, returns list of structural changes | `Microsoft.CodeAnalysis.CSharp` |
 | `REBUSS.Pure.RoslynProcessor\StructuralChange.cs` | `StructuralChange` record + `StructuralChangeKind` enum: model for detected structural differences | — |
 | `REBUSS.Pure.RoslynProcessor\UsingsChangeEnricher.cs` | `IDiffEnricher` (Order=250): detects added/removed `using` directives and inserts `[dependency-changes]` block | `DiffSourceResolver`, `UsingsChangeDetector` |
@@ -246,7 +246,7 @@ Full codebase context is included below (file-role map, dependency graph, DI reg
 | `REBUSS.Pure.RoslynProcessor\CallSiteResult.cs` | Records: `CallSiteTarget`, `CallSiteTargetKind`, `CallSiteResult`, `CallSiteLocation` | — |
 | `REBUSS.Pure.RoslynProcessor\ContextDecision.cs` | Context level enum: None (cosmetic), Minimal (structural, 3 lines), Full (semantic, 10 lines) | — |
 | `REBUSS.Pure.RoslynProcessor\BeforeAfterAnalyzer.cs` | Static Roslyn-based analyzer: compares before/after C# syntax trees, classifies changes into ContextDecision | `Microsoft.CodeAnalysis.CSharp` |
-| `REBUSS.Pure.RoslynProcessor\DiffParser.cs` | Static diff parser: extracts file path and hunk info from formatted diffs, rebuilds diffs with context lines | `ParsedHunk` |
+| `REBUSS.Pure.RoslynProcessor\DiffParser.cs` | Static diff parser: extracts file path and hunk info from formatted diffs, rebuilds diffs with context lines. `RebuildDiffWithContext` uses a three-phase pipeline (cluster adjacent hunks → expand each cluster with shared per-axis-clamped context window → render) to guarantee one merged hunk per non-overlapping range, valid unified-diff syntax, and no duplicated source lines (feature 011) | `ParsedHunk` |
 | `REBUSS.Pure.RoslynProcessor\RepositoryFileResolver.cs` | Static file resolver: detects nested ZIP root directory, resolves diff paths to filesystem paths | — |
 
 ### Repository download (REBUSS.Pure\Services\RepositoryDownload)
@@ -272,7 +272,7 @@ Full codebase context is included below (file-role map, dependency graph, DI reg
 
 | File | Role | Depends on |
 |---|---|---|
-| `REBUSS.Pure\Services\CompositeCodeProcessor.cs` | `ICodeProcessor` implementation: chains all registered `IDiffEnricher` implementations in ascending `Order`; logs and skips on failure | `ICodeProcessor`, `IEnumerable<IDiffEnricher>` |
+| `REBUSS.Pure\Services\CompositeCodeProcessor.cs` | `ICodeProcessor` implementation: chains all registered `IDiffEnricher` implementations in ascending `Order`; logs and skips on failure. Centralized idempotence short-circuit at the top of `AddBeforeAfterContext` returns the input unchanged if `DiffLanguageDetector.IsAlreadyEnriched` returns true (feature 011) | `ICodeProcessor`, `IEnumerable<IDiffEnricher>`, `DiffLanguageDetector` |
 
 ### Context Window Awareness (REBUSS.Pure\Services\ContextWindow)
 

@@ -80,4 +80,153 @@ public class DiffParserTests
         Assert.Contains("-old", result);
         Assert.Contains("+new", result);
     }
+
+    // ─── Feature 011 — fix duplicated/overlapping hunks + negative line numbers ──────────────
+
+    private static List<(int oldStart, int oldCount, int newStart, int newCount)> ParseHeaders(string diff)
+    {
+        var headers = new List<(int, int, int, int)>();
+        foreach (var line in diff.Split('\n'))
+        {
+            var trimmed = line.TrimEnd('\r');
+            if (!trimmed.StartsWith("@@ ")) continue;
+            // Format: @@ -a,b +c,d @@
+            var parts = trimmed.Split(' ');
+            // parts[0] = "@@", parts[1] = "-a,b", parts[2] = "+c,d", parts[3] = "@@"
+            var minus = parts[1].TrimStart('-').Split(',');
+            var plus = parts[2].TrimStart('+').Split(',');
+            headers.Add((int.Parse(minus[0]), int.Parse(minus[1]), int.Parse(plus[0]), int.Parse(plus[1])));
+        }
+        return headers;
+    }
+
+    [Fact]
+    public void RebuildDiffWithContext_NewStartSmallerThanOldStart_ProducesNoNegativeLineNumbers()
+    {
+        // Reproduces the @@ -1,20 +-8,19 @@ symptom: NewStart < contextLines means
+        // a naive `NewStart - contextLines` underflows.
+        var diff = "=== src/A.cs (edit: +1 -1) ===\n@@ -12,1 +2,1 @@\n-old\n+new";
+        var sourceLines = Enumerable.Range(1, 30).Select(i => $"line{i}").ToArray();
+        var hunks = DiffParser.ParseHunks(diff);
+
+        var result = DiffParser.RebuildDiffWithContext(diff, sourceLines, hunks, ContextDecision.Full);
+
+        var headers = ParseHeaders(result);
+        Assert.NotEmpty(headers);
+        foreach (var h in headers)
+        {
+            Assert.True(h.oldStart >= 1, $"oldStart was {h.oldStart}");
+            Assert.True(h.oldCount >= 0, $"oldCount was {h.oldCount}");
+            Assert.True(h.newStart >= 1, $"newStart was {h.newStart}");
+            Assert.True(h.newCount >= 0, $"newCount was {h.newCount}");
+        }
+    }
+
+    [Fact]
+    public void RebuildDiffWithContext_AdjacentHunks_MergesIntoSingleBlock()
+    {
+        // Two raw hunks 5 lines apart on the after-axis with Full (10) context → must merge.
+        var diff = "=== src/A.cs (edit: +2 -2) ===\n" +
+                   "@@ -10,1 +10,1 @@\n-old1\n+new1\n" +
+                   "@@ -15,1 +15,1 @@\n-old2\n+new2";
+        var sourceLines = Enumerable.Range(1, 50).Select(i => $"line{i}").ToArray();
+        var hunks = DiffParser.ParseHunks(diff);
+
+        var result = DiffParser.RebuildDiffWithContext(diff, sourceLines, hunks, ContextDecision.Full);
+
+        var headers = ParseHeaders(result);
+        Assert.Single(headers); // merged into one
+
+        // Source line "line12" sits between the two hunks. It must appear EXACTLY ONCE in output
+        // (used to appear twice — once as trailing context of hunk 1, once as leading context of hunk 2).
+        var line12Count = result.Split('\n').Count(l => l.TrimEnd('\r') == " line12");
+        Assert.Equal(1, line12Count);
+    }
+
+    [Fact]
+    public void RebuildDiffWithContext_DistantHunks_EmitsBothBlocks()
+    {
+        // Two hunks 50 lines apart — context windows do NOT overlap → two separate blocks.
+        var diff = "=== src/A.cs (edit: +2 -2) ===\n" +
+                   "@@ -10,1 +10,1 @@\n-old1\n+new1\n" +
+                   "@@ -60,1 +60,1 @@\n-old2\n+new2";
+        var sourceLines = Enumerable.Range(1, 100).Select(i => $"line{i}").ToArray();
+        var hunks = DiffParser.ParseHunks(diff);
+
+        var result = DiffParser.RebuildDiffWithContext(diff, sourceLines, hunks, ContextDecision.Full);
+
+        var headers = ParseHeaders(result);
+        Assert.Equal(2, headers.Count);
+    }
+
+    [Fact]
+    public void RebuildDiffWithContext_ThreeClusteredHunks_MergesAllThree()
+    {
+        var diff = "=== src/A.cs (edit: +3 -3) ===\n" +
+                   "@@ -10,1 +10,1 @@\n-old1\n+new1\n" +
+                   "@@ -15,1 +15,1 @@\n-old2\n+new2\n" +
+                   "@@ -20,1 +20,1 @@\n-old3\n+new3";
+        var sourceLines = Enumerable.Range(1, 50).Select(i => $"line{i}").ToArray();
+        var hunks = DiffParser.ParseHunks(diff);
+
+        var result = DiffParser.RebuildDiffWithContext(diff, sourceLines, hunks, ContextDecision.Full);
+
+        var headers = ParseHeaders(result);
+        Assert.Single(headers);
+
+        // All three change markers must be present once.
+        Assert.Equal(1, result.Split('\n').Count(l => l.TrimEnd('\r') == "+new1"));
+        Assert.Equal(1, result.Split('\n').Count(l => l.TrimEnd('\r') == "+new2"));
+        Assert.Equal(1, result.Split('\n').Count(l => l.TrimEnd('\r') == "+new3"));
+    }
+
+    [Fact]
+    public void RebuildDiffWithContext_OutputRoundTripsThroughParseHunks()
+    {
+        var diff = "=== src/A.cs (edit: +2 -2) ===\n" +
+                   "@@ -10,1 +10,1 @@\n-old1\n+new1\n" +
+                   "@@ -25,1 +25,1 @@\n-old2\n+new2";
+        var sourceLines = Enumerable.Range(1, 50).Select(i => $"line{i}").ToArray();
+        var hunks = DiffParser.ParseHunks(diff);
+
+        var result = DiffParser.RebuildDiffWithContext(diff, sourceLines, hunks, ContextDecision.Full);
+        var reparsed = DiffParser.ParseHunks(result);
+
+        Assert.NotEmpty(reparsed);
+        foreach (var h in reparsed)
+        {
+            Assert.True(h.OldStart >= 1);
+            Assert.True(h.OldCount >= 0);
+            Assert.True(h.NewStart >= 1);
+            Assert.True(h.NewCount >= 0);
+        }
+    }
+
+    [Fact]
+    public void RebuildDiffWithContext_ThreeClusteredHunks_MergedCountsAreExact()
+    {
+        // Three hunks at after-lines 10, 15, 20 (each 1 line). With Full=10 context they merge.
+        // Merged hunk should span from min leading context to max trailing context.
+        var diff = "=== src/A.cs (edit: +3 -3) ===\n" +
+                   "@@ -10,1 +10,1 @@\n-old1\n+new1\n" +
+                   "@@ -15,1 +15,1 @@\n-old2\n+new2\n" +
+                   "@@ -20,1 +20,1 @@\n-old3\n+new3";
+        var sourceLines = Enumerable.Range(1, 50).Select(i => $"line{i}").ToArray();
+        var hunks = DiffParser.ParseHunks(diff);
+
+        var result = DiffParser.RebuildDiffWithContext(diff, sourceLines, hunks, ContextDecision.Full);
+
+        var headers = ParseHeaders(result);
+        Assert.Single(headers);
+        var h = headers[0];
+        // Leading context: 10 lines before line 10 → starts at line 0+1 = 1 (clamped to NewStart-1=9 lines).
+        // Hunk 1 starts at NewStart=10, after clamping leadingCount = min(10, 9) = 9.
+        // So newNewStart = 10 - 9 = 1.
+        Assert.Equal(1, h.newStart);
+        Assert.Equal(1, h.oldStart);
+        // Trailing context: hunk 3 ends at line 21 (NewStart=20, NewCount=1, after-pos = 21).
+        // Trailing 10 lines → up to line 30. Total span = lines 1..30 = 30 lines.
+        Assert.Equal(30, h.newCount);
+        Assert.Equal(30, h.oldCount);
+    }
 }

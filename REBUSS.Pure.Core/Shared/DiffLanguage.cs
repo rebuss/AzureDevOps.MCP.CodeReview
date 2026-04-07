@@ -30,9 +30,14 @@ public static partial class DiffLanguageDetector
 {
     // Same pattern as DiffParser.TryParseFilePath — duplicated to avoid Core→RoslynProcessor dependency.
     private static readonly Regex FilePathRegex = FilePathPattern();
+    private static readonly Regex ScopeAnnotationRegex = ScopeAnnotationPattern();
 
     [GeneratedRegex(@"^=== (.+?) \(", RegexOptions.Multiline)]
     private static partial Regex FilePathPattern();
+
+    // Matches an `@@ ` hunk header line that ends with a `[scope: …]` annotation.
+    [GeneratedRegex(@"^@@ .*\[scope: ", RegexOptions.Multiline)]
+    private static partial Regex ScopeAnnotationPattern();
 
     /// <summary>
     /// Detects the programming language from the diff header file path.
@@ -72,4 +77,21 @@ public static partial class DiffLanguageDetector
 
     /// <summary>Returns <c>true</c> if the diff is marked as skipped.</summary>
     public static bool IsSkipped(string diff) => diff.Contains("skipped) ===");
+
+    /// <summary>
+    /// Returns <c>true</c> if the diff already carries any of the enricher-emitted markers
+    /// (<c>[scope: …]</c> on a hunk header, or any of the file-level
+    /// <c>[structural-changes]</c> / <c>[dependency-changes]</c> / <c>[call-sites]</c> blocks).
+    /// Used by <c>CompositeCodeProcessor</c> as a centralized idempotence short-circuit so
+    /// that running the enricher chain on its own output is a no-op (feature 011).
+    /// </summary>
+    public static bool IsAlreadyEnriched(string diff)
+    {
+        if (string.IsNullOrEmpty(diff)) return false;
+        if (ScopeAnnotationRegex.IsMatch(diff)) return true;
+        if (diff.Contains("[structural-changes]", StringComparison.Ordinal)) return true;
+        if (diff.Contains("[dependency-changes]", StringComparison.Ordinal)) return true;
+        if (diff.Contains("[call-sites]", StringComparison.Ordinal)) return true;
+        return false;
+    }
 }

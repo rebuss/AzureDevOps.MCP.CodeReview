@@ -391,6 +391,17 @@ The MCP host enforces a hard ~30 s tool-call timeout. For large PRs, computing
 content paging requires fetching the diff *and* running the enrichment pipeline
 (`CompositeCodeProcessor` → Roslyn-backed enrichers → per-file before/after
 windows + structural change blocks), which on big repos can exceed that ceiling.
+
+> **Note (feature 011)**: `CompositeCodeProcessor.AddBeforeAfterContext` short-circuits
+> at the top via `DiffLanguageDetector.IsAlreadyEnriched`, returning the input
+> unchanged if it already carries any of the enricher-emitted markers (`[scope:`,
+> `[structural-changes]`, `[dependency-changes]`, `[call-sites]`). This makes the
+> chain idempotent and is the single point of policy that covers all five enrichers.
+> The hunk-rebuild logic in `DiffParser.RebuildDiffWithContext` is now a three-phase
+> pipeline (cluster adjacent hunks → expand each cluster with shared per-axis-clamped
+> context → render) that guarantees one merged hunk per non-overlapping range, valid
+> unified-diff syntax, and no duplicated source lines across adjacent hunks.
+
 Without the orchestrator, `get_pr_metadata` for an oversized PR would return a
 raw timeout error and the review could not start.
 

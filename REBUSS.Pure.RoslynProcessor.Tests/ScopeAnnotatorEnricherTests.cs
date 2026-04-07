@@ -137,6 +137,63 @@ public class ScopeAnnotatorEnricherTests : IDisposable
         Assert.Contains("@@ -1,0 +1,1 @@", result);
     }
 
+    // ─── Feature 011 — scope determinism + file-level handling (FR-005, FR-010) ───
+
+    [Fact]
+    public async Task EnrichAsync_HunkInUsingDirectives_DoesNotMisattributeToMethod()
+    {
+        // A hunk that touches only using-directives at the top of a file must not
+        // be misattributed to whatever method happens to live below them.
+        var srcDir = Path.Combine(_tempDir, "repo", "src");
+        Directory.CreateDirectory(srcDir);
+
+        var afterCode = @"using System;
+using System.Linq;
+using System.Text.Json;
+
+class Svc
+{
+    void DoWork()
+    {
+        var x = 1;
+    }
+}";
+        File.WriteAllText(Path.Combine(srcDir, "Svc.cs"), afterCode);
+        _orchestrator.GetExtractedPathAsync(Arg.Any<CancellationToken>()).Returns(_tempDir);
+
+        var diff = "=== src/Svc.cs (edit: +1 -0) ===\n@@ -2,0 +3,1 @@\n+using System.Text.Json;";
+        var result = await _enricher.EnrichAsync(diff);
+
+        // The annotation must NOT name `DoWork` — that method is not at the hunk site.
+        Assert.DoesNotContain("DoWork", result);
+    }
+
+    [Fact]
+    public async Task EnrichAsync_SameInputTwice_ProducesIdenticalOutput()
+    {
+        // FR-010: scope attribution must be deterministic — repeated runs over the
+        // same input must produce the same annotation.
+        var srcDir = Path.Combine(_tempDir, "repo", "src");
+        Directory.CreateDirectory(srcDir);
+
+        var afterCode = @"class Svc
+{
+    void Process()
+    {
+        var x = 42;
+    }
+}";
+        File.WriteAllText(Path.Combine(srcDir, "Svc.cs"), afterCode);
+        _orchestrator.GetExtractedPathAsync(Arg.Any<CancellationToken>()).Returns(_tempDir);
+
+        var diff = "=== src/Svc.cs (edit: +1 -1) ===\n@@ -4,1 +4,1 @@\n-        var x = 0;\n+        var x = 42;";
+
+        var first = await _enricher.EnrichAsync(diff);
+        var second = await _enricher.EnrichAsync(diff);
+
+        Assert.Equal(first, second);
+    }
+
     [Fact]
     public async Task EnrichAsync_RepoNotReady_ReturnsDiffUnchanged()
     {

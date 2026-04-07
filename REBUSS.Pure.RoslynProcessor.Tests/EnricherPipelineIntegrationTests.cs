@@ -146,9 +146,13 @@ public class EnricherPipelineIntegrationTests : IDisposable
     /// <summary>
     /// Minimal enricher chaining — same logic as CompositeCodeProcessor
     /// but without requiring a project reference to the app assembly.
+    /// Mirrors the centralized idempotence short-circuit (feature 011).
     /// </summary>
     private static async Task<string> ChainEnrichersAsync(IDiffEnricher[] enrichers, string diff)
     {
+        if (REBUSS.Pure.Core.Shared.DiffLanguageDetector.IsAlreadyEnriched(diff))
+            return diff;
+
         var current = diff;
         foreach (var enricher in enrichers.OrderBy(e => e.Order))
         {
@@ -162,5 +166,30 @@ public class EnricherPipelineIntegrationTests : IDisposable
             catch { /* graceful fallback — same as CompositeCodeProcessor */ }
         }
         return current;
+    }
+
+    // ─── Feature 011 — idempotence (FR-007 / SC-004) ─────────────────────────
+
+    [Fact]
+    public async Task Pipeline_RunTwice_IsByteIdentical()
+    {
+        var afterCode = "using System.Text.Json;\nclass Svc { void Process(Order o, CancellationToken ct) { var x = 1; } }";
+        SetupRepo("Svc.cs", afterCode);
+
+        var sourceResolver = new DiffSourceResolver(_orchestrator, NullLogger<DiffSourceResolver>.Instance);
+        var enrichers = new IDiffEnricher[]
+        {
+            new BeforeAfterEnricher(sourceResolver, NullLogger<BeforeAfterEnricher>.Instance),
+            new ScopeAnnotatorEnricher(sourceResolver, NullLogger<ScopeAnnotatorEnricher>.Instance),
+            new StructuralChangeEnricher(sourceResolver, NullLogger<StructuralChangeEnricher>.Instance),
+            new UsingsChangeEnricher(sourceResolver, NullLogger<UsingsChangeEnricher>.Instance)
+        };
+
+        var diff = "=== src/Svc.cs (edit: +2 -1) ===\n@@ -1,1 +1,2 @@\n using System;\n+using System.Text.Json;\n-class Svc { void Process(Order o) { var x = 0; } }\n+class Svc { void Process(Order o, CancellationToken ct) { var x = 1; } }";
+
+        var firstPass = await ChainEnrichersAsync(enrichers, diff);
+        var secondPass = await ChainEnrichersAsync(enrichers, firstPass);
+
+        Assert.Equal(firstPass, secondPass);
     }
 }

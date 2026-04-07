@@ -34,6 +34,10 @@ public class UsingsChangeEnricher : IDiffEnricher
     {
         try
         {
+            // Feature 011: zero-hunk files (renames) must pass through unchanged.
+            if (DiffParser.ParseHunks(diff).Count == 0)
+                return diff;
+
             var pair = await _sourceResolver.ResolveAsync(diff, ct);
             if (pair == null)
                 return diff;

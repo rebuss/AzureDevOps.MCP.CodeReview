@@ -23,6 +23,14 @@ public class CompositeCodeProcessor : ICodeProcessor
 
     public async Task<string> AddBeforeAfterContext(string diff, CancellationToken ct = default)
     {
+        // Idempotence short-circuit (feature 011): if the input already carries any of
+        // the enricher-emitted markers, return it untouched. This single point of policy
+        // covers all five enrichers in the chain so a future enricher inherits the
+        // guarantee for free, and a second pass through the chain is a byte-identical
+        // no-op.
+        if (DiffLanguageDetector.IsAlreadyEnriched(diff))
+            return diff;
+
         var currentDiff = diff;
 
         foreach (var enricher in _enrichers)

@@ -39,6 +39,10 @@ public class CallSiteEnricher : IDiffEnricher
     {
         try
         {
+            // Feature 011: zero-hunk files (renames) must pass through unchanged.
+            if (DiffParser.ParseHunks(diff).Count == 0)
+                return diff;
+
             // 1. Get repo path
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeoutCts.CancelAfter(DownloadTimeout);

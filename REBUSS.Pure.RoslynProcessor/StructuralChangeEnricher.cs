@@ -46,6 +46,11 @@ public partial class StructuralChangeEnricher : IDiffEnricher
     {
         try
         {
+            // Feature 011: zero-hunk files (e.g. renames) must not get spurious annotation
+            // blocks. The spec's "zero-hunk file" edge case requires pass-through behavior.
+            if (DiffParser.ParseHunks(diff).Count == 0)
+                return diff;
+
             var pair = await _sourceResolver.ResolveAsync(diff, ct);
             if (pair == null)
                 return diff;

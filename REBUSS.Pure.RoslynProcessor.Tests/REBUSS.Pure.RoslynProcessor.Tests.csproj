@@ -24,4 +24,9 @@
     <ProjectReference Include="..\REBUSS.Pure.Core\REBUSS.Pure.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="Fixtures\Enricher\**\*.txt" />
+    <EmbeddedResource Include="Fixtures\Enricher\**\*.json" />
+  </ItemGroup>
+
 </Project>

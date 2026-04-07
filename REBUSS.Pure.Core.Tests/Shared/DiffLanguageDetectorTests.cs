@@ -157,4 +157,47 @@ public class DiffLanguageDetectorTests
         var diff = "=== src/utils.mjs (modified: +1 -1) ===\n@@";
         Assert.Equal(DiffLanguage.JavaScript, DiffLanguageDetector.Detect(diff));
     }
+
+    // ─── Feature 011 — IsAlreadyEnriched detector ────────────────────────────
+
+    [Fact]
+    public void IsAlreadyEnriched_EmptyDiff_ReturnsFalse()
+    {
+        Assert.False(DiffLanguageDetector.IsAlreadyEnriched(""));
+    }
+
+    [Fact]
+    public void IsAlreadyEnriched_RawDiffWithNoAnnotations_ReturnsFalse()
+    {
+        var diff = "=== src/A.cs (edit: +1 -1) ===\n@@ -1,1 +1,1 @@\n-old\n+new";
+        Assert.False(DiffLanguageDetector.IsAlreadyEnriched(diff));
+    }
+
+    [Fact]
+    public void IsAlreadyEnriched_DiffWithScopeAnnotation_ReturnsTrue()
+    {
+        var diff = "=== src/A.cs (edit: +1 -1) ===\n@@ -1,5 +1,5 @@ [scope: Foo.Bar]\n-old\n+new";
+        Assert.True(DiffLanguageDetector.IsAlreadyEnriched(diff));
+    }
+
+    [Fact]
+    public void IsAlreadyEnriched_DiffWithStructuralChangesBlock_ReturnsTrue()
+    {
+        var diff = "=== src/A.cs (edit: +1 -1) ===\n[structural-changes]\n  - method added: Foo\n[/structural-changes]\n@@ -1,1 +1,1 @@\n-old\n+new";
+        Assert.True(DiffLanguageDetector.IsAlreadyEnriched(diff));
+    }
+
+    [Fact]
+    public void IsAlreadyEnriched_DiffWithDependencyChangesBlock_ReturnsTrue()
+    {
+        var diff = "=== src/A.cs (edit: +1 -1) ===\n[dependency-changes]\n  + System.Linq\n[/dependency-changes]\n@@ -1,1 +1,1 @@\n-old\n+new";
+        Assert.True(DiffLanguageDetector.IsAlreadyEnriched(diff));
+    }
+
+    [Fact]
+    public void IsAlreadyEnriched_DiffWithCallSitesBlock_ReturnsTrue()
+    {
+        var diff = "=== src/A.cs (edit: +1 -1) ===\n[call-sites]\n  - Foo.Bar called from Baz.cs:10\n[/call-sites]\n@@ -1,1 +1,1 @@\n-old\n+new";
+        Assert.True(DiffLanguageDetector.IsAlreadyEnriched(diff));
+    }
 }
