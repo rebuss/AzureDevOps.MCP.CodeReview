@@ -296,7 +296,7 @@ For large PRs the diff fetch + enrichment pipeline can exceed the host's hard ~3
 
 1. `get_pr_metadata` enforces an internal 28 s timeout. On timeout it returns the basic-summary response with an explicit "Content paging: not yet available" indicator instead of failing — the host never sees a tool-call timeout.
 2. Background enrichment continues to run in the singleton `PrEnrichmentOrchestrator` even after the metadata response has returned.
-3. A follow-up `get_pr_content` call gets its own fresh 28 s budget and serves the result from the orchestrator's cache. The effective end-to-end processing budget for one review is therefore >60 s without any host-visible timeout.
+3. A follow-up `begin_pr_review` call gets its own fresh 28 s budget and serves the result from the orchestrator's cache. The effective end-to-end processing budget for one review is therefore >60 s without any host-visible timeout.
 4. If even the content call cannot complete in time — or the background job has failed — both handlers return a friendly plain-text status block via `PlainTextFormatter.FormatFriendlyStatus(...)`. The MCP tool response is always a successful payload.
 
 Configuration in `appsettings.json`:
@@ -320,12 +320,11 @@ The orchestrator's load-bearing semantic — caller cancellation never cancels t
 
 ### PR Review Tools (require SCM provider authentication)
 
-#### Primary tools — pagination-aware (recommended for all PR sizes)
+#### Primary tools
 
 | Tool | Description |
 |---|---|
-| `get_pr_metadata(prNumber, [modelName], [maxTokens])` | Returns PR metadata. Pass `modelName` or `maxTokens` to also receive `contentPaging` — total page count and per-page file breakdown for use with `get_pr_content` |
-| `get_pr_content(prNumber, pageNumber, [modelName], [maxTokens])` | Returns diff content for a specific page of the PR. Call `get_pr_metadata` with budget params first to discover the total page count |
+| `get_pr_metadata(prNumber, [modelName], [maxTokens])` | Returns PR metadata. Pass `modelName` or `maxTokens` to also receive `contentPaging` info — useful for sizing decisions before starting a review session via `begin_pr_review` |
 | `get_pr_files(prNumber, [pageReference])` | Returns classified list of changed files with per-file stats and review priority; supports pagination via `pageReference` |
 
 #### Stateful PR Review Session (feature 012 — recommended for very large PRs)
@@ -381,12 +380,17 @@ begin_pr_review(prNumber)              ← returns sessionId + manifest
 
 ## Review Workflows
 
-### PR Review — paginated (recommended)
+### PR Review — stateful session (canonical)
 
 ```
-get_pr_metadata(prNumber, modelName)          ← discovers total pages via contentPaging
-  → loop: get_pr_content(prNumber, page, modelName)  ← one page at a time until hasMorePages = false
+begin_pr_review(prNumber)              ← returns sessionId + manifest
+  → loop:
+      next_review_item(sessionId)      ← get next file (deep) or scan summary
+      record_review_observation(sessionId, filePath, observations, "reviewed_complete")
+  → submit_pr_review(sessionId, reviewText)   ← gates on full acknowledgment + returns audit trail
 ```
+
+Optionally interleave `refetch_review_item(sessionId, filePath)` to re-read a previously delivered file and `query_review_notes(sessionId, query)` to search past observations. Both are pure reads.
 
 ### Self-Review — paginated (recommended)
 

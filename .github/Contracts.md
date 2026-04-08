@@ -33,7 +33,7 @@ Wire format example (diff tool, 2 files + manifest):
 
 | Tool | Blocks returned |
 |---|---|
-| `get_pr_content` / `get_local_content` | `[file_block..., simple_pagination_block]` |
+| `get_local_content` | `[file_block..., simple_pagination_block]` |
 | `get_pr_files` (F003, non-paginated) | `[file_list_block, manifest_block]` |
 | `get_pr_files` / `get_local_files` (F004, paginated) | `[file_list_block, manifest_block, pagination_block]` |
 | `get_pr_metadata` | `[metadata_block]` (single block) |
@@ -70,7 +70,6 @@ catch (Exception ex)
 Error messages by tool:
 - `get_pr_files` / `get_pr_metadata`: `"Pull Request not found: ..."`, `"Error retrieving PR ..."`
 - `get_local_files`: `"Repository not found: ..."`, `"Git command failed: ..."`
-- `get_pr_content`: `"Missing required parameter: prNumber"`, `"Missing required parameter: pageNumber"`, `"pageNumber N exceeds total pages M"`, `"Pull Request not found: ..."`, `"Error retrieving PR content: ..."`
 - `get_local_content`: `"Missing required parameter: pageNumber"`, `"pageNumber N exceeds total pages M"`, `"Error retrieving local content: ..."`
 
 ### JSON-RPC errors (protocol level)
@@ -138,7 +137,7 @@ Auto-generated from `GetPullRequestMetadataToolHandler.ExecuteAsync` signature. 
 | `modelName` | `string?` | ❌ | `null` | Model name for context budget resolution (e.g. `"gpt-4o"`). Triggers pagination info. |
 | `maxTokens` | `int?` | ❌ | `null` | Explicit token budget override. Triggers pagination info. **Bypasses the gateway cap** — callers passing `maxTokens` are treated as authoritative. |
 
-> **Feature 005 note:** When `modelName` or `maxTokens` is provided, the response includes content paging info in plain text for use with `get_pr_content`.
+> **Feature 005 note:** When `modelName` or `maxTokens` is provided, the response includes content paging info in plain text for use with `begin_pr_review`.
 >
 > **Gateway cap:** when `maxTokens` is omitted, the resolved budget (from `modelName` or default) is clamped by the active gateway cap — either `ContextWindow:GatewayMaxTokens` from config, or autodetected from the MCP host's `clientInfo.Name` (Claude Code → 25 000, Cursor → 24 000, Codex → 20 000, default → 20 000). See `DeveloperGuide.md` → *Context Window — Gateway Cap*.
 
@@ -266,45 +265,9 @@ Summary: 1 source, 1 test | High priority: 1
 
 ---
 
-### 4.4 `get_pr_content`
+### 4.4 PR review session tools
 
-#### Input
-
-Auto-generated from `GetPullRequestContentToolHandler.ExecuteAsync` signature. All parameters are nullable with defaults, making them optional in the schema. `prNumber` and `pageNumber` are logically required (validated at runtime).
-
-| Parameter | C# Type | Required | Default | Description |
-|---|---|---|---|---|
-| `prNumber` | `int?` | ✅ (runtime) | `null` | The Pull Request number/ID |
-| `pageNumber` | `int?` | ✅ (runtime) | `null` | Page number to retrieve (1-based) |
-| `modelName` | `string?` | ❌ | `null` | Model name for context budget resolution |
-| `maxTokens` | `int?` | ❌ | `null` | Explicit token budget override |
-
-#### Output — plain text blocks
-
-**Block 1..N:** one `TextContentBlock` per file (unified diff format with `@@ -oldStart,oldCount +newStart,newCount @@` hunk headers)
-
-```
-=== src/Cache/CacheService.cs (edit: +5 -2) ===
-@@ -10,4 +10,5 @@
- public class CacheService
--    private int _ttl = 60;
-+    private int _ttl = 300;
-```
-
-**Last block:** simple pagination footer
-
-```
---- Page 1 of 5 | hasMore: true | 12/286 files | ~85000 tokens | 10 Source, 2 Config ---
-```
-
-| Part | Notes |
-|---|---|
-| `hasMore` | `true` when `pageNumber < totalPages` |
-| `N/M files` | Files on this page / total files |
-| `~X tokens` | Estimated token usage for this page |
-| Category breakdown | Optional; shows count per `FileCategory` on this page (e.g. `3 Source, 1 Test`). Omitted when empty. |
-
-Error messages: `"Missing required parameter: prNumber"`, `"prNumber must be greater than 0"`, `"Missing required parameter: pageNumber"`, `"pageNumber must be >= 1"`, `"pageNumber N exceeds total pages M"`, `"Pull Request not found: ..."`, `"Error retrieving PR content: ..."`.
+PR review uses the stateful session API introduced by feature 012 and extended by features 013 (refetch + query) and 014 (scan-only classification): `begin_pr_review`, `next_review_item`, `record_review_observation`, `refetch_review_item`, `query_review_notes`, `submit_pr_review`. See `specs/012-review-session-mvp/`, `specs/013-review-memory/`, and `specs/014-scan-only-classification/` for the full input/output contracts. All return plain-text payloads via `PlainTextFormatter`. The legacy `get_pr_content` paginated tool was retired in feature 015 — use `begin_pr_review` instead.
 
 ---
 
@@ -323,7 +286,7 @@ Auto-generated from `GetLocalContentToolHandler.ExecuteAsync` signature. All par
 
 #### Output — plain text blocks
 
-Same structure as `get_pr_content`. One `TextContentBlock` per file on the page, followed by a simple pagination footer block (including category breakdown).
+One `TextContentBlock` per file on the page, followed by a simple pagination footer block (including category breakdown).
 
 ```
 --- Page 1 of 2 | hasMore: true | 5/8 files | ~12000 tokens | 4 Source, 1 Test ---

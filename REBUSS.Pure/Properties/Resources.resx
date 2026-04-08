@@ -194,18 +194,6 @@
   <data name="LogGetLocalFilesRepositoryNotFound" xml:space="preserve">
     <value>[get_local_files] Repository not found</value>
   </data>
-  <data name="LogGetPrContentCompleted" xml:space="preserve">
-    <value>[get_pr_content] Completed: PR #{PrNumber}, page {Page}/{TotalPages}, {FileCount} files, {Ms}ms</value>
-  </data>
-  <data name="LogGetPrContentEntry" xml:space="preserve">
-    <value>[get_pr_content] Entry: PR #{PrNumber}, page {PageNumber}</value>
-  </data>
-  <data name="LogGetPrContentError" xml:space="preserve">
-    <value>[get_pr_content] Error (prNumber={PrNumber}, pageNumber={PageNumber})</value>
-  </data>
-  <data name="LogGetPrContentPrNotFound" xml:space="preserve">
-    <value>[get_pr_content] PR not found (prNumber={PrNumber})</value>
-  </data>
   <data name="LogGetPrFilesCompletedF003" xml:space="preserve">
     <value>[get_pr_files] Completed (F003): PR #{PrNumber}, {FileCount} files, {ElapsedMs}ms</value>
   </data>

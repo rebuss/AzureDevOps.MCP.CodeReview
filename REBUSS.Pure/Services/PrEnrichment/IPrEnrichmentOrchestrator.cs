@@ -2,7 +2,7 @@ namespace REBUSS.Pure.Services.PrEnrichment;
 
 /// <summary>
 /// Owns background enrichment of pull-request diffs. Lets <c>get_pr_metadata</c>
-/// kick off enrichment and time-bound the wait, while <c>get_pr_content</c>
+/// kick off enrichment and time-bound the wait, while <c>begin_pr_review</c>
 /// reuses the in-flight or completed result with its own fresh timeout window.
 ///
 /// The background body always runs under the host's

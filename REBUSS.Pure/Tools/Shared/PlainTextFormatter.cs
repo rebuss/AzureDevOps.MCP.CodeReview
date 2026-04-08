@@ -162,10 +162,10 @@ internal static class PlainTextFormatter
         {
             // FR-004: explicit indicator that paging is not yet available because
             // background enrichment did not complete within the metadata tool's
-            // internal timeout. Tells the agent to follow up with get_pr_content.
+            // internal timeout. Tells the agent to follow up with begin_pr_review.
             sb.AppendLine();
             sb.AppendLine("Content paging: not yet available — background enrichment is still running.");
-            sb.AppendLine("Action: call get_pr_content with pageNumber=1 to retrieve the enriched content.");
+            sb.AppendLine("Action: call begin_pr_review to start a stateful review session that walks the PR file by file.");
         }
 
         return sb.ToString().TrimEnd();
@@ -243,7 +243,7 @@ internal static class PlainTextFormatter
 
     /// <summary>
     /// Simple pagination footer for tools that do not use page-reference encoding
-    /// (e.g. <c>get_pr_content</c>, <c>get_local_content</c>).
+    /// (e.g. <c>get_local_content</c>).
     /// When <paramref name="categories"/> is provided, a category breakdown is appended.
     /// </summary>
     public static string FormatSimplePaginationBlock(

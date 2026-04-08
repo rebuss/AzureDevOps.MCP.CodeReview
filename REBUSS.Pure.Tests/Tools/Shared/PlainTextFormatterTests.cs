@@ -40,7 +40,7 @@ public class PlainTextFormatterTests
         Assert.Contains("PR #42: Fix the bug", text);
         Assert.Contains("Content paging: not yet available", text);
         Assert.Contains("background enrichment is still running", text);
-        Assert.Contains("get_pr_content", text);
+        Assert.Contains("begin_pr_review", text);
     }
 
     [Fact]

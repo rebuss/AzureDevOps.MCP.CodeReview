@@ -5,7 +5,7 @@ namespace REBUSS.Pure.Services.PrEnrichment;
 
 /// <summary>
 /// Successful payload of a completed enrichment job. Cached so both
-/// <c>get_pr_metadata</c> and <c>get_pr_content</c> can reuse it without
+/// <c>get_pr_metadata</c> and <c>begin_pr_review</c> can reuse it without
 /// recomputation.
 /// </summary>
 public sealed record PrEnrichmentResult

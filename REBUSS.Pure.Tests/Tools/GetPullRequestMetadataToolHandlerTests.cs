@@ -168,7 +168,7 @@ public class GetPullRequestMetadataToolHandlerTests
         Assert.Contains("PR #42: Fix the bug", text);
         // FR-004: explicit indicator that paging is deferred.
         Assert.Contains("not yet available", text);
-        Assert.Contains("get_pr_content", text);
+        Assert.Contains("begin_pr_review", text);
         Assert.DoesNotContain("Content paging: 1 page", text);
 
         // No exception escapes — tool returns a successful response.
