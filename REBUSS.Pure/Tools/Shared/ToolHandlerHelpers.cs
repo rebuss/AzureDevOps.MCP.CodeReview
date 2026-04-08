@@ -50,11 +50,19 @@ internal static class ToolHandlerHelpers
             var estimation = tokenEstimator.Estimate(plainText, safeBudgetTokens);
             var classification = fileClassifier.Classify(pathSelector(item));
 
+            // Deliberate `0, 0` placeholders for LinesAdded / LinesRemoved: this generic
+            // helper is used by file-list tools (get_pr_files / get_local_files) which
+            // don't have separated added/removed counts (changeSizeSelector returns the
+            // sum) and don't render line counts in their output. Feature 014's scan-only
+            // synthetic summary uses LinesAdded / LinesRemoved only on candidates built
+            // by FileTokenMeasurement (the review-session path).
             candidates.Add(new PackingCandidate(
                 pathSelector(item),
                 estimation.EstimatedTokens,
                 classification.Category,
-                changeSizeSelector(item)));
+                changeSizeSelector(item),
+                0,
+                0));
         }
         return candidates;
     }

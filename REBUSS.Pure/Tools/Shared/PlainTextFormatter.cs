@@ -290,24 +290,58 @@ internal static class PlainTextFormatter
         int maxFilesShown = 200)
     {
         var sb = new StringBuilder();
+        var deepCount = files.Count(f => f.Classification == Services.ReviewSession.ReviewFileClassification.Deep);
+        var scanCount = files.Count - deepCount;
+        var deepTokens = files.Where(f => f.Classification == Services.ReviewSession.ReviewFileClassification.Deep).Sum(f => f.EstimatedTokens);
+        var scanTokens = files.Where(f => f.Classification == Services.ReviewSession.ReviewFileClassification.Scan).Sum(f => f.EstimatedTokens);
+
         sb.AppendLine($"Review session ready");
         sb.AppendLine($"Session id: {sessionId}");
         sb.AppendLine($"PR:         #{prNumber}");
         sb.AppendLine($"Files:      {files.Count}");
         sb.AppendLine($"Budget:     {safeBudgetTokens} tokens per response");
-        sb.AppendLine($"Estimated:  ~{files.Sum(f => f.EstimatedTokens)} tokens total");
+        sb.AppendLine($"Deep:       {deepCount} (~{deepTokens} tokens)");
+        sb.AppendLine($"Scan:       {scanCount} (~{scanTokens} tokens of summaries)");
         sb.AppendLine();
         sb.AppendLine("Files to review (alphabetical):");
         var shown = Math.Min(files.Count, maxFilesShown);
         for (int i = 0; i < shown; i++)
         {
             var f = files[i];
-            sb.AppendLine($"  {i + 1,4}. {f.Path}  [{f.Category}, ~{f.EstimatedTokens} tokens]");
+            var classTag = f.Classification == Services.ReviewSession.ReviewFileClassification.Scan
+                ? $"[scan: {f.MatchedPattern}]"
+                : "[deep]";
+            sb.AppendLine($"  {i + 1,4}. {f.Path}  [{f.Category}, ~{f.EstimatedTokens} tokens]  {classTag}");
         }
         if (files.Count > shown)
             sb.AppendLine($"  ... and {files.Count - shown} more (walk via next_review_item)");
         sb.AppendLine();
         sb.Append($"Next: call next_review_item with sessionId={sessionId}");
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Feature 014: synthetic summary block returned by next_review_item for
+    /// scan-classified files. Bounded to ~1 KB regardless of underlying file size.
+    /// </summary>
+    public static string FormatScanSummary(Services.ReviewSession.ReviewFileEntry file)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"=== {file.Path} ===");
+        sb.AppendLine("Classification: scan-only");
+        sb.AppendLine($"Reason: matches pattern '{file.MatchedPattern}' (auto-generated/mechanical file)");
+        sb.AppendLine();
+        sb.AppendLine("Stats:");
+        sb.AppendLine($"  - Lines added:   {file.LinesAdded}");
+        sb.AppendLine($"  - Lines removed: {file.LinesRemoved}");
+        sb.AppendLine($"  - Total lines:   {file.LinesAdded + file.LinesRemoved}");
+        sb.AppendLine();
+        sb.AppendLine("This file was classified as mechanical and is presented as a summary");
+        sb.AppendLine("rather than full content to preserve the review context budget.");
+        sb.AppendLine();
+        sb.Append("If you need the full content, call refetch_review_item with this file ");
+        sb.Append("path explicitly. Otherwise, acknowledge it via record_review_observation ");
+        sb.Append("to advance the session.");
         return sb.ToString();
     }
 

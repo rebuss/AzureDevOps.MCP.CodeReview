@@ -35,7 +35,9 @@ internal static class FileTokenMeasurement
                 file.Path,
                 actualTokens,
                 classification.Category,
-                file.Additions + file.Deletions));
+                file.Additions + file.Deletions,
+                file.Additions,
+                file.Deletions));
         }
 
         return candidates;
@@ -77,7 +79,9 @@ internal static class FileTokenMeasurement
                 file.Path,
                 actualTokens,
                 classification.Category,
-                file.Additions + file.Deletions));
+                file.Additions + file.Deletions,
+                file.Additions,
+                file.Deletions));
             enrichedByPath[file.Path] = enriched;
         }
 

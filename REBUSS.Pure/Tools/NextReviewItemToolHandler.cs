@@ -59,9 +59,14 @@ public class NextReviewItemToolHandler
                 var position = session.Files.ToList().IndexOf(result.File!) + 1;
                 var remaining = session.Files.Count(f =>
                     f.Status is ReviewItemStatus.Pending or ReviewItemStatus.DeliveredPartial or ReviewItemStatus.DeliveredAwaitingObservation);
+                // Feature 014: scan-classified files are delivered as a synthetic summary
+                // computed on the fly; deep files keep the full content path unchanged.
+                var body = result.File!.Classification == ReviewFileClassification.Scan
+                    ? PlainTextFormatter.FormatScanSummary(result.File!)
+                    : result.Content!;
                 var text = PlainTextFormatter.FormatAdvanceResponse(
                     result.File!,
-                    result.Content!,
+                    body,
                     result.ChunkIndex,
                     result.TotalChunks,
                     position,

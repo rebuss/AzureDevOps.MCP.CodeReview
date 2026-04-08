@@ -474,6 +474,25 @@ DI registrations (`Program.cs:170-172`): `IReviewSessionStore` and `ISingleFileC
 
 No new DI registrations — both handlers auto-discovered. No new singletons. The constitution Principle VI exception scoped to `IReviewSessionStore` (added in feature 012) covers this feature without widening.
 
+#### Scan-only file classification — feature 014 (additive on top of 012)
+
+| File | Role |
+|---|---|
+| `Services\ReviewSession\ReviewFileClassification.cs` | Enum: `Deep` (full content) or `Scan` (synthetic summary). Default for unmatched paths is `Deep`. |
+| `Services\ReviewSession\ReviewFileClassificationResult.cs` | Immutable record carrying classification + the matched pattern (first in configuration order, or null for `Deep`) |
+| `Services\ReviewSession\IReviewFileClassifier.cs` / `ReviewFileClassifier.cs` | Singleton glob-pattern classifier built on `Microsoft.Extensions.FileSystemGlobbing.Matcher`. Per-pattern matchers (so the matched pattern can be reported); reads patterns once at construction; logs and drops invalid patterns; case-insensitive on all hosts |
+| `Services\ReviewSession\ReviewFileEntry.cs` (extended) | Four new immutable fields: `Classification`, `MatchedPattern`, `LinesAdded`, `LinesRemoved`. Captured at session-begin and never re-evaluated. All four are constructor parameters with defaults so existing call sites still compile. |
+| `Tools\BeginPullRequestReviewToolHandler.cs` (extended) | Inject `IReviewFileClassifier`; classify each candidate's path; pass classification + matched pattern + line counts into `ReviewFileEntry` |
+| `Tools\NextReviewItemToolHandler.cs` (extended) | Branches on `result.File.Classification`: scan files get `PlainTextFormatter.FormatScanSummary` (~1 KB regardless of file size); deep files keep their feature 012 path unchanged for SC-003 byte-equivalence |
+| `Tools\Shared\PlainTextFormatter.cs` (extended) | Added `FormatScanSummary`; extended `FormatSessionManifest` with per-class summary block (Deep/Scan counts and token totals) and per-file `[scan: <pattern>]` / `[deep]` annotations |
+| `REBUSS.Pure.Core\Models\PackingCandidate.cs` (extended) | Two new fields: `LinesAdded`, `LinesRemoved`. Default-valued so the ~25 existing test fixture call sites still compile. `TotalChanges` preserved for `PackingPriorityComparer` compatibility (still equals additions+deletions) |
+| `Services\PrEnrichment\WorkflowOptions.cs` (extended) | New nested `ReviewSessionOptions { ScanOnlyPatterns: string[] }` bound from `Workflow:ReviewSession` |
+| `appsettings.json` (extended) | Default 15-pattern scan list under `Workflow:ReviewSession:ScanOnlyPatterns` |
+| `REBUSS.Pure.csproj` | New `Microsoft.Extensions.FileSystemGlobbing 10.0.5` package reference |
+| `Tools\Shared\ToolHandlerHelpers.cs` | `BuildCandidates<T>` updated to pass `0, 0` placeholders for `LinesAdded`/`LinesRemoved` (the file-list tools that use this helper don't have separated counts and don't render them) |
+
+DI registration: `IReviewFileClassifier` added as a singleton in `Program.cs:172` (after the existing `IReviewSessionStore` / `ISingleFileChunker` registrations). No new tool surface — `ExpectedTools` array unchanged at 11.
+
 ---
 
 ## Test files

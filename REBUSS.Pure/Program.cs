@@ -171,6 +171,7 @@ namespace REBUSS.Pure
             // Constitution Principle VI exception scoped to review sessions only.
             services.AddSingleton<Services.ReviewSession.IReviewSessionStore, Services.ReviewSession.ReviewSessionStore>();
             services.AddSingleton<Services.ReviewSession.ISingleFileChunker, Services.ReviewSession.SingleFileChunker>();
+            services.AddSingleton<Services.ReviewSession.IReviewFileClassifier, Services.ReviewSession.ReviewFileClassifier>();
 
             // Context Window Awareness
             services.Configure<ContextWindowOptions>(configuration.GetSection(ContextWindowOptions.SectionName));

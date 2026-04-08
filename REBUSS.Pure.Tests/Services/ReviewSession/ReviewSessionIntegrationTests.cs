@@ -24,6 +24,7 @@ public class ReviewSessionIntegrationTests
     private readonly IContextBudgetResolver _budget = Substitute.For<IContextBudgetResolver>();
     private readonly IPrEnrichmentOrchestrator _orchestrator = Substitute.For<IPrEnrichmentOrchestrator>();
     private readonly ReviewSessionStore _store = new();
+    private readonly IReviewFileClassifier _classifier;
     private readonly SingleFileChunker _chunker;
     private readonly IOptions<WorkflowOptions> _workflow =
         Options.Create(new WorkflowOptions { MetadataInternalTimeoutMs = 5_000, ContentInternalTimeoutMs = 5_000 });
@@ -55,8 +56,15 @@ public class ReviewSessionIntegrationTests
 
         _orchestrator.TryGetSnapshot(Arg.Any<int>()).Returns((PrEnrichmentJobSnapshot?)null);
 
+        // Classifier configured to scan files matching **/scan_*.cs (used by feature 014 tests).
+        var classifierOpts = Microsoft.Extensions.Options.Options.Create(new WorkflowOptions
+        {
+            ReviewSession = new ReviewSessionOptions { ScanOnlyPatterns = new[] { "**/scan_*.cs" } }
+        });
+        _classifier = new ReviewFileClassifier(classifierOpts, NullLogger<ReviewFileClassifier>.Instance);
+
         _begin = new BeginPullRequestReviewToolHandler(
-            _meta, _budget, _orchestrator, _store, _workflow,
+            _meta, _budget, _orchestrator, _store, _classifier, _workflow,
             NullLogger<BeginPullRequestReviewToolHandler>.Instance);
         _next = new NextReviewItemToolHandler(_store, _chunker,
             NullLogger<NextReviewItemToolHandler>.Instance);
@@ -69,7 +77,7 @@ public class ReviewSessionIntegrationTests
     private void StubEnrichment(int n, int sizeEach = 50)
     {
         var candidates = Enumerable.Range(0, n)
-            .Select(i => new PackingCandidate($"src/file_{(char)('a' + i)}.cs", sizeEach, FileCategory.Source, 5))
+            .Select(i => new PackingCandidate($"src/file_{(char)('a' + i)}.cs", sizeEach, FileCategory.Source, 5, 3, 2))
             .ToArray();
         var enriched = candidates.ToDictionary(
             c => c.Path,
@@ -345,6 +353,163 @@ public class ReviewSessionIntegrationTests
 
         // Still exactly one enrichment trigger
         _orchestrator.Received(1).TriggerEnrichment(42, "head-sha", Arg.Any<int>());
+    }
+
+    // ─── Feature 014: Scan-only classification ────────────────────────────────────
+
+    private void StubMixedEnrichment(string[] paths, int sizeEach = 100)
+    {
+        var candidates = paths
+            .Select(p => new PackingCandidate(p, sizeEach, FileCategory.Source, 5, 3, 2))
+            .ToArray();
+        var enriched = candidates.ToDictionary(
+            c => c.Path,
+            c => $"@@ -1,3 +1,3 @@\n+full enriched content of {c.Path}\n");
+        var result = new PrEnrichmentResult
+        {
+            PrNumber = 42,
+            HeadSha = "head-sha",
+            SortedCandidates = candidates,
+            EnrichedByPath = enriched,
+            Allocation = new PageAllocation(Array.Empty<PageSlice>(), 0, 0),
+            SafeBudgetTokens = 10_000,
+            CompletedAt = DateTimeOffset.UtcNow,
+        };
+        _orchestrator.WaitForEnrichmentAsync(Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(result);
+    }
+
+    [Fact]
+    public async Task Manifest_HasSeparateDeepAndScanCounts_AndPerFileAnnotation()
+    {
+        // 5-file mixed PR: 2 scan files match the **/scan_*.cs pattern from the test fixture classifier.
+        StubMixedEnrichment(new[] { "src/scan_a.cs", "src/deep_b.cs", "src/deep_c.cs", "src/scan_d.cs", "src/deep_e.cs" });
+
+        var manifestText = TextOf(await _begin.ExecuteAsync(prNumber: 42));
+        Assert.Contains("Deep:       3", manifestText);
+        Assert.Contains("Scan:       2", manifestText);
+        Assert.Contains("[scan: **/scan_*.cs]", manifestText);
+        Assert.Contains("[deep]", manifestText);
+    }
+
+    [Fact]
+    public async Task ScanFile_NextItem_ReturnsSummaryNotFullContent_AndUnder2KB()
+    {
+        StubMixedEnrichment(new[] { "src/scan_a.cs" });
+        var sid = ExtractSessionId(TextOf(await _begin.ExecuteAsync(prNumber: 42)));
+
+        var nextText = TextOf(await _next.ExecuteAsync(sessionId: sid));
+        Assert.Contains("Classification: scan-only", nextText);
+        Assert.Contains("**/scan_*.cs", nextText);
+        Assert.Contains("Lines added:", nextText);
+        Assert.Contains("Lines removed:", nextText);
+        // SC-002: bounded under 2 KB regardless of file size
+        Assert.True(nextText.Length <= 2048, $"scan summary length {nextText.Length} > 2048");
+        // Must NOT contain the full enriched content body
+        Assert.DoesNotContain("full enriched content of src/scan_a.cs", nextText);
+    }
+
+    [Fact]
+    public async Task DeepFile_NextItem_ReturnsFullContent_RegressionCheckForFeature012()
+    {
+        StubMixedEnrichment(new[] { "src/deep_a.cs" });
+        var sid = ExtractSessionId(TextOf(await _begin.ExecuteAsync(prNumber: 42)));
+
+        var nextText = TextOf(await _next.ExecuteAsync(sessionId: sid));
+        // SC-003: deep file behaviour unchanged from feature 012
+        Assert.Contains("full enriched content of src/deep_a.cs", nextText);
+        Assert.DoesNotContain("Classification: scan-only", nextText);
+    }
+
+    [Fact]
+    public async Task ScanFile_AcknowledgmentGate_StillEnforced()
+    {
+        // Use only scan files so the alphabetical-first delivered file is definitely a scan file.
+        StubMixedEnrichment(new[] { "src/scan_a.cs", "src/scan_b.cs" });
+        var sid = ExtractSessionId(TextOf(await _begin.ExecuteAsync(prNumber: 42)));
+
+        var firstText = TextOf(await _next.ExecuteAsync(sessionId: sid));
+        Assert.Contains("Classification: scan-only", firstText); // verify we got a scan file
+        // Without acknowledging, next call must hit the gate naming the unacknowledged scan file
+        var ex = await Assert.ThrowsAsync<McpException>(() => _next.ExecuteAsync(sessionId: sid));
+        Assert.Contains("scan_a.cs", ex.Message);
+    }
+
+    [Fact]
+    public async Task ScanFiles_FullLifecycle_AllAcknowledgedAndCountedTowardSubmit()
+    {
+        StubMixedEnrichment(new[] { "src/deep_a.cs", "src/deep_b.cs", "src/deep_c.cs", "src/scan_d.cs", "src/scan_e.cs" });
+        var sid = ExtractSessionId(TextOf(await _begin.ExecuteAsync(prNumber: 42)));
+
+        var deliveredKinds = new List<string>();
+        for (int i = 0; i < 5; i++)
+        {
+            var nextText = TextOf(await _next.ExecuteAsync(sessionId: sid));
+            var path = nextText.Split('\n')[0].Replace("===", "").Trim();
+            deliveredKinds.Add(nextText.Contains("Classification: scan-only") ? "scan" : "deep");
+            await _record.ExecuteAsync(sessionId: sid, filePath: path,
+                observations: "ok", status: "reviewed_complete");
+        }
+
+        Assert.Equal(3, deliveredKinds.Count(k => k == "deep"));
+        Assert.Equal(2, deliveredKinds.Count(k => k == "scan"));
+
+        var subText = TextOf(await _submit.ExecuteAsync(sessionId: sid, reviewText: "done"));
+        Assert.Contains("Audit Trail", subText);
+        // All 5 files in the audit trail
+        foreach (var p in new[] { "deep_a.cs", "deep_b.cs", "deep_c.cs", "scan_d.cs", "scan_e.cs" })
+            Assert.Contains(p, subText);
+    }
+
+    [Fact]
+    public async Task Submit_WithUnacknowledgedScanFile_RejectedWithoutForce()
+    {
+        StubMixedEnrichment(new[] { "src/deep_a.cs", "src/deep_b.cs", "src/scan_c.cs" });
+        var sid = ExtractSessionId(TextOf(await _begin.ExecuteAsync(prNumber: 42)));
+
+        // Acknowledge only the first 2 files (both deep), leave the scan file pending
+        for (int i = 0; i < 2; i++)
+        {
+            var t = TextOf(await _next.ExecuteAsync(sessionId: sid));
+            var path = t.Split('\n')[0].Replace("===", "").Trim();
+            await _record.ExecuteAsync(sessionId: sid, filePath: path,
+                observations: "ok", status: "reviewed_complete");
+        }
+
+        var rejText = TextOf(await _submit.ExecuteAsync(sessionId: sid, reviewText: "incomplete"));
+        Assert.Contains("Cannot submit", rejText);
+        Assert.Contains("scan_c.cs", rejText); // SC-005: scan file named in rejection
+    }
+
+    [Fact]
+    public async Task Refetch_OnScanFile_ReturnsFullContentNotSummary_AndStateUnchanged()
+    {
+        // US4 / SC-010: refetch on a scan file returns the full enriched content;
+        // classification and state unchanged after refetch (FR-021).
+        var refetch = new RefetchReviewItemToolHandler(_store, NullLogger<RefetchReviewItemToolHandler>.Instance);
+        StubMixedEnrichment(new[] { "src/scan_a.cs" });
+        var sid = ExtractSessionId(TextOf(await _begin.ExecuteAsync(prNumber: 42)));
+
+        // Walk the scan file via next_review_item — should be the synthetic summary
+        var summaryText = TextOf(await _next.ExecuteAsync(sessionId: sid));
+        Assert.Contains("Classification: scan-only", summaryText);
+
+        // Snapshot before refetch
+        Assert.True(_store.TryGet(sid, out var session));
+        var fileBefore = session.Files[0];
+        var classBefore = fileBefore.Classification;
+        var matchedBefore = fileBefore.MatchedPattern;
+        var statusBefore = fileBefore.Status;
+
+        // Refetch should return full content (not the summary)
+        var refetchText = TextOf(await refetch.ExecuteAsync(sessionId: sid, filePath: "src/scan_a.cs"));
+        Assert.Contains("[REFETCH]", refetchText);
+        Assert.Contains("full enriched content of src/scan_a.cs", refetchText);
+        Assert.DoesNotContain("Classification: scan-only", refetchText);
+
+        // Snapshot equality after refetch
+        Assert.Equal(classBefore, session.Files[0].Classification);
+        Assert.Equal(matchedBefore, session.Files[0].MatchedPattern);
+        Assert.Equal(statusBefore, session.Files[0].Status);
     }
 
     [Fact]

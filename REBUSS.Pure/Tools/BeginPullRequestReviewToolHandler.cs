@@ -24,6 +24,7 @@ public class BeginPullRequestReviewToolHandler
     private readonly IContextBudgetResolver _budgetResolver;
     private readonly IPrEnrichmentOrchestrator _enrichmentOrchestrator;
     private readonly IReviewSessionStore _sessionStore;
+    private readonly IReviewFileClassifier _classifier;
     private readonly IOptions<WorkflowOptions> _workflowOptions;
     private readonly ILogger<BeginPullRequestReviewToolHandler> _logger;
 
@@ -32,6 +33,7 @@ public class BeginPullRequestReviewToolHandler
         IContextBudgetResolver budgetResolver,
         IPrEnrichmentOrchestrator enrichmentOrchestrator,
         IReviewSessionStore sessionStore,
+        IReviewFileClassifier classifier,
         IOptions<WorkflowOptions> workflowOptions,
         ILogger<BeginPullRequestReviewToolHandler> logger)
     {
@@ -39,6 +41,7 @@ public class BeginPullRequestReviewToolHandler
         _budgetResolver = budgetResolver;
         _enrichmentOrchestrator = enrichmentOrchestrator;
         _sessionStore = sessionStore;
+        _classifier = classifier;
         _workflowOptions = workflowOptions;
         _logger = logger;
     }
@@ -103,10 +106,19 @@ public class BeginPullRequestReviewToolHandler
                 };
             }
 
-            // Sort alphabetically by Path (FR-005). Reuse PackingCandidate fields.
+            // Sort alphabetically by Path (FR-005). Classify each file via the
+            // scan-only classifier (feature 014); Deep is the default for
+            // unmatched paths.
             var files = result.SortedCandidates
                 .OrderBy(c => c.Path, StringComparer.OrdinalIgnoreCase)
-                .Select(c => new ReviewFileEntry(c.Path, c.Category, c.EstimatedTokens))
+                .Select(c =>
+                {
+                    var cls = _classifier.Classify(c.Path);
+                    return new ReviewFileEntry(
+                        c.Path, c.Category, c.EstimatedTokens,
+                        cls.Classification, cls.MatchedPattern,
+                        c.LinesAdded, c.LinesRemoved);
+                })
                 .ToList();
 
             var sessionId = Guid.NewGuid().ToString("N");
