@@ -379,6 +379,65 @@ internal static class PlainTextFormatter
         return sb.ToString().TrimEnd();
     }
 
+    // ─── Feature 013: Refetch + Query ─────────────────────────────────────────────
+
+    public static string FormatRefetchResponse(
+        Services.ReviewSession.ReviewFileEntry file,
+        string content,
+        int chunkIndex,
+        int totalChunks,
+        string sessionId)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("[REFETCH]");
+        sb.AppendLine($"=== {file.Path} ===");
+        if (totalChunks > 1)
+            sb.AppendLine($"Chunk {chunkIndex} of {totalChunks}  |  state: {file.Status}");
+        else
+            sb.AppendLine($"State: {file.Status}");
+        sb.AppendLine();
+        sb.AppendLine(content);
+        sb.AppendLine();
+        if (totalChunks > 1 && chunkIndex < totalChunks)
+            sb.Append($"--- More chunks remain. Call refetch_review_item with sessionId={sessionId}, filePath=\"{file.Path}\", chunkIndex={chunkIndex + 1} to continue.");
+        else
+            sb.Append("--- End of refetched content. This call did not change session state.");
+        return sb.ToString();
+    }
+
+    public static string FormatQueryResponse(
+        string query,
+        Services.ReviewSession.QueryResult result,
+        int requestedLimit)
+    {
+        var sb = new StringBuilder();
+        var shown = result.Entries.Count;
+        sb.AppendLine($"Query: '{query}'  |  {result.TotalMatches} match(es) total  |  showing top {shown}");
+        sb.AppendLine();
+
+        for (int i = 0; i < result.Entries.Count; i++)
+        {
+            var e = result.Entries[i];
+            sb.AppendLine($"  [{i + 1}] {e.FilePath}  ({e.Status}, observation #{e.SequenceNumber})");
+            foreach (var line in e.Text.Split('\n'))
+                sb.AppendLine($"      {line}");
+            if (e.IsTruncated)
+                sb.AppendLine($"      ... [truncated at {Services.ReviewSession.ReviewSession.MaxObservationCharsInResult} chars]");
+            sb.AppendLine();
+        }
+
+        if (result.TotalMatches > shown)
+            sb.Append($"--- {result.TotalMatches - shown} additional match(es) not shown. Increase 'limit' (max 20) or refine the query.");
+        else
+            sb.Append("--- End of query results. This call did not change session state.");
+        return sb.ToString();
+    }
+
+    public static string FormatNoMatchesResponse(string query)
+    {
+        return $"Query: '{query}'\nNo observations match this query in the current session.";
+    }
+
     public static string FormatAuditTrail(
         Services.ReviewSession.ReviewSession session,
         string reviewText)

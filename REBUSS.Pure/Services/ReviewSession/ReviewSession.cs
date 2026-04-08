@@ -37,6 +37,12 @@ public sealed class ReviewSession
         _byPath = files.ToDictionary(f => f.Path, StringComparer.OrdinalIgnoreCase);
     }
 
+    /// <summary>Maximum number of results returned by <see cref="QueryObservations"/>. (FR-016)</summary>
+    public const int MaxQueryLimit = 20;
+
+    /// <summary>Per-result truncation cap for observation text in query responses. (FR-017)</summary>
+    public const int MaxObservationCharsInResult = 2000;
+
     public string SessionId { get; }
     public int PrNumber { get; }
     public string HeadSha { get; }
@@ -202,7 +208,130 @@ public sealed class ReviewSession
                 unacked);
         }
     }
+
+    /// <summary>
+    /// Refetches the content of a previously-delivered file. PURE READ — never
+    /// mutates any session field. See feature 013 spec FR-001 through FR-011.
+    /// </summary>
+    public RefetchResult Refetch(string filePath, int chunkIndex)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(filePath);
+        lock (_lock)
+        {
+            if (!_byPath.TryGetValue(filePath, out var file))
+                return new RefetchResult(RefetchKind.FileNotInSession, null, null, 0, 0);
+
+            if (file.Status == ReviewItemStatus.Pending)
+                return new RefetchResult(RefetchKind.FilePending, file, null, 0, 0);
+
+            if (file.Status == ReviewItemStatus.DeliveredPartial)
+                return new RefetchResult(RefetchKind.FilePartial, file, null, 0, 0);
+
+            // Acknowledged states: DeliveredAwaitingObservation, ReviewedComplete, SkippedWithReason.
+            if (file.Chunks is { } chunks && chunks.Count > 0)
+            {
+                if (chunkIndex < 1 || chunkIndex > chunks.Count)
+                    return new RefetchResult(RefetchKind.ChunkOutOfRange, file, null, chunkIndex, chunks.Count);
+
+                return new RefetchResult(RefetchKind.Ok, file, chunks[chunkIndex - 1], chunkIndex, chunks.Count);
+            }
+
+            // Unchunked file: only chunkIndex == 1 is valid (explicit decision in plan.md Phase 3).
+            if (chunkIndex != 1)
+                return new RefetchResult(RefetchKind.ChunkOutOfRange, file, null, chunkIndex, 1);
+
+            if (!_enrichedByPath.TryGetValue(file.Path, out var enriched) || enriched is null)
+                return new RefetchResult(RefetchKind.EnrichmentMissing, file, null, 0, 0);
+
+            return new RefetchResult(RefetchKind.Ok, file, enriched, 1, 1);
+        }
+    }
+
+    /// <summary>
+    /// Free-text query over the session's recorded observations. PURE READ.
+    /// See FR-012 through FR-020.
+    /// </summary>
+    public QueryResult QueryObservations(string? query, int limit)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+            return new QueryResult(QueryKind.EmptyQuery, Array.Empty<QueryResultEntry>(), 0);
+
+        var effectiveLimit = Math.Clamp(limit, 1, MaxQueryLimit);
+        var tokens = query
+            .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(t => t.ToLowerInvariant())
+            .Distinct()
+            .ToArray();
+
+        lock (_lock)
+        {
+            var matches = new List<QueryResultEntry>();
+            foreach (var file in Files)
+            {
+                foreach (var obs in file.Observations)
+                {
+                    var lowerText = obs.Text.ToLowerInvariant();
+                    int score = tokens.Count(t => lowerText.Contains(t, StringComparison.Ordinal));
+                    if (score == 0) continue;
+
+                    var truncated = obs.Text.Length > MaxObservationCharsInResult;
+                    var text = truncated ? obs.Text[..MaxObservationCharsInResult] : obs.Text;
+                    matches.Add(new QueryResultEntry(
+                        file.Path,
+                        file.Status,
+                        obs.SequenceNumber,
+                        text,
+                        truncated,
+                        score));
+                }
+            }
+
+            var ordered = matches
+                .OrderByDescending(e => e.MatchScore)
+                .ThenBy(e => e.FilePath, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var top = ordered.Take(effectiveLimit).ToList();
+            return new QueryResult(QueryKind.Ok, top, ordered.Count);
+        }
+    }
 }
+
+public enum RefetchKind
+{
+    Ok,
+    FileNotInSession,
+    FilePending,
+    FilePartial,
+    ChunkOutOfRange,
+    EnrichmentMissing,
+}
+
+public sealed record RefetchResult(
+    RefetchKind Kind,
+    ReviewFileEntry? File,
+    string? Content,
+    int ChunkIndex,
+    int TotalChunks);
+
+public enum QueryKind
+{
+    Ok,
+    EmptyQuery,
+}
+
+public sealed record QueryResultEntry(
+    string FilePath,
+    ReviewItemStatus Status,
+    int SequenceNumber,
+    string Text,
+    bool IsTruncated,
+    int MatchScore);
+
+public sealed record QueryResult(
+    QueryKind Kind,
+    IReadOnlyList<QueryResultEntry> Entries,
+    int TotalMatches);
 
 public enum NextItemKind
 {

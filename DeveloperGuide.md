@@ -341,6 +341,8 @@ nothing is silently skipped.
 | `next_review_item(sessionId)` | Returns the next file (or next chunk of an oversize file). Refuses to advance past a fully-delivered file until you call `record_review_observation`. |
 | `record_review_observation(sessionId, filePath, observations, status)` | Records an observation. `status` is `reviewed_complete` or `skipped_with_reason`. Append-only — multiple observations on the same file are preserved. |
 | `submit_pr_review(sessionId, reviewText, [force])` | Finalizes the review. Rejects with a structured error listing unacknowledged files unless `force=true` (which is recorded in the audit trail). |
+| `refetch_review_item(sessionId, filePath, [chunkIndex])` | (feature 013) Re-reads any acknowledged file's exact original content. Pure read; never re-runs enrichment. Use mid-review to verify a cross-reference or recall a forgotten detail. Honors the acknowledgment gate — rejects files in `Pending` or partial-delivery state. |
+| `query_review_notes(sessionId, query, [limit])` | (feature 013) Free-text searches your own previously-recorded observations across the session. Use before `submit_pr_review` to compose a final review from accumulated observations. Default limit 5, max 20. |
 
 **Key properties:**
 - Server-enforced acknowledgment gate — no silent abandonment, cherry-picking, or lost-in-the-middle.

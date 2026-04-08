@@ -211,6 +211,307 @@ public class ReviewSessionAggregateTests
         Assert.Single(session.Files[0].Observations);
     }
 
+    // ─── Feature 013: Refetch ─────────────────────────────────────────────────────
+
+    [Fact]
+    public void Refetch_OnPending_ReturnsFilePending()
+    {
+        var (s, _) = NewSession(("a.cs", "content"));
+        var r = s.Refetch("a.cs", 1);
+        Assert.Equal(RefetchKind.FilePending, r.Kind);
+    }
+
+    [Fact]
+    public void Refetch_OnPartial_ReturnsFilePartial()
+    {
+        var entries = new List<ReviewFileEntry> { new("big.cs", FileCategory.Source, 1) };
+        var content = "@@ -1,2 +1,2 @@\nline-a\n@@ -10,2 +10,2 @@\nline-b\n@@ -20,2 +20,2 @@\nline-c";
+        var enriched = new Dictionary<string, string> { ["big.cs"] = content };
+        var est = Substitute.For<ITokenEstimator>();
+        est.EstimateTokenCount(Arg.Any<string>()).Returns(ci => ((string)ci[0]).Length);
+        var chunker = new SingleFileChunker(est);
+        var session = new RSession("s", 1, "h", safeBudgetTokens: 25, entries, enriched, DateTimeOffset.UtcNow);
+        session.NextItem(chunker, DateTimeOffset.UtcNow); // file goes into DeliveredPartial
+
+        var r = session.Refetch("big.cs", 1);
+        Assert.Equal(RefetchKind.FilePartial, r.Kind);
+    }
+
+    [Fact]
+    public void Refetch_OnReviewedComplete_ReturnsExactOriginalContent()
+    {
+        var (s, ch) = NewSession(("a.cs", "exact-content"));
+        var now = DateTimeOffset.UtcNow;
+        var deliv = s.NextItem(ch, now);
+        s.RecordObservation("a.cs", "ok", ReviewItemStatus.ReviewedComplete, now);
+
+        var r = s.Refetch("a.cs", 1);
+        Assert.Equal(RefetchKind.Ok, r.Kind);
+        Assert.Equal(deliv.Content, r.Content);
+        Assert.Equal(1, r.ChunkIndex);
+        Assert.Equal(1, r.TotalChunks);
+    }
+
+    [Fact]
+    public void Refetch_OnSubmittedSession_StillSucceeds()
+    {
+        var (s, ch) = NewSession(("a.cs", "x"));
+        var now = DateTimeOffset.UtcNow;
+        s.NextItem(ch, now);
+        s.RecordObservation("a.cs", "ok", ReviewItemStatus.ReviewedComplete, now);
+        s.Submit("done", false, now);
+
+        var r = s.Refetch("a.cs", 1);
+        Assert.Equal(RefetchKind.Ok, r.Kind);
+        Assert.Equal("x", r.Content);
+    }
+
+    [Fact]
+    public void Refetch_OnFileNotInSession_ReturnsFileNotInSession()
+    {
+        var (s, _) = NewSession(("a.cs", "x"));
+        var r = s.Refetch("zzz.cs", 1);
+        Assert.Equal(RefetchKind.FileNotInSession, r.Kind);
+    }
+
+    [Fact]
+    public void Refetch_OnChunkedFile_DefaultIndex1_ReturnsChunk1()
+    {
+        var entries = new List<ReviewFileEntry> { new("big.cs", FileCategory.Source, 1) };
+        var content = "@@ -1,2 +1,2 @@\nline-a\n@@ -10,2 +10,2 @@\nline-b\n@@ -20,2 +20,2 @@\nline-c";
+        var enriched = new Dictionary<string, string> { ["big.cs"] = content };
+        var est = Substitute.For<ITokenEstimator>();
+        est.EstimateTokenCount(Arg.Any<string>()).Returns(ci => ((string)ci[0]).Length);
+        var chunker = new SingleFileChunker(est);
+        var session = new RSession("s", 1, "h", 25, entries, enriched, DateTimeOffset.UtcNow);
+        // Walk all chunks to reach DeliveredAwaitingObservation
+        var first = session.NextItem(chunker, DateTimeOffset.UtcNow);
+        var total = first.TotalChunks;
+        for (int i = 2; i <= total; i++) session.NextItem(chunker, DateTimeOffset.UtcNow);
+
+        var r = session.Refetch("big.cs", 1);
+        Assert.Equal(RefetchKind.Ok, r.Kind);
+        Assert.Equal(1, r.ChunkIndex);
+        Assert.Equal(total, r.TotalChunks);
+    }
+
+    [Fact]
+    public void Refetch_OnChunkedFile_Index2_ReturnsChunk2()
+    {
+        var entries = new List<ReviewFileEntry> { new("big.cs", FileCategory.Source, 1) };
+        var content = "@@ -1,2 +1,2 @@\nline-a\n@@ -10,2 +10,2 @@\nline-b\n@@ -20,2 +20,2 @@\nline-c";
+        var enriched = new Dictionary<string, string> { ["big.cs"] = content };
+        var est = Substitute.For<ITokenEstimator>();
+        est.EstimateTokenCount(Arg.Any<string>()).Returns(ci => ((string)ci[0]).Length);
+        var chunker = new SingleFileChunker(est);
+        var session = new RSession("s", 1, "h", 25, entries, enriched, DateTimeOffset.UtcNow);
+        var first = session.NextItem(chunker, DateTimeOffset.UtcNow);
+        var total = first.TotalChunks;
+        Assert.True(total >= 2, "test setup must produce at least 2 chunks");
+        for (int i = 2; i <= total; i++) session.NextItem(chunker, DateTimeOffset.UtcNow);
+
+        var r = session.Refetch("big.cs", 2);
+        Assert.Equal(RefetchKind.Ok, r.Kind);
+        Assert.Equal(2, r.ChunkIndex);
+    }
+
+    [Fact]
+    public void Refetch_ChunkIndexOutOfRange_ReturnsChunkOutOfRange()
+    {
+        var entries = new List<ReviewFileEntry> { new("big.cs", FileCategory.Source, 1) };
+        var content = "@@ -1,2 +1,2 @@\nline-a\n@@ -10,2 +10,2 @@\nline-b\n@@ -20,2 +20,2 @@\nline-c";
+        var enriched = new Dictionary<string, string> { ["big.cs"] = content };
+        var est = Substitute.For<ITokenEstimator>();
+        est.EstimateTokenCount(Arg.Any<string>()).Returns(ci => ((string)ci[0]).Length);
+        var chunker = new SingleFileChunker(est);
+        var session = new RSession("s", 1, "h", 25, entries, enriched, DateTimeOffset.UtcNow);
+        var first = session.NextItem(chunker, DateTimeOffset.UtcNow);
+        var total = first.TotalChunks;
+        for (int i = 2; i <= total; i++) session.NextItem(chunker, DateTimeOffset.UtcNow);
+
+        Assert.Equal(RefetchKind.ChunkOutOfRange, session.Refetch("big.cs", 0).Kind);
+        Assert.Equal(RefetchKind.ChunkOutOfRange, session.Refetch("big.cs", total + 1).Kind);
+    }
+
+    [Fact]
+    public void Refetch_OnUnchunkedFile_NonOneIndex_ReturnsChunkOutOfRange()
+    {
+        var (s, ch) = NewSession(("a.cs", "x"));
+        var now = DateTimeOffset.UtcNow;
+        s.NextItem(ch, now);
+        s.RecordObservation("a.cs", "ok", ReviewItemStatus.ReviewedComplete, now);
+
+        Assert.Equal(RefetchKind.ChunkOutOfRange, s.Refetch("a.cs", 2).Kind);
+        Assert.Equal(RefetchKind.ChunkOutOfRange, s.Refetch("a.cs", 0).Kind);
+    }
+
+    [Fact]
+    public void Refetch_DoesNotMutateSessionState()
+    {
+        var (s, ch) = NewSession(("a.cs", "x"), ("b.cs", "y"));
+        var now = DateTimeOffset.UtcNow;
+        s.NextItem(ch, now);
+        s.RecordObservation("a.cs", "first", ReviewItemStatus.ReviewedComplete, now);
+
+        var beforeStatuses = s.Files.Select(f => f.Status).ToArray();
+        var beforeObsCounts = s.Files.Select(f => f.Observations.Count).ToArray();
+        var beforeAck = s.AcknowledgedCount;
+
+        // Multiple refetches
+        s.Refetch("a.cs", 1);
+        s.Refetch("a.cs", 1);
+        s.Refetch("zzz.cs", 1);
+
+        Assert.Equal(beforeStatuses, s.Files.Select(f => f.Status).ToArray());
+        Assert.Equal(beforeObsCounts, s.Files.Select(f => f.Observations.Count).ToArray());
+        Assert.Equal(beforeAck, s.AcknowledgedCount);
+    }
+
+    // ─── Feature 013: Query ───────────────────────────────────────────────────────
+
+    private static RSession SessionWithObservations(params (string Path, string ObsText, ReviewItemStatus Status)[] obs)
+    {
+        var paths = obs.Select(o => o.Path).Distinct().ToArray();
+        var entries = paths.Select(p => new ReviewFileEntry(p, FileCategory.Source, 1)).ToList();
+        var enriched = paths.ToDictionary(p => p, p => "content-" + p);
+        var est = Substitute.For<ITokenEstimator>();
+        est.EstimateTokenCount(Arg.Any<string>()).Returns(ci => ((string)ci[0]).Length);
+        var chunker = new SingleFileChunker(est);
+        var session = new RSession("s", 1, "h", 10_000, entries, enriched, DateTimeOffset.UtcNow);
+        var now = DateTimeOffset.UtcNow;
+        // Deliver each file then record the observation
+        var deliveredPaths = new HashSet<string>();
+        foreach (var (path, text, status) in obs)
+        {
+            if (!deliveredPaths.Contains(path))
+            {
+                // Walk to that file
+                while (true)
+                {
+                    var r = session.NextItem(chunker, now);
+                    if (r.Kind == NextItemKind.Delivered && r.File!.Path == path) break;
+                    if (r.Kind == NextItemKind.Delivered)
+                        session.RecordObservation(r.File!.Path, "filler", ReviewItemStatus.ReviewedComplete, now);
+                }
+                deliveredPaths.Add(path);
+            }
+            session.RecordObservation(path, text, status, now);
+        }
+        return session;
+    }
+
+    [Fact]
+    public void Query_EmptyString_ReturnsEmptyQuery()
+    {
+        var s = SessionWithObservations(("a.cs", "obs", ReviewItemStatus.ReviewedComplete));
+        Assert.Equal(QueryKind.EmptyQuery, s.QueryObservations("", 5).Kind);
+        Assert.Equal(QueryKind.EmptyQuery, s.QueryObservations("   ", 5).Kind);
+        Assert.Equal(QueryKind.EmptyQuery, s.QueryObservations(null, 5).Kind);
+    }
+
+    [Fact]
+    public void Query_NoMatches_ReturnsOkWithEmptyEntries()
+    {
+        var s = SessionWithObservations(("a.cs", "completely unrelated", ReviewItemStatus.ReviewedComplete));
+        var r = s.QueryObservations("validation", 5);
+        Assert.Equal(QueryKind.Ok, r.Kind);
+        Assert.Empty(r.Entries);
+    }
+
+    [Fact]
+    public void Query_SimpleSubstringMatch()
+    {
+        var s = SessionWithObservations(
+            ("a.cs", "validation now requires CancellationToken", ReviewItemStatus.ReviewedComplete));
+        var r = s.QueryObservations("validation", 5);
+        Assert.Single(r.Entries);
+        Assert.Contains("validation", r.Entries[0].Text);
+    }
+
+    [Fact]
+    public void Query_CaseInsensitive()
+    {
+        var s = SessionWithObservations(
+            ("a.cs", "Validation now requires Token", ReviewItemStatus.ReviewedComplete));
+        var r = s.QueryObservations("VALIDATION", 5);
+        Assert.Single(r.Entries);
+    }
+
+    [Fact]
+    public void Query_MultiToken_ScoredByDistinctTokenCount()
+    {
+        var s = SessionWithObservations(
+            ("a.cs", "validation null inputs handled", ReviewItemStatus.ReviewedComplete),
+            ("b.cs", "validation only", ReviewItemStatus.ReviewedComplete));
+        var r = s.QueryObservations("validation null", 5);
+        Assert.Equal(2, r.Entries.Count);
+        Assert.Equal("a.cs", r.Entries[0].FilePath); // higher score (2 tokens)
+        Assert.Equal(2, r.Entries[0].MatchScore);
+        Assert.Equal(1, r.Entries[1].MatchScore);
+    }
+
+    [Fact]
+    public void Query_TieBreakAlphabeticalByFilePath()
+    {
+        var s = SessionWithObservations(
+            ("zeta.cs", "match", ReviewItemStatus.ReviewedComplete),
+            ("alpha.cs", "match", ReviewItemStatus.ReviewedComplete));
+        var r = s.QueryObservations("match", 5);
+        Assert.Equal("alpha.cs", r.Entries[0].FilePath);
+        Assert.Equal("zeta.cs", r.Entries[1].FilePath);
+    }
+
+    [Fact]
+    public void Query_TruncatesObservationOver2000Chars_AndSetsIsTruncated()
+    {
+        var longObs = "validation " + new string('x', 5000);
+        var s = SessionWithObservations(("a.cs", longObs, ReviewItemStatus.ReviewedComplete));
+        var r = s.QueryObservations("validation", 5);
+        Assert.Single(r.Entries);
+        Assert.True(r.Entries[0].IsTruncated);
+        Assert.Equal(RSession.MaxObservationCharsInResult, r.Entries[0].Text.Length);
+    }
+
+    [Fact]
+    public void Query_LimitDefault5_AndCappedAt20()
+    {
+        var observations = Enumerable.Range(0, 30)
+            .Select(i => ($"f{i:D3}.cs", "match here", ReviewItemStatus.ReviewedComplete))
+            .ToArray();
+        var s = SessionWithObservations(observations);
+        var r = s.QueryObservations("match", 100);
+        Assert.Equal(20, r.Entries.Count);
+        Assert.Equal(30, r.TotalMatches);
+    }
+
+    [Fact]
+    public void Query_DoesNotMutateSessionState()
+    {
+        var s = SessionWithObservations(
+            ("a.cs", "validation matches", ReviewItemStatus.ReviewedComplete),
+            ("b.cs", "skipped due to validation noise", ReviewItemStatus.SkippedWithReason));
+
+        var beforeStatuses = s.Files.Select(f => f.Status).ToArray();
+        var beforeObsCounts = s.Files.Select(f => f.Observations.Count).ToArray();
+
+        s.QueryObservations("validation", 5);
+        s.QueryObservations("anything", 20);
+        s.QueryObservations("nomatch", 1);
+
+        Assert.Equal(beforeStatuses, s.Files.Select(f => f.Status).ToArray());
+        Assert.Equal(beforeObsCounts, s.Files.Select(f => f.Observations.Count).ToArray());
+    }
+
+    [Fact]
+    public void Query_IncludesObservationsFromSkippedFiles()
+    {
+        var s = SessionWithObservations(
+            ("a.cs", "skipped: generated file", ReviewItemStatus.SkippedWithReason));
+        var r = s.QueryObservations("generated", 5);
+        Assert.Single(r.Entries);
+        Assert.Equal(ReviewItemStatus.SkippedWithReason, r.Entries[0].Status);
+    }
+
     [Fact]
     public void Files_AreDeliveredInListOrder()
     {

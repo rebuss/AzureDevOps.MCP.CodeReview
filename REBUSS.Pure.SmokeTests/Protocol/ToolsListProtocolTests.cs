@@ -42,15 +42,15 @@ public class ToolsListProtocolTests
     }
 
     [Fact]
-    public async Task ToolsList_ReturnsAllNineTools()
+    public async Task ToolsList_ReturnsAllElevenTools()
     {
         var response = await _fixture.Server.SendToolsListAsync();
         var tools = response.RootElement
             .GetProperty("result")
             .GetProperty("tools");
 
-        // Five legacy PR/local tools + four review-session tools (feature 012).
-        Assert.Equal(9, tools.GetArrayLength());
+        // Five legacy + four review-session (012) + two review-memory (013) tools.
+        Assert.Equal(11, tools.GetArrayLength());
     }
 
     [Fact]

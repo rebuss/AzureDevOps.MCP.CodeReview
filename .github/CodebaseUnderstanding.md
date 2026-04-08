@@ -463,6 +463,17 @@ Note: As of the plain-text ContentBlock refactor, most JSON output DTOs have bee
 
 DI registrations (`Program.cs:170-172`): `IReviewSessionStore` and `ISingleFileChunker` as singletons. The four handler classes are auto-discovered by `WithToolsFromAssembly()`.
 
+#### Review Memory — feature 013 (additive on top of 012)
+
+| File | Role |
+|---|---|
+| `Services\ReviewSession\ReviewSession.cs` (extended) | Two new pure-read methods: `Refetch(filePath, chunkIndex)` and `QueryObservations(query, limit)`, plus `RefetchKind`/`RefetchResult`/`QueryKind`/`QueryResultEntry`/`QueryResult` records. Both methods run under the existing per-session lock and never write to any field. Constants: `MaxQueryLimit = 20`, `MaxObservationCharsInResult = 2000` |
+| `Tools\RefetchReviewItemToolHandler.cs` | `[McpServerTool(Name = "refetch_review_item")]` — re-reads acknowledged file content; respects the gate (rejects `Pending`/`DeliveredPartial`); supports chunked refetch; allowed against submitted sessions |
+| `Tools\QueryReviewNotesToolHandler.cs` | `[McpServerTool(Name = "query_review_notes")]` — free-text search over recorded observations; whitespace-tokenized case-insensitive substring scoring; default limit 5, max 20 |
+| `Tools\Shared\PlainTextFormatter.cs` (extended) | Added `FormatRefetchResponse`, `FormatQueryResponse`, `FormatNoMatchesResponse` |
+
+No new DI registrations — both handlers auto-discovered. No new singletons. The constitution Principle VI exception scoped to `IReviewSessionStore` (added in feature 012) covers this feature without widening.
+
 ---
 
 ## Test files

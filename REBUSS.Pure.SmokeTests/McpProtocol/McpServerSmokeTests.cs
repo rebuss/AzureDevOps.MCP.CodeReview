@@ -19,7 +19,9 @@ public class McpServerSmokeTests
         "begin_pr_review",
         "next_review_item",
         "record_review_observation",
-        "submit_pr_review"
+        "submit_pr_review",
+        "refetch_review_item",
+        "query_review_notes"
     ];
 
     [Fact]

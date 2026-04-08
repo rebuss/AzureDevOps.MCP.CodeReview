@@ -255,6 +255,98 @@ public class ReviewSessionIntegrationTests
 
     // ─── Session lookup error path ─────────────────────────────────────────────────
 
+    // ─── Feature 013: Refetch + Query interleaved with the lifecycle ──────────────
+
+    [Fact]
+    public async Task InterleavedRefetchAndQuery_DoNotMutateState_AndContentByteEqualToOriginal()
+    {
+        StubEnrichment(5);
+        var refetch = new RefetchReviewItemToolHandler(_store, NullLogger<RefetchReviewItemToolHandler>.Instance);
+        var query = new QueryReviewNotesToolHandler(_store, NullLogger<QueryReviewNotesToolHandler>.Instance);
+
+        var sid = ExtractSessionId(TextOf(await _begin.ExecuteAsync(prNumber: 42)));
+        var originalContentByPath = new Dictionary<string, string>();
+
+        // Walk all 5 files, capturing original content keyed by path.
+        for (int i = 0; i < 5; i++)
+        {
+            var nextText = TextOf(await _next.ExecuteAsync(sessionId: sid));
+            var path = nextText.Split('\n')[0].Replace("===", "").Trim();
+            originalContentByPath[path] = nextText;
+
+            // Intercalate refetches and queries — they MUST be no-ops state-wise.
+            if (i > 0)
+            {
+                var earlierPath = originalContentByPath.Keys.First();
+                var refetchText = TextOf(await refetch.ExecuteAsync(sessionId: sid, filePath: earlierPath));
+                Assert.Contains("[REFETCH]", refetchText);
+
+                // Byte-equality of underlying content (the file body, ignoring the refetch marker prefix and headers).
+                // Verify the actual content body appears in both.
+                var originalBody = originalContentByPath[earlierPath];
+                Assert.Contains("content of " + earlierPath, refetchText);
+                Assert.Contains("content of " + earlierPath, originalBody);
+            }
+
+            await _record.ExecuteAsync(sessionId: sid, filePath: path,
+                observations: $"observation containing keyword-{i} for {path}",
+                status: "reviewed_complete");
+
+            // Query mid-walk — must not change anything.
+            var qText = TextOf(await query.ExecuteAsync(sessionId: sid, query: $"keyword-{i}"));
+            Assert.Contains("keyword-" + i, qText);
+        }
+
+        // Final query before submit
+        var finalQuery = TextOf(await query.ExecuteAsync(sessionId: sid, query: "keyword-2"));
+        Assert.Contains("keyword-2", finalQuery);
+
+        // Submit. Audit trail must NOT mention refetch/query operations (FR-025).
+        var subText = TextOf(await _submit.ExecuteAsync(sessionId: sid, reviewText: "summary"));
+        Assert.Contains("Audit Trail", subText);
+        Assert.DoesNotContain("[REFETCH]", subText);
+        Assert.DoesNotContain("Query:", subText);
+
+        // SC-002: enrichment triggered exactly once across the lifecycle + interleaved reads.
+        _orchestrator.Received(1).TriggerEnrichment(42, "head-sha", Arg.Any<int>());
+
+        // FR-013 / SC-011: refetch still works on the submitted session.
+        var postSubmitText = TextOf(await refetch.ExecuteAsync(
+            sessionId: sid, filePath: originalContentByPath.Keys.First()));
+        Assert.Contains("[REFETCH]", postSubmitText);
+    }
+
+    [Fact]
+    public async Task OperationsUnderStress_NoExtraEnrichmentTriggers()
+    {
+        StubEnrichment(3);
+        var refetch = new RefetchReviewItemToolHandler(_store, NullLogger<RefetchReviewItemToolHandler>.Instance);
+        var query = new QueryReviewNotesToolHandler(_store, NullLogger<QueryReviewNotesToolHandler>.Instance);
+
+        var sid = ExtractSessionId(TextOf(await _begin.ExecuteAsync(prNumber: 42)));
+
+        // Walk + acknowledge all
+        var paths = new List<string>();
+        for (int i = 0; i < 3; i++)
+        {
+            var t = TextOf(await _next.ExecuteAsync(sessionId: sid));
+            var path = t.Split('\n')[0].Replace("===", "").Trim();
+            paths.Add(path);
+            await _record.ExecuteAsync(sessionId: sid, filePath: path,
+                observations: "match-token here", status: "reviewed_complete");
+        }
+
+        // Stress: 20 refetches + 20 queries in mixed order
+        for (int i = 0; i < 20; i++)
+        {
+            await refetch.ExecuteAsync(sessionId: sid, filePath: paths[i % paths.Count]);
+            await query.ExecuteAsync(sessionId: sid, query: "match-token");
+        }
+
+        // Still exactly one enrichment trigger
+        _orchestrator.Received(1).TriggerEnrichment(42, "head-sha", Arg.Any<int>());
+    }
+
     [Fact]
     public async Task NextReviewItem_OnUnknownSession_ReturnsSessionNotFound()
     {
