@@ -328,6 +328,36 @@ The orchestrator's load-bearing semantic — caller cancellation never cancels t
 | `get_pr_content(prNumber, pageNumber, [modelName], [maxTokens])` | Returns diff content for a specific page of the PR. Call `get_pr_metadata` with budget params first to discover the total page count |
 | `get_pr_files(prNumber, [pageReference])` | Returns classified list of changed files with per-file stats and review priority; supports pagination via `pageReference` |
 
+#### Stateful PR Review Session (feature 012 — recommended for very large PRs)
+
+For PRs that exceed your agent's context window (especially small-context agents
+like Copilot, GPT-4o-mini, Haiku) the **review session** lets you walk the PR one
+file at a time with server-side acknowledgment tracking. Every file is reviewed;
+nothing is silently skipped.
+
+| Tool | Description |
+|---|---|
+| `begin_pr_review(prNumber, [modelName], [maxTokens])` | Starts a stateful review session. Returns a session id and an alphabetically-sorted manifest of every file in the PR. |
+| `next_review_item(sessionId)` | Returns the next file (or next chunk of an oversize file). Refuses to advance past a fully-delivered file until you call `record_review_observation`. |
+| `record_review_observation(sessionId, filePath, observations, status)` | Records an observation. `status` is `reviewed_complete` or `skipped_with_reason`. Append-only — multiple observations on the same file are preserved. |
+| `submit_pr_review(sessionId, reviewText, [force])` | Finalizes the review. Rejects with a structured error listing unacknowledged files unless `force=true` (which is recorded in the audit trail). |
+
+**Key properties:**
+- Server-enforced acknowledgment gate — no silent abandonment, cherry-picking, or lost-in-the-middle.
+- Every response fits under the configured transport ceiling (default 20k tokens). Oversize single files are split into ordered chunks.
+- Sessions live only in process memory. A server restart discards all in-flight sessions; call `begin_pr_review` again.
+- See `specs/012-review-session-mvp/` for the full spec, plan, and acceptance criteria.
+
+**Workflow:**
+
+```
+begin_pr_review(prNumber)              ← returns sessionId + manifest
+  → loop:
+      next_review_item(sessionId)      ← get next file or chunk
+      record_review_observation(sessionId, filePath, observations, "reviewed_complete")
+  → submit_pr_review(sessionId, reviewText)   ← gets audit trail
+```
+
 ### Local Self-Review Tools (no authentication needed)
 
 | Tool | Description |

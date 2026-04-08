@@ -276,6 +276,139 @@ internal static class PlainTextFormatter
 
     // ─── Manifest block ───────────────────────────────────────────────────────────
 
+    // ─── Review session (feature 012) ─────────────────────────────────────────────
+
+    /// <summary>
+    /// Formats the manifest returned by <c>begin_pr_review</c>. Truncates the file
+    /// list with an "... and N more" marker if it would exceed <paramref name="maxFilesShown"/>.
+    /// </summary>
+    public static string FormatSessionManifest(
+        string sessionId,
+        int prNumber,
+        int safeBudgetTokens,
+        IReadOnlyList<Services.ReviewSession.ReviewFileEntry> files,
+        int maxFilesShown = 200)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"Review session ready");
+        sb.AppendLine($"Session id: {sessionId}");
+        sb.AppendLine($"PR:         #{prNumber}");
+        sb.AppendLine($"Files:      {files.Count}");
+        sb.AppendLine($"Budget:     {safeBudgetTokens} tokens per response");
+        sb.AppendLine($"Estimated:  ~{files.Sum(f => f.EstimatedTokens)} tokens total");
+        sb.AppendLine();
+        sb.AppendLine("Files to review (alphabetical):");
+        var shown = Math.Min(files.Count, maxFilesShown);
+        for (int i = 0; i < shown; i++)
+        {
+            var f = files[i];
+            sb.AppendLine($"  {i + 1,4}. {f.Path}  [{f.Category}, ~{f.EstimatedTokens} tokens]");
+        }
+        if (files.Count > shown)
+            sb.AppendLine($"  ... and {files.Count - shown} more (walk via next_review_item)");
+        sb.AppendLine();
+        sb.Append($"Next: call next_review_item with sessionId={sessionId}");
+        return sb.ToString();
+    }
+
+    public static string FormatAdvanceResponse(
+        Services.ReviewSession.ReviewFileEntry file,
+        string content,
+        int chunkIndex,
+        int totalChunks,
+        int filePosition,
+        int totalFiles,
+        int filesRemaining,
+        string sessionId)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"=== {file.Path} ===");
+        var chunkInfo = totalChunks > 1 ? $", chunk {chunkIndex} of {totalChunks}" : string.Empty;
+        sb.AppendLine($"File {filePosition} of {totalFiles}{chunkInfo} | {filesRemaining} file(s) remaining");
+        sb.AppendLine();
+        sb.AppendLine(content);
+        sb.AppendLine();
+        if (totalChunks > 1 && chunkIndex < totalChunks)
+            sb.Append($"--- More chunks of this file remain. Call next_review_item with sessionId={sessionId} to receive chunk {chunkIndex + 1} of {totalChunks}.");
+        else
+            sb.Append($"--- After reviewing this file, call record_review_observation with sessionId={sessionId}, filePath=\"{file.Path}\", and your observations before requesting the next item.");
+        return sb.ToString();
+    }
+
+    public static string FormatObservationConfirmation(
+        string filePath,
+        int acknowledgedCount,
+        int totalCount,
+        string sessionId)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"Observation recorded for {filePath}.");
+        sb.AppendLine($"Progress: {acknowledgedCount} of {totalCount} files acknowledged.");
+        sb.Append(acknowledgedCount < totalCount
+            ? $"Next: call next_review_item with sessionId={sessionId}"
+            : $"Next: call submit_pr_review with sessionId={sessionId} to finalize the review.");
+        return sb.ToString();
+    }
+
+    public static string FormatAcknowledgmentGateError(string filePath, string sessionId)
+    {
+        return $"Cannot advance: file '{filePath}' has been delivered but not yet acknowledged. " +
+               $"Call record_review_observation with sessionId={sessionId}, filePath=\"{filePath}\" " +
+               $"before requesting the next item.";
+    }
+
+    public static string FormatSessionNotFoundError(string sessionId)
+    {
+        return $"Review session '{sessionId}' was not found. " +
+               "Sessions are in-memory and do not persist across server restarts. " +
+               "Call begin_pr_review to start a fresh session.";
+    }
+
+    public static string FormatUnacknowledgedFilesError(
+        string sessionId,
+        IReadOnlyList<Services.ReviewSession.ReviewFileEntry> unacknowledged)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("Cannot submit: the following files have not been acknowledged:");
+        foreach (var f in unacknowledged)
+            sb.AppendLine($"  - {f.Path}  [state: {f.Status}]");
+        sb.AppendLine();
+        sb.AppendLine("Either:");
+        sb.AppendLine($"  1. Call next_review_item with sessionId={sessionId} to walk through them, then record observations; or");
+        sb.AppendLine($"  2. Re-call submit_pr_review with force=true to override (the override will be recorded in the audit trail).");
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string FormatAuditTrail(
+        Services.ReviewSession.ReviewSession session,
+        string reviewText)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("=== Final Review ===");
+        sb.AppendLine(reviewText);
+        sb.AppendLine();
+        sb.AppendLine("=== Audit Trail ===");
+        sb.AppendLine($"Session id: {session.SessionId}");
+        sb.AppendLine($"PR:         #{session.PrNumber}");
+        sb.AppendLine($"Head SHA:   {session.HeadSha}");
+        sb.AppendLine($"Created:    {session.CreatedAt:O}");
+        sb.AppendLine($"Submitted:  {session.SubmittedAt:O}");
+        if (session.SubmissionUsedForce)
+            sb.AppendLine("Override:   FORCE — submission accepted with unacknowledged files");
+        sb.AppendLine();
+        sb.AppendLine($"Files ({session.Files.Count}):");
+        for (int i = 0; i < session.Files.Count; i++)
+        {
+            var f = session.Files[i];
+            var lastObs = f.Observations.Count > 0 ? f.Observations[^1].Text : "(no observation)";
+            var truncated = lastObs.Length > 120 ? lastObs[..117] + "..." : lastObs;
+            sb.AppendLine($"  {i + 1,4}. [{f.Status}] {f.Path}");
+            sb.AppendLine($"        delivered: {f.DeliveredAt:O} | acknowledged: {f.LastAcknowledgedAt:O}");
+            sb.AppendLine($"        last observation: {truncated}");
+        }
+        return sb.ToString().TrimEnd();
+    }
+
     public static string FormatManifestBlock(
         ContentManifestResult manifest,
         string? pageContext = null)

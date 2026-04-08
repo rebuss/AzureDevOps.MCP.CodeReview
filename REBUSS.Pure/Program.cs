@@ -167,6 +167,11 @@ namespace REBUSS.Pure
             services.Configure<WorkflowOptions>(configuration.GetSection(WorkflowOptions.SectionName));
             services.AddSingleton<IPrEnrichmentOrchestrator, PrEnrichmentOrchestrator>();
 
+            // Stateful PR Review Session (feature 012). Singleton store + chunker.
+            // Constitution Principle VI exception scoped to review sessions only.
+            services.AddSingleton<Services.ReviewSession.IReviewSessionStore, Services.ReviewSession.ReviewSessionStore>();
+            services.AddSingleton<Services.ReviewSession.ISingleFileChunker, Services.ReviewSession.SingleFileChunker>();
+
             // Context Window Awareness
             services.Configure<ContextWindowOptions>(configuration.GetSection(ContextWindowOptions.SectionName));
 

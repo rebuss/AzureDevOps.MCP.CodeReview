@@ -445,6 +445,24 @@ Note: As of the plain-text ContentBlock refactor, most JSON output DTOs have bee
 | `.github\ExtensionRecipes.md` | Detailed extension cookbook: code templates, reference implementations, validation checklists, common pitfalls for each extension pattern |
 | `.github\Contracts.md` | Complete MCP tool contract reference: input schemas, output JSON examples, error formats, serialization pipeline, shared DTOs, enum values |
 
+### Stateful PR Review Session — feature 012 (`REBUSS.Pure\Services\ReviewSession\`)
+
+| File | Role |
+|---|---|
+| `Services\ReviewSession\ReviewItemStatus.cs` | Enum for per-file lifecycle: `Pending` → `DeliveredPartial` → `DeliveredAwaitingObservation` → `ReviewedComplete` \| `SkippedWithReason` |
+| `Services\ReviewSession\ObservationRecord.cs` | Immutable per-acknowledgment record (sequence, text, status, timestamp) — append-only |
+| `Services\ReviewSession\ReviewFileEntry.cs` | Mutable per-file state inside a session: status, chunk index/count, cached chunks, observation history, delivery/ack timestamps |
+| `Services\ReviewSession\ReviewSession.cs` | Aggregate. Per-instance lock. Methods `NextItem`, `RecordObservation`, `Submit`. Enforces acknowledgment gate (FR-007/FR-008) and submit gate (FR-009/FR-011). Includes `NextItemResult`, `RecordResult`, `SubmitResult` discriminated result types. **Stateful** — exception to constitution Principle VI scoped to review sessions only |
+| `Services\ReviewSession\IReviewSessionStore.cs` / `ReviewSessionStore.cs` | Singleton in-memory store backed by `ConcurrentDictionary<string, ReviewSession>`. No removal — process lifetime only |
+| `Services\ReviewSession\ISingleFileChunker.cs` / `SingleFileChunker.cs` | Hunk-aware single-file splitter (~80 LOC). Prefers `@@ ... @@` boundaries; pathological hunks split mid-hunk with explicit `MidHunkSplitMarker` |
+| `Tools\BeginPullRequestReviewToolHandler.cs` | `[McpServerTool(Name = "begin_pr_review")]` — resolves budget, awaits enrichment with friendly-status fallback, sorts files alphabetically, creates session, returns manifest |
+| `Tools\NextReviewItemToolHandler.cs` | `[McpServerTool(Name = "next_review_item")]` — delivers next pending file or next chunk, formats response, enforces ack gate via `McpException` |
+| `Tools\RecordReviewObservationToolHandler.cs` | `[McpServerTool(Name = "record_review_observation")]` — appends observation, updates status, returns progress |
+| `Tools\SubmitPullRequestReviewToolHandler.cs` | `[McpServerTool(Name = "submit_pr_review")]` — accepts review or returns structured rejection (NOT exception) listing unacknowledged files; honors `force` override and records it in audit trail |
+| `Tools\Shared\PlainTextFormatter.cs` (extended) | Added `FormatSessionManifest`, `FormatAdvanceResponse`, `FormatObservationConfirmation`, `FormatAcknowledgmentGateError`, `FormatSessionNotFoundError`, `FormatUnacknowledgedFilesError`, `FormatAuditTrail` |
+
+DI registrations (`Program.cs:170-172`): `IReviewSessionStore` and `ISingleFileChunker` as singletons. The four handler classes are auto-discovered by `WithToolsFromAssembly()`.
+
 ---
 
 ## Test files
