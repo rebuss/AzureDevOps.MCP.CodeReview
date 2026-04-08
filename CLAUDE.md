@@ -78,15 +78,20 @@ REBUSS.Pure                                      (MCP server app)
 
 ---
 
-## MCP tools (5 total)
+## MCP tools (10 total)
 
 | Tool name | Handler | What it does |
 |---|---|---|
 | `get_pr_metadata` | `GetPullRequestMetadataToolHandler` | Returns PR metadata as plain text; optionally computes content paging info |
-| `get_pr_content` | `GetPullRequestContentToolHandler` | Returns one paginated page of PR diff content as plain text |
 | `get_pr_files` | `GetPullRequestFilesToolHandler` | Returns classified file list for a PR as plain text; supports pagination (F004) |
 | `get_local_files` | `GetLocalChangesFilesToolHandler` | Lists locally changed files with classification as plain text |
 | `get_local_content` | `GetLocalContentToolHandler` | Returns one paginated page of local diff content as plain text |
+| `begin_pr_review` | `BeginPullRequestReviewToolHandler` | Opens a stateful review session for a PR; returns a session id and the manifest of files to review (feature 012) |
+| `next_review_item` | `NextReviewItemToolHandler` | Returns the next file to review (deep) or a synthetic summary (scan); enforces the acknowledgment gate (feature 012/014) |
+| `record_review_observation` | `RecordReviewObservationToolHandler` | Acknowledges a file with the agent's observations; append-only history (feature 012) |
+| `refetch_review_item` | `RefetchReviewItemToolHandler` | Re-reads a previously delivered file; pure read, never re-runs enrichment (feature 013) |
+| `query_review_notes` | `QueryReviewNotesToolHandler` | Free-text searches the agent's recorded observations across the session (feature 013) |
+| `submit_pr_review` | `SubmitPullRequestReviewToolHandler` | Finalizes the review with audit trail; gated on full acknowledgment of all files (feature 012) |
 
 ---
 

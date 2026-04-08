@@ -19,16 +19,19 @@ REBUSS.Pure                                          (MCP server app: tool handl
 
 ## 2. Data Flow
 
-### PR Review: `get_pr_content(prNumber: 42, pageNumber: 1)`
+### PR Review: `begin_pr_review(prNumber: 42)` (feature 012/013/014/015)
 ```
-MCP stdin → SDK (JSON-RPC dispatch) → [McpServerTool] method on GetPullRequestContentToolHandler
+MCP stdin → SDK (JSON-RPC dispatch) → [McpServerTool] method on BeginPullRequestReviewToolHandler
   → ExecuteAsync
-    → IPullRequestDataProvider.GetDiffAsync(42)  [DI → AzureDevOpsScmClient or GitHubScmClient]
-      → DiffProvider → API client (HTTP) → Parser (JSON → domain) → StructuredDiffBuilder (hunks)
-    ← PullRequestDiff
-  → FileTokenMeasurement.BuildCandidatesFromDiff → StructuredFileChange models
-  → PlainTextFormatter.FormatFileDiff (one block per file) + FormatManifestBlock
-  → IEnumerable<ContentBlock> → returned to SDK → JSON-RPC response on stdout
+    → IContextBudgetResolver.Resolve → safe budget
+    → IPrEnrichmentOrchestrator.TriggerEnrichment + WaitForEnrichmentAsync
+      → PrEnrichmentResult { SortedCandidates, EnrichedByPath }
+    → for each candidate: IReviewFileClassifier.Classify → Deep | Scan
+    → ReviewSession built (alphabetical, classified) → IReviewSessionStore.Add
+  → PlainTextFormatter.FormatSessionManifest → IEnumerable<ContentBlock>
+  → SDK → JSON-RPC response on stdout
+
+Subsequent walk: next_review_item → record_review_observation → submit_pr_review.
 ```
 
 ### Local Review: `get_local_files(scope)`

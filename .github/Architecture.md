@@ -425,7 +425,7 @@ get_pr_metadata(prNumber, modelName)
 
 (later)
 
-get_pr_content(prNumber, pageNumber)
+begin_pr_review(prNumber)
   ├─> snapshot = _orchestrator.TryGetSnapshot(prNumber)
   ├─> Failed?            return FormatFriendlyStatus failure block (no retrigger)
   ├─> null?              cold-start: GetMetadataAsync → TriggerEnrichment

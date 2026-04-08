@@ -466,42 +466,6 @@ namespace REBUSS.Pure.Properties {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to [get_pr_content] Completed: PR #{PrNumber}, page {Page}/{TotalPages}, ...
-        /// </summary>
-        internal static string LogGetPrContentCompleted {
-            get {
-                return ResourceManager.GetString("LogGetPrContentCompleted", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to [get_pr_content] Entry: PR #{PrNumber}, page {PageNumber}.
-        /// </summary>
-        internal static string LogGetPrContentEntry {
-            get {
-                return ResourceManager.GetString("LogGetPrContentEntry", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to [get_pr_content] Error (prNumber={PrNumber}, pageNumber={PageNumber}).
-        /// </summary>
-        internal static string LogGetPrContentError {
-            get {
-                return ResourceManager.GetString("LogGetPrContentError", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to [get_pr_content] PR not found (prNumber={PrNumber}).
-        /// </summary>
-        internal static string LogGetPrContentPrNotFound {
-            get {
-                return ResourceManager.GetString("LogGetPrContentPrNotFound", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to [get_pr_files] Completed (F003): PR #{PrNumber}, ...
         /// </summary>
         internal static string LogGetPrFilesCompletedF003 {

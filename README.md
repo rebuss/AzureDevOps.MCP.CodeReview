@@ -219,7 +219,7 @@ Works **offline** — no Azure DevOps connection required.
 
 ## ⚙️ Gateway Token Limit
 
-REBUSS.Pure paginates diff content so a single `get_pr_content` / `get_local_content` response fits inside the **per-tool-result token cap your MCP host enforces**. Different hosts have wildly different limits, so the server picks one automatically based on the `clientInfo.Name` from the MCP `initialize` handshake — **no configuration needed** for supported hosts:
+REBUSS.Pure sizes every review response to fit inside the **per-tool-result token cap your MCP host enforces**. PR review uses the stateful session API (`begin_pr_review` / `next_review_item`); local self-review uses `get_local_content` with internal pagination. Different hosts have wildly different limits, so the server picks one automatically based on the `clientInfo.Name` from the MCP `initialize` handshake — **no configuration needed** for supported hosts:
 
 | Host (`clientInfo.Name`) | Auto cap |
 |---|---|

@@ -60,10 +60,10 @@ namespace REBUSS.Pure.Tools
             "Returns a plain-text block with PR details including title, author, state, " +
             "branches, stats, commit SHAs, and description. " +
             "When modelName or maxTokens is provided, also returns content paging info " +
-            "with page count and per-page file breakdown for use with get_pr_content. " +
+            "with page count and per-page file breakdown; use begin_pr_review to start a stateful review session. " +
             "If background enrichment cannot complete within the internal timeout, the response " +
             "still returns the basic summary with an explicit 'paging not yet available' indicator " +
-            "so the host never times out — call get_pr_content to retrieve the enriched content.")]
+            "so the host never times out — call begin_pr_review to begin a stateful review session that walks the PR file by file.")]
         public async Task<IEnumerable<ContentBlock>> ExecuteAsync(
             [Description("The Pull Request number/ID to retrieve metadata for")] int? prNumber = null,
             [Description("Model name for context budget resolution (e.g. 'gpt-4o'). Triggers pagination info.")] string? modelName = null,
@@ -119,7 +119,7 @@ namespace REBUSS.Pure.Tools
                         Text = PlainTextFormatter.FormatFriendlyStatus(
                             headline: $"Background enrichment failed for PR #{prNumber}",
                             explanation: $"{enrichmentFailure.ExceptionTypeName}: {enrichmentFailure.SanitizedMessage}",
-                            suggestedNextAction: "Retry get_pr_metadata or call get_pr_content with pageNumber=1")
+                            suggestedNextAction: "Retry get_pr_metadata or call begin_pr_review to start a review session")
                     });
                 }
 

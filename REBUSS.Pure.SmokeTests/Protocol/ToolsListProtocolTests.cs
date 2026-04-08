@@ -15,14 +15,12 @@ public class ToolsListProtocolTests
         "get_pr_metadata",
         "get_pr_files",
         "get_local_files",
-        "get_pr_content",
         "get_local_content"
     ];
 
     private static readonly string[] PrNumberTools =
     [
-        "get_pr_metadata",
-        "get_pr_content"
+        "get_pr_metadata"
     ];
 
     /// <summary>
@@ -42,15 +40,15 @@ public class ToolsListProtocolTests
     }
 
     [Fact]
-    public async Task ToolsList_ReturnsAllElevenTools()
+    public async Task ToolsList_ReturnsAllTenTools()
     {
         var response = await _fixture.Server.SendToolsListAsync();
         var tools = response.RootElement
             .GetProperty("result")
             .GetProperty("tools");
 
-        // Five legacy + four review-session (012) + two review-memory (013) tools.
-        Assert.Equal(11, tools.GetArrayLength());
+        // Four legacy + four review-session (012) + two review-memory (013) tools.
+        Assert.Equal(10, tools.GetArrayLength());
     }
 
     [Fact]
@@ -162,7 +160,7 @@ public class ToolsListProtocolTests
                 t => t.GetProperty("name").GetString()!,
                 t => t);
 
-        foreach (var toolName in new[] { "get_pr_content", "get_local_content" })
+        foreach (var toolName in new[] { "get_local_content" })
         {
             Assert.True(toolMap.ContainsKey(toolName), $"Tool '{toolName}' not found.");
 
