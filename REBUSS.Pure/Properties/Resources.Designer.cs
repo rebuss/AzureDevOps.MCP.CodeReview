@@ -815,5 +815,61 @@ namespace REBUSS.Pure.Properties {
         internal static string CopilotSetup_ManualInstallHint {
             get { return ResourceManager.GetString("CopilotSetup_ManualInstallHint", resourceCulture)!; }
         }
+
+        internal static string LogCopilotClientStarting {
+            get { return ResourceManager.GetString("LogCopilotClientStarting", resourceCulture)!; }
+        }
+
+        internal static string LogCopilotClientStarted {
+            get { return ResourceManager.GetString("LogCopilotClientStarted", resourceCulture)!; }
+        }
+
+        internal static string LogCopilotClientStartFailed {
+            get { return ResourceManager.GetString("LogCopilotClientStartFailed", resourceCulture)!; }
+        }
+
+        internal static string LogCopilotClientStopping {
+            get { return ResourceManager.GetString("LogCopilotClientStopping", resourceCulture)!; }
+        }
+
+        internal static string LogCopilotAvailable {
+            get { return ResourceManager.GetString("LogCopilotAvailable", resourceCulture)!; }
+        }
+
+        internal static string LogCopilotNotAvailable {
+            get { return ResourceManager.GetString("LogCopilotNotAvailable", resourceCulture)!; }
+        }
+
+        internal static string LogCopilotReviewTriggered {
+            get { return ResourceManager.GetString("LogCopilotReviewTriggered", resourceCulture)!; }
+        }
+
+        internal static string LogCopilotReviewPageStarted {
+            get { return ResourceManager.GetString("LogCopilotReviewPageStarted", resourceCulture)!; }
+        }
+
+        internal static string LogCopilotReviewPageCompleted {
+            get { return ResourceManager.GetString("LogCopilotReviewPageCompleted", resourceCulture)!; }
+        }
+
+        internal static string LogCopilotReviewPageFailed {
+            get { return ResourceManager.GetString("LogCopilotReviewPageFailed", resourceCulture)!; }
+        }
+
+        internal static string LogCopilotReviewCompleted {
+            get { return ResourceManager.GetString("LogCopilotReviewCompleted", resourceCulture)!; }
+        }
+
+        internal static string LogCopilotReviewFailed {
+            get { return ResourceManager.GetString("LogCopilotReviewFailed", resourceCulture)!; }
+        }
+
+        internal static string CopilotReviewModeHeader {
+            get { return ResourceManager.GetString("CopilotReviewModeHeader", resourceCulture)!; }
+        }
+
+        internal static string ContentOnlyModeHeader {
+            get { return ResourceManager.GetString("ContentOnlyModeHeader", resourceCulture)!; }
+        }
     }
 }

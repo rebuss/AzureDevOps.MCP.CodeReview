@@ -174,6 +174,8 @@ This will:
 - ✔ authenticate via Azure CLI (opens browser for login) or accept a GitHub PAT
 - ✔ **optionally** set up GitHub Copilot CLI (`gh copilot` extension) for the enhanced, summarization-resilient review flow (declining is safe — existing tools still work)
 
+When `gh copilot` is available and the `CopilotReview.Enabled` switch is on, the MCP server performs large-PR reviews server-side via the Copilot SDK: each page of enriched diff is reviewed in parallel by Copilot, and the IDE agent receives compact review summaries to organize by severity — instead of walking raw diff content page by page through the conversation window.
+
 ### Global mode (`-g`)
 
 If Visual Studio does not detect the local `.vs/mcp.json` file in your repository, use the global flag:

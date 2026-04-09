@@ -9,6 +9,7 @@ using REBUSS.Pure.Core;
 using REBUSS.Pure.Core.Exceptions;
 using REBUSS.Pure.Core.Models.Pagination;
 using REBUSS.Pure.Core.Models.ResponsePacking;
+using REBUSS.Pure.Core.Services.CopilotReview;
 using REBUSS.Pure.Properties;
 using REBUSS.Pure.Services.PrEnrichment;
 using REBUSS.Pure.Services.ResponsePacking;
@@ -33,6 +34,8 @@ namespace REBUSS.Pure.Tools
         private readonly IPrEnrichmentOrchestrator _enrichmentOrchestrator;
         private readonly IPageAllocator _pageAllocator;
         private readonly IOptions<WorkflowOptions> _workflowOptions;
+        private readonly ICopilotAvailabilityDetector _copilotAvailability;
+        private readonly ICopilotReviewOrchestrator _copilotReviewOrchestrator;
         private readonly ILogger<GetPullRequestContentToolHandler> _logger;
 
         public GetPullRequestContentToolHandler(
@@ -41,6 +44,8 @@ namespace REBUSS.Pure.Tools
             IPrEnrichmentOrchestrator enrichmentOrchestrator,
             IPageAllocator pageAllocator,
             IOptions<WorkflowOptions> workflowOptions,
+            ICopilotAvailabilityDetector copilotAvailability,
+            ICopilotReviewOrchestrator copilotReviewOrchestrator,
             ILogger<GetPullRequestContentToolHandler> logger)
         {
             _metadataProvider = metadataProvider;
@@ -48,6 +53,8 @@ namespace REBUSS.Pure.Tools
             _enrichmentOrchestrator = enrichmentOrchestrator;
             _pageAllocator = pageAllocator;
             _workflowOptions = workflowOptions;
+            _copilotAvailability = copilotAvailability;
+            _copilotReviewOrchestrator = copilotReviewOrchestrator;
             _logger = logger;
         }
 
@@ -119,6 +126,27 @@ namespace REBUSS.Pure.Tools
                     return BuildFriendlyStillPreparingBlocks(prNumber.Value, pageNumber.Value);
                 }
 
+                // Feature 013 branch: if Copilot is available + enabled, the server performs
+                // the review itself and returns compact page summaries in a single response.
+                // Otherwise, fall through to the existing content-only path.
+                var copilotAvailable = await _copilotAvailability.IsAvailableAsync(cancellationToken);
+                if (copilotAvailable)
+                {
+                    _copilotReviewOrchestrator.TriggerReview(prNumber.Value, result);
+                    var copilotResult = await _copilotReviewOrchestrator.WaitForReviewAsync(
+                        prNumber.Value, cancellationToken);
+
+                    var copilotBlocks = BuildCopilotAssistedBlocks(prNumber.Value, copilotResult);
+
+                    sw.Stop();
+                    _logger.LogInformation(
+                        "PR {Pr} copilot-assisted content returned in {Ms}ms ({Pages} pages, {Succeeded} ok, {Failed} failed)",
+                        prNumber, sw.ElapsedMilliseconds,
+                        copilotResult.TotalPages, copilotResult.SucceededPages, copilotResult.FailedPages);
+
+                    return copilotBlocks;
+                }
+
                 // Repaginate per-call against the caller's resolved safe budget. The enriched
                 // candidates and per-file enriched text are reused from the cache; only the
                 // bin-packing (PageAllocator.Allocate) re-runs. This is what makes maxTokens /
@@ -155,7 +183,11 @@ namespace REBUSS.Pure.Tools
         private static List<ContentBlock> BuildPageBlocks(
             PageSlice pageSlice, int pageNumber, PageAllocation allocation, PrEnrichmentResult result)
         {
-            var blocks = new List<ContentBlock>(pageSlice.Items.Count + 1);
+            var blocks = new List<ContentBlock>(pageSlice.Items.Count + 2);
+
+            // Feature 013 FR-004: prepend the content-only mode indicator so the IDE prompt
+            // can detect the mode on every response.
+            blocks.Add(new TextContentBlock { Text = PlainTextFormatter.FormatContentOnlyModeHeader() });
 
             // Per-file enriched text, in the order produced by the page allocator.
             var pagePathsOrdered = new List<string>(pageSlice.Items.Count);
@@ -177,6 +209,33 @@ namespace REBUSS.Pure.Tools
                     pageSlice.BudgetUsed,
                     categories)
             });
+
+            return blocks;
+        }
+
+        private static List<ContentBlock> BuildCopilotAssistedBlocks(
+            int prNumber, Core.Models.CopilotReview.CopilotReviewResult copilotResult)
+        {
+            var blocks = new List<ContentBlock>(copilotResult.PageReviews.Count + 1);
+
+            // First block: mode indicator + header (FR-004, FR-006).
+            blocks.Add(new TextContentBlock
+            {
+                Text = PlainTextFormatter.FormatCopilotReviewHeader(
+                    prNumber,
+                    copilotResult.TotalPages,
+                    copilotResult.SucceededPages,
+                    copilotResult.FailedPages)
+            });
+
+            // One block per page (success or failure) in page-number order (FR-005, FR-007a).
+            foreach (var pageReview in copilotResult.PageReviews)
+            {
+                blocks.Add(new TextContentBlock
+                {
+                    Text = PlainTextFormatter.FormatCopilotPageReviewBlock(pageReview)
+                });
+            }
 
             return blocks;
         }

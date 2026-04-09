@@ -1,5 +1,7 @@
 using System.Text;
 using REBUSS.Pure.Core.Models;
+using REBUSS.Pure.Core.Models.CopilotReview;
+using REBUSS.Pure.Properties;
 using REBUSS.Pure.Tools.Models;
 
 namespace REBUSS.Pure.Tools.Shared;
@@ -294,5 +296,54 @@ internal static class PlainTextFormatter
 
         sb.Append($"Budget: {manifest.Summary.BudgetUsed}/{manifest.Summary.TotalBudgetTokens} tokens ({manifest.Summary.UtilizationPercent:F0}%)");
         return sb.ToString();
+    }
+
+    // ─── Copilot review layer (feature 013) ───────────────────────────────────────
+
+    /// <summary>
+    /// Formats the copilot-assisted mode indicator header. The first line MUST be the
+    /// <c>[review-mode: copilot-assisted]</c> string from <see cref="Resources.CopilotReviewModeHeader"/>
+    /// so the IDE prompt can detect the mode and adapt behavior (FR-004, FR-014).
+    /// </summary>
+    public static string FormatCopilotReviewHeader(int prNumber, int totalPages, int succeeded, int failed)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine(Resources.CopilotReviewModeHeader);
+        sb.Append($"PR #{prNumber} — Review completed ({totalPages} pages reviewed, {succeeded} succeeded, {failed} failed)");
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Formats a single page's Copilot review outcome. On success renders the review text;
+    /// on failure renders the list of file paths that were on the failed page plus the
+    /// last-attempt reason (FR-007a, Clarification Q1).
+    /// </summary>
+    public static string FormatCopilotPageReviewBlock(CopilotPageReviewResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        var sb = new StringBuilder();
+        if (result.Succeeded)
+        {
+            sb.AppendLine($"=== Page {result.PageNumber} Review ===");
+            sb.Append(result.ReviewText);
+            return sb.ToString();
+        }
+
+        sb.AppendLine($"=== Page {result.PageNumber} Review (FAILED) ===");
+        sb.AppendLine("Files not reviewed:");
+        foreach (var path in result.FailedFilePaths)
+            sb.AppendLine($"  - {path}");
+        sb.Append($"Reason: {result.ErrorMessage}");
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Formats the content-only mode indicator header. Prepended to the existing
+    /// enriched-diff response when the Copilot path is not taken, so the IDE prompt
+    /// can detect "same as before" and keep its current page-by-page workflow.
+    /// </summary>
+    public static string FormatContentOnlyModeHeader()
+    {
+        return Resources.ContentOnlyModeHeader;
     }
 }

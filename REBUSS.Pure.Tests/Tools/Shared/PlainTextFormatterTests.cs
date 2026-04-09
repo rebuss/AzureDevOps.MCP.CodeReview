@@ -1,4 +1,5 @@
 using REBUSS.Pure.Core.Models;
+using REBUSS.Pure.Core.Models.CopilotReview;
 using REBUSS.Pure.Tools.Shared;
 
 namespace REBUSS.Pure.Tests.Tools.Shared;
@@ -76,5 +77,57 @@ public class PlainTextFormatterTests
     {
         Assert.ThrowsAny<ArgumentException>(() =>
             PlainTextFormatter.FormatFriendlyStatus(headline!, explanation!, suggested!));
+    }
+
+    // ─── Feature 013 Copilot review formatter tests (T030) ───────────────────────
+
+    [Fact]
+    public void FormatCopilotReviewHeader_ContainsModeAndCounts()
+    {
+        var text = PlainTextFormatter.FormatCopilotReviewHeader(
+            prNumber: 42, totalPages: 5, succeeded: 4, failed: 1);
+
+        Assert.Contains("[review-mode: copilot-assisted]", text);
+        Assert.Contains("PR #42", text);
+        Assert.Contains("5 pages", text);
+        Assert.Contains("4 succeeded", text);
+        Assert.Contains("1 failed", text);
+    }
+
+    [Fact]
+    public void FormatCopilotPageReviewBlock_Success_ContainsReviewText()
+    {
+        var result = CopilotPageReviewResult.Success(
+            pageNumber: 3, reviewText: "Found a null ref bug", attemptsMade: 1);
+
+        var text = PlainTextFormatter.FormatCopilotPageReviewBlock(result);
+
+        Assert.Contains("=== Page 3 Review ===", text);
+        Assert.Contains("Found a null ref bug", text);
+        Assert.DoesNotContain("FAILED", text);
+    }
+
+    [Fact]
+    public void FormatCopilotPageReviewBlock_Failure_ContainsFailedFilePathsAndReason()
+    {
+        var result = CopilotPageReviewResult.Failure(
+            pageNumber: 4,
+            failedFilePaths: new[] { "src/A.cs", "src/B.cs" },
+            errorMessage: "network timeout",
+            attemptsMade: 3);
+
+        var text = PlainTextFormatter.FormatCopilotPageReviewBlock(result);
+
+        Assert.Contains("=== Page 4 Review (FAILED) ===", text);
+        Assert.Contains("src/A.cs", text);
+        Assert.Contains("src/B.cs", text);
+        Assert.Contains("Reason: network timeout", text);
+    }
+
+    [Fact]
+    public void FormatContentOnlyModeHeader_ContainsContentOnlyLabel()
+    {
+        var text = PlainTextFormatter.FormatContentOnlyModeHeader();
+        Assert.Equal("[review-mode: content-only]", text);
     }
 }

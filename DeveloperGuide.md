@@ -40,6 +40,52 @@ rebuss-pure init -g
    skips the entire chain (no separate extension prompt follows). To enable later without
    re-running `init`, use: `gh extension install github/gh-copilot`.
 
+### Copilot Review Layer (feature 013)
+
+When the `GitHub.Copilot.SDK` package is installed and `gh copilot` is available on the
+machine (set up via feature 012), the MCP server can perform PR reviews **server-side**
+by sending every page of enriched content to GitHub Copilot in parallel and returning
+compact review summaries to the IDE agent. This eliminates the "IDE conversation
+summarization drops earlier findings" problem on large PRs.
+
+**Two modes**: every `get_pr_content` response carries a mode indicator in its first block:
+
+- `[review-mode: copilot-assisted]` — the MCP performed the review. The response contains
+  `=== Page N Review ===` blocks with free-form Copilot output (and `=== Page N Review (FAILED) ===`
+  blocks listing file paths when a page exhausts all 3 retry attempts). The IDE agent
+  organizes findings by severity and does NOT prompt the user page-by-page.
+- `[review-mode: content-only]` — the existing enriched-diff flow. Unchanged behavior.
+
+**Configuration** (`appsettings.json`):
+
+```json
+"CopilotReview": {
+  "Enabled": true,
+  "ReviewBudgetTokens": 128000,
+  "Model": "claude-sonnet-4.6"
+}
+```
+
+| Key | Default | Meaning |
+|---|---|---|
+| `Enabled` | `true` | Master switch. `false` forces content-only mode regardless of Copilot availability. |
+| `ReviewBudgetTokens` | `128000` | Per-call Copilot context budget. Used to re-paginate the enrichment result into Copilot-sized pages. |
+| `Model` | `"claude-sonnet-4.6"` | Copilot model passed to `SessionConfig.Model`. If the SDK rejects this string, check `client.ListModelsAsync()` output. |
+
+**Retry**: each page review is attempted up to **3 times** before giving up. Retries fire
+immediately (no backoff). On exhaustion, the response still succeeds and carries a
+`=== Page N Review (FAILED) ===` block listing the source files that were on the failed
+page, plus the last-attempt reason. (Clarification Q1.)
+
+**Idempotency**: the copilot review cache is keyed on **PR number only** (Clarification Q2).
+Changing `ReviewBudgetTokens` mid-session does NOT invalidate an already-cached PR review;
+restart the server to force a re-run under a new budget. Within one server session,
+triggering a review of the same PR twice consumes zero additional Copilot calls.
+
+**Privacy (Principle VIII)**: enriched PR content is relayed only to GitHub Copilot via the
+user's own authenticated `gh` session. No intermediary. No telemetry. The operator explicitly
+opts into the feature via `CopilotReview.Enabled` plus the feature-012 onboarding.
+
 **IDE detection logic (local mode):**
 
 | Markers found | Config written to |

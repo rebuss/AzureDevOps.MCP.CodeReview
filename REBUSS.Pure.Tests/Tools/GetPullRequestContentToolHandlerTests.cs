@@ -9,6 +9,7 @@ using REBUSS.Pure.Core.Exceptions;
 using REBUSS.Pure.Core.Models;
 using REBUSS.Pure.Core.Models.Pagination;
 using REBUSS.Pure.Core.Models.ResponsePacking;
+using REBUSS.Pure.Core.Services.CopilotReview;
 using REBUSS.Pure.Services.PrEnrichment;
 using REBUSS.Pure.Services.ResponsePacking;
 using REBUSS.Pure.Tools;
@@ -23,6 +24,10 @@ public class GetPullRequestContentToolHandlerTests
     private readonly IPageAllocator _pageAllocator = Substitute.For<IPageAllocator>();
     private readonly IOptions<WorkflowOptions> _workflowOptions =
         Options.Create(new WorkflowOptions { MetadataInternalTimeoutMs = 28_000, ContentInternalTimeoutMs = 28_000 });
+    // Feature 013 defaults: Copilot is NOT available so existing tests exercise the
+    // content-only path unchanged. Tests that want the copilot-assisted branch override.
+    private readonly ICopilotAvailabilityDetector _copilotAvailability = Substitute.For<ICopilotAvailabilityDetector>();
+    private readonly ICopilotReviewOrchestrator _copilotReviewOrchestrator = Substitute.For<ICopilotReviewOrchestrator>();
     private readonly GetPullRequestContentToolHandler _handler;
 
     private static readonly FullPullRequestMetadata SampleMetadata = new()
@@ -100,12 +105,18 @@ public class GetPullRequestContentToolHandlerTests
         _pageAllocator.Allocate(Arg.Any<IReadOnlyList<PackingCandidate>>(), Arg.Any<int>())
             .Returns(defaultResult.Allocation);
 
+        // Default: Copilot not available — existing content-only tests see no behavior change
+        // beyond the new [review-mode: content-only] prefix block.
+        _copilotAvailability.IsAvailableAsync(Arg.Any<CancellationToken>()).Returns(false);
+
         _handler = new GetPullRequestContentToolHandler(
             _metadataProvider,
             _budgetResolver,
             _orchestrator,
             _pageAllocator,
             _workflowOptions,
+            _copilotAvailability,
+            _copilotReviewOrchestrator,
             NullLogger<GetPullRequestContentToolHandler>.Instance);
     }
 
@@ -124,6 +135,151 @@ public class GetPullRequestContentToolHandlerTests
         _orchestrator.Received(1).TriggerEnrichment(42, "abc123", 140_000);
         await _orchestrator.Received(1).WaitForEnrichmentAsync(42, Arg.Any<CancellationToken>());
         Assert.Contains("src/A.cs", text);
+    }
+
+    // ─── Feature 013 copilot-assisted branch tests (T029, T033) ──────────────────
+
+    [Fact]
+    public async Task Execute_CopilotNotAvailable_ReturnsContentWithContentOnlyHeader()
+    {
+        // Default from fixture: _copilotAvailability returns false.
+        var blocks = (await _handler.ExecuteAsync(prNumber: 42, pageNumber: 1)).ToList();
+        var text = AllText(blocks);
+
+        Assert.Contains("[review-mode: content-only]", text);
+        Assert.DoesNotContain("[review-mode: copilot-assisted]", text);
+        Assert.Contains("src/A.cs", text); // existing content still present
+        _copilotReviewOrchestrator.DidNotReceive().TriggerReview(Arg.Any<int>(), Arg.Any<object>());
+    }
+
+    [Fact]
+    public async Task Execute_CopilotAvailable_ReturnsReviewSummariesWithModeHeader()
+    {
+        _copilotAvailability.IsAvailableAsync(Arg.Any<CancellationToken>()).Returns(true);
+        var copilotResult = new Core.Models.CopilotReview.CopilotReviewResult
+        {
+            PrNumber = 42,
+            PageReviews = new[]
+            {
+                Core.Models.CopilotReview.CopilotPageReviewResult.Success(1, "no issues found", 1),
+                Core.Models.CopilotReview.CopilotPageReviewResult.Success(2, "minor: fix typo in comment", 1),
+            },
+            CompletedAt = DateTimeOffset.UtcNow,
+        };
+        _copilotReviewOrchestrator
+            .WaitForReviewAsync(42, Arg.Any<CancellationToken>())
+            .Returns(copilotResult);
+
+        var blocks = (await _handler.ExecuteAsync(prNumber: 42, pageNumber: 1)).ToList();
+        var text = AllText(blocks);
+
+        Assert.Contains("[review-mode: copilot-assisted]", text);
+        Assert.Contains("PR #42", text);
+        Assert.Contains("2 pages reviewed", text);
+        Assert.Contains("2 succeeded", text);
+        Assert.Contains("=== Page 1 Review ===", text);
+        Assert.Contains("no issues found", text);
+        Assert.Contains("=== Page 2 Review ===", text);
+        Assert.DoesNotContain("[review-mode: content-only]", text);
+        _copilotReviewOrchestrator.Received(1).TriggerReview(42, Arg.Any<object>());
+    }
+
+    [Fact]
+    public async Task Execute_PageNumberIgnoredInCopilotMode_ReturnsAllSummaries()
+    {
+        _copilotAvailability.IsAvailableAsync(Arg.Any<CancellationToken>()).Returns(true);
+        var copilotResult = new Core.Models.CopilotReview.CopilotReviewResult
+        {
+            PrNumber = 42,
+            PageReviews = new[]
+            {
+                Core.Models.CopilotReview.CopilotPageReviewResult.Success(1, "page 1 review", 1),
+                Core.Models.CopilotReview.CopilotPageReviewResult.Success(2, "page 2 review", 1),
+                Core.Models.CopilotReview.CopilotPageReviewResult.Success(3, "page 3 review", 1),
+            },
+            CompletedAt = DateTimeOffset.UtcNow,
+        };
+        _copilotReviewOrchestrator
+            .WaitForReviewAsync(42, Arg.Any<CancellationToken>())
+            .Returns(copilotResult);
+
+        // Caller requests pageNumber=2 — should be ignored, all pages returned in copilot mode.
+        var blocks = (await _handler.ExecuteAsync(prNumber: 42, pageNumber: 2)).ToList();
+        var text = AllText(blocks);
+
+        Assert.Contains("page 1 review", text);
+        Assert.Contains("page 2 review", text);
+        Assert.Contains("page 3 review", text);
+    }
+
+    // ─── Feature 013 Phase 5 US3 (T038) — partial + all-failed tool handler tests ──
+
+    [Fact]
+    public async Task Execute_CopilotPartialFailure_ResponseIncludesFailureBlocksWithFilePaths()
+    {
+        _copilotAvailability.IsAvailableAsync(Arg.Any<CancellationToken>()).Returns(true);
+        var copilotResult = new Core.Models.CopilotReview.CopilotReviewResult
+        {
+            PrNumber = 42,
+            PageReviews = new[]
+            {
+                Core.Models.CopilotReview.CopilotPageReviewResult.Success(1, "all good on page 1", 1),
+                Core.Models.CopilotReview.CopilotPageReviewResult.Failure(
+                    2, new[] { "src/Failing.cs", "src/AlsoFailing.cs" }, "network timeout", 3),
+            },
+            CompletedAt = DateTimeOffset.UtcNow,
+        };
+        _copilotReviewOrchestrator
+            .WaitForReviewAsync(42, Arg.Any<CancellationToken>())
+            .Returns(copilotResult);
+
+        var blocks = (await _handler.ExecuteAsync(prNumber: 42, pageNumber: 1)).ToList();
+        var text = AllText(blocks);
+
+        Assert.Contains("[review-mode: copilot-assisted]", text);
+        Assert.Contains("2 pages reviewed", text);
+        Assert.Contains("1 succeeded", text);
+        Assert.Contains("1 failed", text);
+        Assert.Contains("=== Page 1 Review ===", text);
+        Assert.Contains("all good on page 1", text);
+        Assert.Contains("=== Page 2 Review (FAILED) ===", text);
+        Assert.Contains("src/Failing.cs", text);
+        Assert.Contains("src/AlsoFailing.cs", text);
+        Assert.Contains("network timeout", text);
+    }
+
+    [Fact]
+    public async Task Execute_CopilotAllPagesFailed_ResponseStillReturnsCopilotAssistedHeader()
+    {
+        // FR-008: when every page fails, the response still carries the copilot-assisted
+        // mode indicator (not content-only) — the copilot path did run, just produced zero
+        // successes. The IDE agent's copilot-assisted branch is what surfaces the file paths.
+        _copilotAvailability.IsAvailableAsync(Arg.Any<CancellationToken>()).Returns(true);
+        var copilotResult = new Core.Models.CopilotReview.CopilotReviewResult
+        {
+            PrNumber = 42,
+            PageReviews = new[]
+            {
+                Core.Models.CopilotReview.CopilotPageReviewResult.Failure(
+                    1, new[] { "src/A.cs" }, "down", 3),
+                Core.Models.CopilotReview.CopilotPageReviewResult.Failure(
+                    2, new[] { "src/B.cs" }, "down", 3),
+            },
+            CompletedAt = DateTimeOffset.UtcNow,
+        };
+        _copilotReviewOrchestrator
+            .WaitForReviewAsync(42, Arg.Any<CancellationToken>())
+            .Returns(copilotResult);
+
+        var blocks = (await _handler.ExecuteAsync(prNumber: 42, pageNumber: 1)).ToList();
+        var text = AllText(blocks);
+
+        Assert.Contains("[review-mode: copilot-assisted]", text);
+        Assert.DoesNotContain("[review-mode: content-only]", text);
+        Assert.Contains("0 succeeded", text);
+        Assert.Contains("2 failed", text);
+        Assert.Contains("src/A.cs", text);
+        Assert.Contains("src/B.cs", text);
     }
 
     [Fact]

@@ -11,8 +11,10 @@ using REBUSS.Pure.Core.Shared;
 using REBUSS.Pure.GitHub;
 using REBUSS.Pure.GitHub.Configuration;
 using REBUSS.Pure.Logging;
+using REBUSS.Pure.Core.Services.CopilotReview;
 using REBUSS.Pure.Services;
 using REBUSS.Pure.Services.ContextWindow;
+using REBUSS.Pure.Services.CopilotReview;
 using REBUSS.Pure.Services.LocalReview;
 using REBUSS.Pure.Services.PrEnrichment;
 using AzureDevOpsNames = REBUSS.Pure.AzureDevOps.Names;
@@ -166,6 +168,19 @@ namespace REBUSS.Pure
             // Workflow timeouts (progressive PR metadata feature)
             services.Configure<WorkflowOptions>(configuration.GetSection(WorkflowOptions.SectionName));
             services.AddSingleton<IPrEnrichmentOrchestrator, PrEnrichmentOrchestrator>();
+
+            // Copilot Review Layer (feature 013) — SDK-backed server-side PR review.
+            // The provider is registered three ways: (1) concrete singleton, (2) interface
+            // alias so consumers can depend on ICopilotClientProvider, (3) IHostedService so
+            // the generic host calls StopAsync on shutdown. All three resolve to the same instance.
+            services.Configure<CopilotReviewOptions>(configuration.GetSection(CopilotReviewOptions.SectionName));
+            services.AddSingleton<CopilotClientProvider>();
+            services.AddSingleton<ICopilotClientProvider>(sp => sp.GetRequiredService<CopilotClientProvider>());
+            services.AddHostedService(sp => sp.GetRequiredService<CopilotClientProvider>());
+            services.AddSingleton<ICopilotSessionFactory, CopilotSessionFactory>();
+            services.AddSingleton<ICopilotAvailabilityDetector, CopilotAvailabilityDetector>();
+            services.AddSingleton<ICopilotPageReviewer, CopilotPageReviewer>();
+            services.AddSingleton<ICopilotReviewOrchestrator, CopilotReviewOrchestrator>();
 
             // Context Window Awareness
             services.Configure<ContextWindowOptions>(configuration.GetSection(ContextWindowOptions.SectionName));

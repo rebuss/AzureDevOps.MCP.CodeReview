@@ -12,6 +12,33 @@ Your job: perform a professional code review of the PR while minimizing context 
 
 ---
 
+## Response Mode Detection (feature 013)
+
+After calling `get_pr_content`, **always inspect the first content block** for a mode indicator:
+
+### If the first block begins with `[review-mode: copilot-assisted]`
+
+The MCP server has already performed the code review using GitHub Copilot. The response
+contains **review summaries for each page — NOT raw diff content**. Your task changes:
+
+1. Read all `=== Page N Review ===` blocks.
+2. Organize findings **by severity**:
+   - **Critical Issues** — group all critical findings from all pages
+   - **Major Issues** — group all major findings from all pages
+   - **Minor Suggestions** — group all minor findings from all pages
+3. Remove duplicates (same finding reported from multiple pages).
+4. Produce one coherent review report in the Output Structure format below.
+5. **Do NOT** ask the user to continue to the next page — all pages are already reviewed.
+6. If any `=== Page N Review (FAILED) ===` blocks are present, list the failed pages
+   (with their file paths) in a dedicated "Manual Follow-up Needed" section at the end.
+
+### If the first block begins with `[review-mode: content-only]`
+
+Standard flow — review the diff content yourself, page by page with user confirmation.
+(Existing workflow below applies unchanged.)
+
+---
+
 # Workflow
 
 ## 1. Load PR metadata first

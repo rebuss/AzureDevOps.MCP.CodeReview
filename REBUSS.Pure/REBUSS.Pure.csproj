@@ -29,6 +29,7 @@
     <EmbeddedResource Include="Cli\Prompts\review-pr.prompt.md" />
     <EmbeddedResource Include="Cli\Prompts\self-review.prompt.md" />
     <EmbeddedResource Include="Cli\Prompts\create-pr.md" />
+    <EmbeddedResource Include="Services\CopilotReview\Prompts\copilot-page-review.md" />
     <EmbeddedResource Update="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
@@ -48,6 +49,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="GitHub.Copilot.SDK" Version="0.2.1" />
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.5" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.5" />
     <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.5" />

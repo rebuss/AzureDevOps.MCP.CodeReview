@@ -331,4 +331,46 @@ summarization) will not be available until the Copilot CLI is installed.</value>
   gh extension install github/gh-copilot
 </value>
   </data>
+  <data name="LogCopilotClientStarting" xml:space="preserve">
+    <value>Copilot SDK client starting (model={Model})</value>
+  </data>
+  <data name="LogCopilotClientStarted" xml:space="preserve">
+    <value>Copilot SDK client started in {ElapsedMs}ms</value>
+  </data>
+  <data name="LogCopilotClientStartFailed" xml:space="preserve">
+    <value>Copilot SDK client failed to start: {Reason}</value>
+  </data>
+  <data name="LogCopilotClientStopping" xml:space="preserve">
+    <value>Copilot SDK client stopping</value>
+  </data>
+  <data name="LogCopilotAvailable" xml:space="preserve">
+    <value>Copilot review layer available</value>
+  </data>
+  <data name="LogCopilotNotAvailable" xml:space="preserve">
+    <value>Copilot review layer not available: {Reason}</value>
+  </data>
+  <data name="LogCopilotReviewTriggered" xml:space="preserve">
+    <value>PR {PrNumber} Copilot review triggered ({PageCount} pages)</value>
+  </data>
+  <data name="LogCopilotReviewPageStarted" xml:space="preserve">
+    <value>PR {PrNumber} page {PageNumber} Copilot review started (attempt {Attempt}/3)</value>
+  </data>
+  <data name="LogCopilotReviewPageCompleted" xml:space="preserve">
+    <value>PR {PrNumber} page {PageNumber} Copilot review completed (attempt {Attempt}, {ElapsedMs}ms)</value>
+  </data>
+  <data name="LogCopilotReviewPageFailed" xml:space="preserve">
+    <value>PR {PrNumber} page {PageNumber} Copilot review attempt {Attempt} failed: {Reason}</value>
+  </data>
+  <data name="LogCopilotReviewCompleted" xml:space="preserve">
+    <value>PR {PrNumber} Copilot review completed: {Succeeded}/{Total} pages succeeded</value>
+  </data>
+  <data name="LogCopilotReviewFailed" xml:space="preserve">
+    <value>PR {PrNumber} Copilot review failed: {Reason}</value>
+  </data>
+  <data name="CopilotReviewModeHeader" xml:space="preserve">
+    <value>[review-mode: copilot-assisted]</value>
+  </data>
+  <data name="ContentOnlyModeHeader" xml:space="preserve">
+    <value>[review-mode: content-only]</value>
+  </data>
 </root>
