@@ -40,7 +40,7 @@ public sealed class ContextWindowOptions
     /// When set to a positive value, the resolved budget is clamped to this limit
     /// <em>before</em> the safety margin is applied — regardless of model registry
     /// or explicit token declarations.
-    /// Set to <c>null</c> or <c>0</c> to disable (e.g. for Claude Code or direct API access).
+    /// Set to <c>null</c> or <c>0</c> to disable (e.g. for direct API access).
     /// </summary>
     public int? GatewayMaxTokens { get; set; }
 

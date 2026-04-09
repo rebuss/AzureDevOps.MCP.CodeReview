@@ -8,13 +8,6 @@ namespace REBUSS.Pure.Tests.Services.ContextWindow;
 
 public class ContextBudgetResolverTests
 {
-    private sealed class FixedGatewayState : IGatewayBudgetState
-    {
-        private readonly int? _cap;
-        public FixedGatewayState(int? cap) { _cap = cap; }
-        public int? GetEffectiveCap() => _cap;
-    }
-
     private static ContextBudgetResolver CreateResolver(
         int safetyMarginPercent = 30,
         int defaultBudgetTokens = 128_000,
@@ -37,8 +30,7 @@ public class ContextBudgetResolverTests
             LargeContextCeilingTokens = largeContextCeilingTokens,
             ModelRegistry = modelRegistry ?? new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
         });
-        var gatewayState = new FixedGatewayState(gatewayMaxTokens);
-        return new ContextBudgetResolver(options, gatewayState, logger ?? Substitute.For<ILogger<ContextBudgetResolver>>());
+        return new ContextBudgetResolver(options, logger ?? Substitute.For<ILogger<ContextBudgetResolver>>());
     }
 
     private static Dictionary<string, int> DefaultRegistry() => new(StringComparer.OrdinalIgnoreCase)
@@ -415,17 +407,15 @@ public class ContextBudgetResolverTests
     }
 
     [Fact]
-    public void ContextBudgetResolver_Resolve_GatewayCap_DoesNotClampExplicitBudget()
+    public void ContextBudgetResolver_Resolve_GatewayCap_ClampsExplicitBudget()
     {
-        // Explicit per-call maxTokens is an authoritative override and bypasses
-        // the gateway cap by design — callers who pass it know what they want.
-        var resolver = CreateResolver(gatewayMaxTokens: 25_000);
+        var resolver = CreateResolver(gatewayMaxTokens: 128_000);
 
         var result = resolver.Resolve(explicitTokens: 200_000, modelIdentifier: null);
 
-        Assert.Equal(200_000, result.TotalBudgetTokens);
+        Assert.Equal(128_000, result.TotalBudgetTokens);
         Assert.Equal(BudgetSource.Explicit, result.Source);
-        Assert.DoesNotContain(result.Warnings, w => w.Contains("gateway cap"));
+        Assert.Contains(result.Warnings, w => w.Contains("gateway cap"));
     }
 
     [Fact]
@@ -442,7 +432,7 @@ public class ContextBudgetResolverTests
     [Fact]
     public void ContextBudgetResolver_Resolve_GatewayCap_Null_DoesNotClamp()
     {
-        // Null gateway cap = disabled (e.g. Claude Code or direct API)
+        // Null gateway cap = disabled (e.g. direct API access)
         var resolver = CreateResolver(gatewayMaxTokens: null, modelRegistry: DefaultRegistry());
 
         var result = resolver.Resolve(explicitTokens: null, modelIdentifier: "claude-sonnet-4");

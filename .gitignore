@@ -26,7 +26,6 @@ specs/
 .github/prompts/review-pr.prompt.md
 .github/prompts/self-review.prompt.md
 scripts/
-.claude/
 REBUSS.Pure.RoslynProcessor.Tests/bin/
 REBUSS.Pure.RoslynProcessor.Tests/obj/
 REBUSS.Pure.RoslynProcessor/bin/

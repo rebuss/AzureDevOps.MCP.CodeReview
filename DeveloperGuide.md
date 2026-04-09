@@ -20,7 +20,6 @@ rebuss-pure init --provider azuredevops
 # Force specific IDE target (skips auto-detection)
 rebuss-pure init --ide vscode
 rebuss-pure init --ide vs
-rebuss-pure init --ide claude
 
 # Global mode — writes user-level config (~\.mcp.json & %APPDATA%\Code\User\mcp.json)
 rebuss-pure init -g
@@ -31,7 +30,7 @@ rebuss-pure init -g
 1. Finds the Git repository root
 2. Authenticates (Azure CLI or PAT)
 3. Detects IDEs and writes `mcp.json` to the appropriate directory
-4. Copies prompt files to `.github/prompts/` (and to `.claude/commands/` as `<name>.md` slash commands when Claude Code is detected — e.g. `review-pr.prompt.md` becomes `/review-pr`)
+4. Copies prompt files to `.github/prompts/`
 
 **IDE detection logic (local mode):**
 
@@ -39,16 +38,13 @@ rebuss-pure init -g
 |---|---|
 | `.vscode/` or `*.code-workspace` only | `.vscode/mcp.json` |
 | `.vs/` or `*.sln` only | `.vs/mcp.json` |
-| `.claude/` or `CLAUDE.md` only | `.mcp.json` at the repo root (uses `mcpServers` key) |
 | Multiple IDEs detected | All detected locations |
 | No markers found | `.vscode/mcp.json` + `.vs/mcp.json` |
-
-> **Note:** Claude Code uses `mcpServers` as the top-level key (not `servers`). The `init` command handles this automatically.
 
 **Global mode (`-g` / `--global`):**
 
 When the `-g` flag is used, the MCP configuration is written to the user-level directories
-(`~/.mcp.json` for Visual Studio, `%APPDATA%\Code\User\mcp.json` for VS Code on Windows / `~/.config/Code/User/mcp.json` on Linux/macOS, and `~/.claude.json` for Claude Code — merged into the existing `mcpServers` key, preserving all other top-level settings) instead of the repository-local directories.
+(`~/.mcp.json` for Visual Studio, `%APPDATA%\Code\User\mcp.json` for VS Code on Windows / `~/.config/Code/User/mcp.json` on Linux/macOS) instead of the repository-local directories.
 The `--repo` argument in the config points to the current repository's git root.
 
 This is useful when Visual Studio does not detect the local `.vs/mcp.json` file.
@@ -259,36 +255,27 @@ When provider-specific fields are not configured, the server automatically detec
 
 ### Context Window — Gateway Cap
 
-`ContextWindow:GatewayMaxTokens` is the hard cap on the resolved per-request token budget imposed **before** the safety margin is applied. It exists because most MCP hosts enforce a per-tool-result token ceiling that is much smaller than the model's native context window — exceeding it causes the host to reject the response.
+The `ContextWindow` section in `appsettings.json` includes a `GatewayMaxTokens` setting — a hard cap on the resolved token budget imposed **before** the safety margin is applied. This accounts for API gateways (e.g. GitHub Copilot proxy) that enforce a context window limit lower than the model's native capacity.
 
-**Zero-config behavior:** the key is **not set** in `appsettings.json` by default. At runtime, REBUSS.Pure inspects the MCP `initialize` handshake's `clientInfo.Name` and picks a safe value automatically:
+**Default: `128000`** — matches GitHub Copilot's proxy limit.
 
-| Detected `clientInfo.Name` | Auto cap |
+| Platform | Recommended `GatewayMaxTokens` |
 |---|---|
-| `claude-code` / `claude-ai` / `claude.ai` | **25 000** |
-| `cursor` (any variant) | **24 000** |
-| `codex` (any variant) | **20 000** |
-| anything else / unknown / missing | **20 000** (safe fallback) |
+| GitHub Copilot (VS Code / Visual Studio) | `128000` (default) |
+| Cursor | `128000` (verify with your setup) |
+| Direct API access | `null` (disabled) |
 
-**Precedence (first match wins):**
-1. Explicit per-call `maxTokens` parameter — bypasses the gateway cap entirely.
-2. `ContextWindow:GatewayMaxTokens` from configuration (when set, autodetect is skipped).
-3. Autodetected value from `clientInfo.Name`.
-4. Model registry / default budget.
-
-To override the autodetected value (for example to give a custom gateway a larger budget), add to `appsettings.Local.json`:
+To disable the gateway cap, add to `appsettings.Local.json`:
 
 ```json
 {
   "ContextWindow": {
-    "GatewayMaxTokens": 50000
+    "GatewayMaxTokens": null
   }
 }
 ```
 
-Or via environment variable: `ContextWindow__GatewayMaxTokens=50000`. To disable the cap entirely set the value to `0` or `null`.
-
-> **Behavior change:** prior to this version, the gateway cap clamped *all* budget sources including explicit `maxTokens` per call. Explicit per-call values now bypass the cap by design — callers passing `maxTokens` are treated as authoritative.
+Or via environment variable: `ContextWindow__GatewayMaxTokens=0`
 
 ### Workflow timeouts (Progressive PR Metadata)
 
@@ -370,15 +357,9 @@ After running `rebuss-pure init`, you get:
 .github/prompts/
 ├── review-pr.prompt.md
 └── self-review.prompt.md
-
-# If Claude Code is detected (.claude/ or CLAUDE.md):
-.mcp.json                  ← at repo root, uses "mcpServers" key
-.claude/commands/
-├── review-pr.md           ← invocable as /review-pr
-└── self-review.md         ← invocable as /self-review
 ```
 
-> **Note for contributors:** The files in `.github/prompts/` are **generated** by `rebuss-pure init` from embedded resources compiled into the tool (`REBUSS.Pure/Cli/Prompts/*.md`). The embedded files in `REBUSS.Pure/Cli/Prompts/` are the **source of truth**. Always edit the embedded source files — do **not** edit the deployed files directly, as `init` **always overwrites** them on every run to ensure prompt updates are deployed. `init` does **not** create or modify `.github/instructions/` — any instruction files there are owned by you.
+> **Note for contributors:**
 
 These prompts instruct the AI agent on the review workflows. If you need to add custom rules for your repository, create your own files under `.github/instructions/` (e.g. `team-rules.instructions.md`); `init` will leave them alone.
 

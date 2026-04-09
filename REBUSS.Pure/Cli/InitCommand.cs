@@ -22,21 +22,15 @@ namespace REBUSS.Pure.Cli;
 /// When <c>--ide</c> is not specified, the target is determined by IDE auto-detection:
 /// VS Code → <c>.vscode/mcp.json</c>;
 /// Visual Studio → <c>.vs/mcp.json</c>;
-/// Claude Code → <c>.mcp.json</c> at the repo root (uses <c>mcpServers</c> key);
 /// VS Code + Visual Studio are written when both are detected or when no markers are found.
-/// Claude Code is written only when <c>.claude/</c> or <c>CLAUDE.md</c> is detected.
 /// </para>
 /// </summary>
 public class InitCommand : ICliCommand
 {
     private const string VsCodeDir = ".vscode";
     private const string VisualStudioDir = ".vs";
-    private const string ClaudeCodeDir = ".claude";
     private const string McpConfigFileName = "mcp.json";
-    private const string ClaudeCodeMcpConfigFileName = ".mcp.json";
-    private const string ClaudeCodeGlobalConfigFileName = ".claude.json";
     private const string VsGlobalMcpConfigFileName = ".mcp.json";
-    private const string ClaudeCodeMarkerFile = "CLAUDE.md";
     private const string ResourcePrefix = AppConstants.ServerName + ".Cli.Prompts.";
 
     private static readonly string[] PromptFileNames =
@@ -131,40 +125,19 @@ public class InitCommand : ICliCommand
             Directory.CreateDirectory(target.Directory);
 
             string newContent;
-            bool fileExisted = File.Exists(target.ConfigPath);
-            if (fileExisted)
+            if (File.Exists(target.ConfigPath))
             {
                 var existing = await File.ReadAllTextAsync(target.ConfigPath, cancellationToken);
-                newContent = MergeConfigContent(existing, _executablePath, gitRoot, _pat, target.UseMcpServersKey);
-
-                // Backup before overwriting: if our merge or the write itself fails, the user
-                // can recover the original file (especially important for shared user-state files
-                // like ~/.claude.json that contain more than just MCP config).
-                var backupPath = target.ConfigPath + ".bak";
-                File.Copy(target.ConfigPath, backupPath, overwrite: true);
-                await _output.WriteLineAsync(string.Format(Resources.MsgBackedUpMcpConfiguration, backupPath));
+                newContent = MergeConfigContent(existing, _executablePath, gitRoot, _pat);
+                await File.WriteAllTextAsync(target.ConfigPath, newContent, cancellationToken);
+                await _output.WriteLineAsync(string.Format(Resources.MsgUpdatedMcpConfiguration, target.IdeName, target.ConfigPath));
             }
             else
             {
-                newContent = BuildConfigContent(normalizedExePath, normalizedRepoPath, _pat, target.UseMcpServersKey);
-            }
-
-            try
-            {
+                newContent = BuildConfigContent(normalizedExePath, normalizedRepoPath, _pat);
                 await File.WriteAllTextAsync(target.ConfigPath, newContent, cancellationToken);
+                await _output.WriteLineAsync(string.Format(Resources.MsgCreatedMcpConfiguration, target.IdeName, target.ConfigPath));
             }
-            catch (IOException ex)
-            {
-                // File is likely held open by a running MCP client (Claude Code keeps
-                // ~/.claude.json open). Surface a clear, actionable error and continue
-                // with the next target rather than aborting the whole init.
-                await _output.WriteLineAsync(string.Format(Resources.ErrMcpConfigLocked, target.IdeName, target.ConfigPath, ex.Message));
-                continue;
-            }
-
-            await _output.WriteLineAsync(string.Format(
-                fileExisted ? Resources.MsgUpdatedMcpConfiguration : Resources.MsgCreatedMcpConfiguration,
-                target.IdeName, target.ConfigPath));
         }
 
         await CopyPromptFilesAsync(gitRoot, cancellationToken);
@@ -346,25 +319,15 @@ public class InitCommand : ICliCommand
                         Path.Combine(gitRoot, VisualStudioDir, McpConfigFileName))
                 ];
 
-            if (string.Equals(ide, "claude", StringComparison.OrdinalIgnoreCase))
-                return
-                [
-                    new McpConfigTarget(
-                        "Claude Code",
-                        gitRoot,
-                        Path.Combine(gitRoot, ClaudeCodeMcpConfigFileName),
-                        UseMcpServersKey: true)
-                ];
-        }
+            }
 
-        var targets = new List<McpConfigTarget>();
+            var targets = new List<McpConfigTarget>();
 
-        bool hasVsCode = DetectsVsCode(gitRoot);
-        bool hasVisualStudio = DetectsVisualStudio(gitRoot);
-        bool hasClaudeCode = DetectsClaudeCode(gitRoot);
+            bool hasVsCode = DetectsVsCode(gitRoot);
+            bool hasVisualStudio = DetectsVisualStudio(gitRoot);
 
-        bool writeVsCode = hasVsCode || (!hasVisualStudio && !hasClaudeCode);
-        bool writeVisualStudio = hasVisualStudio || (!hasVsCode && !hasClaudeCode);
+            bool writeVsCode = hasVsCode || !hasVisualStudio;
+            bool writeVisualStudio = hasVisualStudio || !hasVsCode;
 
         if (writeVsCode)
             targets.Add(new McpConfigTarget(
@@ -378,13 +341,6 @@ public class InitCommand : ICliCommand
                 Path.Combine(gitRoot, VisualStudioDir),
                 Path.Combine(gitRoot, VisualStudioDir, McpConfigFileName)));
 
-        if (hasClaudeCode)
-            targets.Add(new McpConfigTarget(
-                "Claude Code",
-                gitRoot,
-                Path.Combine(gitRoot, ClaudeCodeMcpConfigFileName),
-                UseMcpServersKey: true));
-
         return targets;
     }
 
@@ -393,10 +349,7 @@ public class InitCommand : ICliCommand
     /// Visual Studio reads <c>~/.mcp.json</c> directly from the user's home directory.
     /// VS Code reads <c>%APPDATA%/Code/User/mcp.json</c> on Windows
     /// (<c>~/.config/Code/User/mcp.json</c> on Linux).
-    /// Claude Code reads <c>~/.claude.json</c> — a shared user-state file with an
-    /// <c>mcpServers</c> top-level key. The merge logic preserves all other top-level
-    /// keys in that file (project history, onboarding flags, etc.).
-    /// Writing to all targets ensures every workspace picks up the configuration.
+    /// Writing to both ensures every workspace picks up the configuration.
     /// </summary>
     internal static List<McpConfigTarget> ResolveGlobalConfigTargets()
     {
@@ -413,13 +366,7 @@ public class InitCommand : ICliCommand
             new McpConfigTarget(
                 "VS Code (global)",
                 Path.Combine(appData, "Code", "User"),
-                Path.Combine(appData, "Code", "User", McpConfigFileName)),
-
-            new McpConfigTarget(
-                "Claude Code (global)",
-                userHome,
-                Path.Combine(userHome, ClaudeCodeGlobalConfigFileName),
-                UseMcpServersKey: true)
+                Path.Combine(appData, "Code", "User", McpConfigFileName))
         ];
     }
 
@@ -431,17 +378,13 @@ public class InitCommand : ICliCommand
         Directory.Exists(Path.Combine(gitRoot, VisualStudioDir)) ||
         Directory.EnumerateFiles(gitRoot, "*.sln", SearchOption.TopDirectoryOnly).Any();
 
-    internal static bool DetectsClaudeCode(string gitRoot) =>
-        Directory.Exists(Path.Combine(gitRoot, ClaudeCodeDir)) ||
-        File.Exists(Path.Combine(gitRoot, ClaudeCodeMarkerFile));
-
-    internal static string BuildConfigContent(string normalizedExePath, string normalizedRepoPath, string? pat = null, bool useMcpServersKey = false)
+    internal static string BuildConfigContent(string normalizedExePath, string normalizedRepoPath, string? pat = null)
     {
         var patArgs = string.IsNullOrWhiteSpace(pat)
             ? string.Empty
             : $", \"--pat\", \"{pat}\"";
 
-        var serversKey = useMcpServersKey ? "mcpServers" : "servers";
+        var serversKey = "servers";
 
         return $$"""
             {
@@ -466,10 +409,9 @@ public class InitCommand : ICliCommand
         string existingJson,
         string rawExePath,
         string rawRepoPath,
-        string? pat = null,
-        bool useMcpServersKey = false)
+        string? pat = null)
     {
-        var serversKey = useMcpServersKey ? "mcpServers" : "servers";
+        var serversKey = "servers";
 
         try
         {
@@ -536,7 +478,7 @@ public class InitCommand : ICliCommand
             // Existing file is not valid JSON — replace it entirely
             var normalizedExePath = rawExePath.Replace("\\", "\\\\");
             var normalizedRepoPath = rawRepoPath.Replace("\\", "\\\\");
-            return BuildConfigContent(normalizedExePath, normalizedRepoPath, pat, useMcpServersKey);
+            return BuildConfigContent(normalizedExePath, normalizedRepoPath, pat);
         }
     }
 
@@ -570,16 +512,8 @@ public class InitCommand : ICliCommand
 
         await DeleteLegacyPromptFilesAsync(promptsTargetDir);
 
-        // Claude Code loads slash commands from .claude/commands/<name>.md.
-        // Write a copy there too so prompts like /review-pr are invocable from the Claude CLI.
-        var claudeCommandsDir = Path.Combine(gitRoot, ClaudeCodeDir, "commands");
-        var writeClaudeCommands = DetectsClaudeCode(gitRoot);
-        if (writeClaudeCommands)
-            Directory.CreateDirectory(claudeCommandsDir);
-
         var assembly = Assembly.GetExecutingAssembly();
         var promptsWritten = 0;
-        var claudeCommandsWritten = 0;
 
         foreach (var promptFileName in PromptFileNames)
         {
@@ -599,24 +533,10 @@ public class InitCommand : ICliCommand
             var promptPath = Path.Combine(promptsTargetDir, promptFileName);
             await File.WriteAllTextAsync(promptPath, content, cancellationToken);
             promptsWritten++;
-
-            if (writeClaudeCommands)
-            {
-                // Strip ".prompt" so review-pr.prompt.md → review-pr.md, exposing /review-pr in Claude Code.
-                var commandFileName = promptFileName.EndsWith(".prompt.md", StringComparison.OrdinalIgnoreCase)
-                    ? promptFileName[..^".prompt.md".Length] + ".md"
-                    : promptFileName;
-                var commandPath = Path.Combine(claudeCommandsDir, commandFileName);
-                await File.WriteAllTextAsync(commandPath, content, cancellationToken);
-                claudeCommandsWritten++;
-            }
         }
 
         if (promptsWritten > 0)
             await _output.WriteLineAsync(string.Format(Resources.MsgCopiedPrompts, promptsWritten, promptsTargetDir));
-
-        if (claudeCommandsWritten > 0)
-            await _output.WriteLineAsync(string.Format(Resources.MsgCopiedPrompts, claudeCommandsWritten, claudeCommandsDir));
     }
 
     private async Task DeleteLegacyPromptFilesAsync(string promptsTargetDir)
@@ -671,4 +591,4 @@ public class InitCommand : ICliCommand
 /// <summary>
 /// Describes a single MCP configuration file target to be written by <see cref="InitCommand"/>.
 /// </summary>
-internal sealed record McpConfigTarget(string IdeName, string Directory, string ConfigPath, bool UseMcpServersKey = false);
+internal sealed record McpConfigTarget(string IdeName, string Directory, string ConfigPath);

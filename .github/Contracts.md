@@ -136,11 +136,9 @@ Auto-generated from `GetPullRequestMetadataToolHandler.ExecuteAsync` signature. 
 |---|---|---|---|---|
 | `prNumber` | `int?` | ✅ (runtime) | `null` | The Pull Request number/ID to retrieve metadata for |
 | `modelName` | `string?` | ❌ | `null` | Model name for context budget resolution (e.g. `"gpt-4o"`). Triggers pagination info. |
-| `maxTokens` | `int?` | ❌ | `null` | Explicit token budget override. Triggers pagination info. **Bypasses the gateway cap** — callers passing `maxTokens` are treated as authoritative. |
+| `maxTokens` | `int?` | ❌ | `null` | Explicit token budget override. Triggers pagination info. |
 
 > **Feature 005 note:** When `modelName` or `maxTokens` is provided, the response includes content paging info in plain text for use with `get_pr_content`.
->
-> **Gateway cap:** when `maxTokens` is omitted, the resolved budget (from `modelName` or default) is clamped by the active gateway cap — either `ContextWindow:GatewayMaxTokens` from config, or autodetected from the MCP host's `clientInfo.Name` (Claude Code → 25 000, Cursor → 24 000, Codex → 20 000, default → 20 000). See `DeveloperGuide.md` → *Context Window — Gateway Cap*.
 
 #### Output — plain text (single `TextContentBlock`)
 

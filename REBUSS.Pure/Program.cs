@@ -170,16 +170,6 @@ namespace REBUSS.Pure
             // Context Window Awareness
             services.Configure<ContextWindowOptions>(configuration.GetSection(ContextWindowOptions.SectionName));
 
-            // Determine whether the user has explicitly set GatewayMaxTokens in config.
-            // If yes → that value wins. If no → autodetect from MCP clientInfo.Name at runtime.
-            var gatewayConfigValue = configuration[$"{ContextWindowOptions.SectionName}:GatewayMaxTokens"];
-            var gatewayConfigExplicit = !string.IsNullOrWhiteSpace(gatewayConfigValue);
-            services.AddSingleton<IGatewayBudgetState>(sp => new GatewayBudgetState(
-                sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ContextWindowOptions>>(),
-                sp,
-                sp.GetRequiredService<ILogger<GatewayBudgetState>>(),
-                gatewayConfigExplicit));
-
             services.AddSingleton<IContextBudgetResolver, ContextBudgetResolver>();
             services.AddSingleton<ITokenEstimator, TokenEstimator>();
 

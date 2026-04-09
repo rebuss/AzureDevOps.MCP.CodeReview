@@ -6,30 +6,18 @@ using REBUSS.Pure.Core.Models;
 namespace REBUSS.Pure.Services.ContextWindow;
 
 /// <summary>
-/// Resolves the token budget for an MCP request.
-///
-/// Precedence (first match wins):
-/// <list type="number">
-///   <item>Explicit per-call <c>maxTokens</c> — bypasses the gateway cap entirely
-///         (still subject to min/max guardrails and the safety margin).</item>
-///   <item>Model registry lookup, then clamped by the gateway cap from
-///         <see cref="IGatewayBudgetState"/> (config or autodetected).</item>
-///   <item>Safe default fallback, then clamped by the gateway cap.</item>
-/// </list>
+/// Resolves the token budget for an MCP request using a three-tier resolution chain:
+/// explicit token count → model registry lookup → safe default fallback.
+/// Applies gateway cap, min/max guardrails and a configurable safety margin.
 /// </summary>
 public sealed class ContextBudgetResolver : IContextBudgetResolver
 {
     private readonly IOptions<ContextWindowOptions> _options;
-    private readonly IGatewayBudgetState _gatewayState;
     private readonly ILogger<ContextBudgetResolver> _logger;
 
-    public ContextBudgetResolver(
-        IOptions<ContextWindowOptions> options,
-        IGatewayBudgetState gatewayState,
-        ILogger<ContextBudgetResolver> logger)
+    public ContextBudgetResolver(IOptions<ContextWindowOptions> options, ILogger<ContextBudgetResolver> logger)
     {
         _options = options;
-        _gatewayState = gatewayState;
         _logger = logger;
     }
 
@@ -39,16 +27,10 @@ public sealed class ContextBudgetResolver : IContextBudgetResolver
         var warnings = new List<string>();
 
         var (totalBudget, source) = ResolveTotalBudget(explicitTokens, modelIdentifier, opts, warnings);
+        totalBudget = ApplyGatewayCap(totalBudget, opts, warnings);
+        totalBudget = ApplyLargeContextCeiling(totalBudget, opts, warnings);
 
-        // Explicit per-call budgets are an authoritative override and bypass the
-        // gateway cap by design — callers who pass maxTokens know what they want.
-        if (source != BudgetSource.Explicit)
-        {
-            totalBudget = ApplyGatewayCap(totalBudget, _gatewayState.GetEffectiveCap(), warnings);
-            totalBudget = ApplyLargeContextCeiling(totalBudget, opts, warnings);
-        }
-
-        _logger.LogDebug("GatewayCap={GatewayCap}, totalBudget={TotalBudget}", _gatewayState.GetEffectiveCap(), totalBudget);
+        _logger.LogDebug("GatewayMaxTokens={GatewayMaxTokens}, totalBudget={TotalBudget}", opts.GatewayMaxTokens, totalBudget);
 
         totalBudget = ApplyGuardrails(totalBudget, source, opts, warnings);
 
@@ -106,12 +88,12 @@ public sealed class ContextBudgetResolver : IContextBudgetResolver
         return (defaultBudget, BudgetSource.Default);
     }
 
-    private static int ApplyGatewayCap(int totalBudget, int? gatewayCap, List<string> warnings)
+    private static int ApplyGatewayCap(int totalBudget, ContextWindowOptions opts, List<string> warnings)
     {
-        if (gatewayCap is not > 0)
+        if (opts.GatewayMaxTokens is not > 0)
             return totalBudget;
 
-        var cap = gatewayCap.Value;
+        var cap = opts.GatewayMaxTokens.Value;
         if (totalBudget <= cap)
             return totalBudget;
 

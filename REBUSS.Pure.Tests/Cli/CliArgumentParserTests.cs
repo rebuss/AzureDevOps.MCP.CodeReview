@@ -297,16 +297,6 @@ public class CliArgumentParserTests
     }
 
     [Fact]
-    public void Parse_InitWithIdeClaude_ReturnsIdeClaude()
-    {
-        var result = CliArgumentParser.Parse(["init", "--ide", "claude"]);
-
-        Assert.False(result.IsServerMode);
-        Assert.Equal("init", result.CommandName);
-        Assert.Equal("claude", result.Ide);
-    }
-
-    [Fact]
     public void Parse_InitWithIdeCaseInsensitive_ReturnsIde()
     {
         var result = CliArgumentParser.Parse(["init", "--IDE", "vscode"]);

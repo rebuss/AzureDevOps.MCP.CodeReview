@@ -299,11 +299,5 @@
   <data name="WarnEmbeddedPromptResourceNotFound" xml:space="preserve">
     <value>Warning: Embedded prompt resource not found: {0}</value>
   </data>
-  <data name="MsgBackedUpMcpConfiguration" xml:space="preserve">
-    <value>Backed up existing MCP configuration to: {0}</value>
-  </data>
-  <data name="ErrMcpConfigLocked" xml:space="preserve">
-    <value>Could not write MCP configuration ({0}) at {1}: the file is locked, likely because the MCP client (e.g. Claude Code) is currently running. Close the client and rerun 'rebuss-pure init'. Underlying error: {2}</value>
-  </data>
 
 </root>
