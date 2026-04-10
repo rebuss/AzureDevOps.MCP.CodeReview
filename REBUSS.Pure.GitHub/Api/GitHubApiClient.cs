@@ -19,9 +19,10 @@ public class GitHubApiClient : IGitHubApiClient
     private const int MaxPagesPerEndpoint = 10;
     private const int DefaultPerPage = 100;
 
-    // Static cache: persists across transient GitHubApiClient instances created by IHttpClientFactory.
-    // PR details are immutable within a review cycle (same headSha).
+    // Static caches: persist across transient GitHubApiClient instances created by IHttpClientFactory.
+    // PR details and file lists are immutable within a review cycle (same headSha).
     private static readonly ConcurrentDictionary<int, string> _prDetailsCache = new();
+    private static readonly ConcurrentDictionary<int, string> _prFilesCache = new();
 
     private readonly HttpClient _httpClient;
     private readonly GitHubOptions _options;
@@ -58,10 +59,18 @@ public class GitHubApiClient : IGitHubApiClient
 
     public async Task<string> GetPullRequestFilesAsync(int pullRequestNumber, CancellationToken cancellationToken = default)
     {
+        if (_prFilesCache.TryGetValue(pullRequestNumber, out var cached))
+        {
+            _logger.LogDebug("GetPullRequestFiles cache hit for PR #{PullRequestNumber}", pullRequestNumber);
+            return cached;
+        }
+
         _logger.LogDebug("API call: GetPullRequestFiles for PR #{PullRequestNumber}", pullRequestNumber);
 
         var url = $"repos/{_options.Owner}/{_options.RepositoryName}/pulls/{pullRequestNumber}/files";
-        return await GetPaginatedArrayAsync(url, "GetPullRequestFiles", cancellationToken);
+        var result = await GetPaginatedArrayAsync(url, "GetPullRequestFiles", cancellationToken);
+        _prFilesCache.TryAdd(pullRequestNumber, result);
+        return result;
     }
 
     public async Task<string> GetPullRequestCommitsAsync(int pullRequestNumber, CancellationToken cancellationToken = default)

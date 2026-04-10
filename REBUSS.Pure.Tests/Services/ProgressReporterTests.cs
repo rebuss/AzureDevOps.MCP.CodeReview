@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using NSubstitute;
@@ -68,5 +69,39 @@ public class ProgressReporterTests
             Arg.Is<object>(o => o.ToString()!.Contains("Starting operation")),
             Arg.Any<Exception?>(),
             Arg.Any<Func<object, Exception?, string>>());
+    }
+
+    [Fact]
+    public async Task ReportAsync_WithSdkProgress_DelegatesToIProgressAndDoesNotResolveMcpServer()
+    {
+        var sdkProgress = Substitute.For<IProgress<ProgressNotificationValue>>();
+
+        await _reporter.ReportAsync(sdkProgress, 2, 5, "Enriching files (2/5)");
+
+        // Should delegate to IProgress<T>.Report()
+        sdkProgress.Received(1).Report(Arg.Is<ProgressNotificationValue>(v =>
+            v.Progress == 2 && v.Total == 5 && v.Message == "Enriching files (2/5)"));
+
+        // Should NOT resolve McpServer — SDK path is self-contained
+        _serviceProvider.DidNotReceive().GetService(typeof(McpServer));
+
+        // Should still log
+        _logger.Received().Log(
+            LogLevel.Information,
+            Arg.Any<EventId>(),
+            Arg.Is<object>(o => o.ToString()!.Contains("Enriching files (2/5)")),
+            Arg.Any<Exception?>(),
+            Arg.Any<Func<object, Exception?, string>>());
+    }
+
+    [Fact]
+    public async Task ReportAsync_WithSdkProgress_NullTotal_ReportsCorrectly()
+    {
+        var sdkProgress = Substitute.For<IProgress<ProgressNotificationValue>>();
+
+        await _reporter.ReportAsync(sdkProgress, 1, null, "Processing...");
+
+        sdkProgress.Received(1).Report(Arg.Is<ProgressNotificationValue>(v =>
+            v.Progress == 1 && v.Total == null && v.Message == "Processing..."));
     }
 }

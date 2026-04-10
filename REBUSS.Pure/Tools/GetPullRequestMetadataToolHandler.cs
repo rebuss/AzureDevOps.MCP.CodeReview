@@ -80,6 +80,7 @@ namespace REBUSS.Pure.Tools
             [Description("The Pull Request number/ID to retrieve metadata for")] int? prNumber = null,
             [Description("Model name for context budget resolution (e.g. 'gpt-4o'). Triggers pagination info.")] string? modelName = null,
             [Description("Explicit token budget override. Triggers pagination info.")] int? maxTokens = null,
+            IProgress<ProgressNotificationValue>? progress = null,
             CancellationToken cancellationToken = default)
         {
             if (prNumber != null && prNumber <= 0)
@@ -93,9 +94,9 @@ namespace REBUSS.Pure.Tools
                 _logger.LogInformation(Resources.LogGetPrMetadataEntry, prNumber);
                 var sw = Stopwatch.StartNew();
 
-                // TODO(017): wire progressToken from request _meta once SDK injection is confirmed
-                object? progressToken = null;
-                await _progressReporter.ReportAsync(progressToken, 0, 3,
+                // SDK injects IProgress<T> automatically from _meta.progressToken;
+                // it no-ops when the client omits the token.
+                await _progressReporter.ReportAsync(progress, 0, 3,
                     $"Fetching PR #{prNumber} metadata", cancellationToken);
 
                 var metadata = await _metadataProvider.GetMetadataAsync(prNumber.Value, cancellationToken);
@@ -113,7 +114,7 @@ namespace REBUSS.Pure.Tools
                 if (_copilotReviewOptions.Value.Enabled)
                     _ = _copilotClientProvider.TryEnsureStartedAsync(CancellationToken.None);
 
-                await _progressReporter.ReportAsync(progressToken, 1, 3,
+                await _progressReporter.ReportAsync(progress, 1, 3,
                     $"PR #{prNumber} metadata retrieved", cancellationToken);
 
                 (int TotalPages, int TotalFiles, int BudgetPerPage, IReadOnlyList<(int Page, int Count)> ByPage)? paging = null;
@@ -133,7 +134,7 @@ namespace REBUSS.Pure.Tools
                 var text = PlainTextFormatter.FormatMetadata(metadata, prNumber.Value, paging, pagingDeferred);
                 sw.Stop();
 
-                await _progressReporter.ReportAsync(progressToken, 3, 3,
+                await _progressReporter.ReportAsync(progress, 3, 3,
                     $"PR #{prNumber} metadata complete", cancellationToken);
 
                 _logger.LogInformation(Resources.LogGetPrMetadataCompleted, prNumber, text.Length, sw.ElapsedMilliseconds);

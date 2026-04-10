@@ -127,8 +127,8 @@ public static partial class DiffParser
             var lines = new List<string>();
 
             // Leading context — sliced from the AFTER file at NEW-axis start.
-            int leadStartIdx = firstHunk.NewStart - 1 - leadingCount;
-            for (int j = 0; j < leadingCount; j++)
+            int leadStartIdx = Math.Max(0, firstHunk.NewStart - 1 - leadingCount);
+            for (int j = 0; j < leadingCount && leadStartIdx + j < sourceLines.Length; j++)
                 lines.Add(" " + sourceLines[leadStartIdx + j]);
 
             for (int hi = 0; hi < cluster.Count; hi++)
