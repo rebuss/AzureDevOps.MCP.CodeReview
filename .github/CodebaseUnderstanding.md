@@ -82,6 +82,7 @@ Full codebase context is included below (file-role map, dependency graph, DI reg
 | `REBUSS.Pure.Core\Shared\DiffLanguage.cs` | `DiffLanguage` enum (13 languages + Unknown) + `DiffLanguageDetector` static class: centralized language detection from diff headers; used by all enrichers for `CanEnrich`. Also exposes `IsAlreadyEnriched(string)` for the centralized idempotence short-circuit in `CompositeCodeProcessor` (feature 011) | `DiffLanguageDetector` — `Detect(string)`, `IsCSharp(string)`, `IsSkipped(string)`, `IsAlreadyEnriched(string)` |
 | `REBUSS.Pure.Core\Shared\IFileClassifier.cs` | Interface: file classifier | `FileClassification` |
 | `REBUSS.Pure.Core\Shared\FileClassifier.cs` | Classifies files by path/extension; normalizes paths with leading `/` for pattern matching; review priorities via `ReviewPriorities` constants | `IFileClassifier`, `FileClassification`, `FileCategory`, `ReviewPriorities` |
+| `REBUSS.Pure.Core\Shared\IProgressReporter.cs` | MCP-agnostic progress reporting interface; `ReportAsync(object?, int, int?, string, CancellationToken)` accepts SDK `IProgress<ProgressNotificationValue>`, legacy `ProgressToken`, or `null`; stays free of MCP SDK dependency | `IProgressReporter` |
 
 ### Core exceptions (REBUSS.Pure.Core\Exceptions)
 

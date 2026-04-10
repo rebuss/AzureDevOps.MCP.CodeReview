@@ -229,4 +229,20 @@ public class DiffParserTests
         Assert.Equal(30, h.newCount);
         Assert.Equal(30, h.oldCount);
     }
+
+    [Fact]
+    public void RebuildDiffWithContext_SourceLinesShorterThanContextRange_DoesNotThrow()
+    {
+        // Hunk claims NewStart=10 but sourceLines has only 5 lines.
+        // Before the fix, leading context indexing would throw IndexOutOfRangeException.
+        var diff = "=== src/A.cs (edit: +1 -1) ===\n@@ -10,1 +10,1 @@\n-old\n+new";
+        var sourceLines = Enumerable.Range(1, 5).Select(i => $"line{i}").ToArray();
+        var hunks = DiffParser.ParseHunks(diff);
+
+        var result = DiffParser.RebuildDiffWithContext(diff, sourceLines, hunks, ContextDecision.Full);
+
+        // Should not throw; should still contain the change.
+        Assert.Contains("-old", result);
+        Assert.Contains("+new", result);
+    }
 }

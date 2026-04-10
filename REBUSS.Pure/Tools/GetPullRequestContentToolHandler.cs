@@ -73,6 +73,7 @@ namespace REBUSS.Pure.Tools
             [Description("Page number to retrieve (1-based)")] int? pageNumber = null,
             [Description("Model name for context budget resolution")] string? modelName = null,
             [Description("Explicit token budget override")] int? maxTokens = null,
+            IProgress<ProgressNotificationValue>? progress = null,
             CancellationToken cancellationToken = default)
         {
             if (prNumber == null)
@@ -89,9 +90,9 @@ namespace REBUSS.Pure.Tools
                 _logger.LogInformation(Resources.LogGetPrContentEntry, prNumber, pageNumber);
                 var sw = Stopwatch.StartNew();
 
-                // TODO(017): wire progressToken from request _meta once SDK injection is confirmed
-                object? progressToken = null;
-                await _progressReporter.ReportAsync(progressToken, 0, 4,
+                // SDK injects IProgress<T> automatically from _meta.progressToken;
+                // it no-ops when the client omits the token.
+                await _progressReporter.ReportAsync(progress, 0, 4,
                     $"Starting content retrieval for PR #{prNumber}", cancellationToken);
 
                 var budget = _budgetResolver.Resolve(maxTokens, modelName);
@@ -122,7 +123,7 @@ namespace REBUSS.Pure.Tools
                 using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 linkedCts.CancelAfter(_workflowOptions.Value.ContentInternalTimeoutMs);
 
-                await _progressReporter.ReportAsync(progressToken, 1, 4,
+                await _progressReporter.ReportAsync(progress, 1, 4,
                     $"Waiting for enrichment — PR #{prNumber}", cancellationToken);
 
                 PrEnrichmentResult result;
@@ -141,7 +142,7 @@ namespace REBUSS.Pure.Tools
                 // Feature 013 branch: if Copilot is available + enabled, the server performs
                 // the review itself and returns compact page summaries in a single response.
                 // Otherwise, fall through to the existing content-only path.
-                await _progressReporter.ReportAsync(progressToken, 2, 4,
+                await _progressReporter.ReportAsync(progress, 2, 4,
                     $"Enrichment complete — checking review mode", cancellationToken);
 
                 var copilotAvailable = await _copilotAvailability.IsAvailableAsync(cancellationToken);
@@ -178,7 +179,7 @@ namespace REBUSS.Pure.Tools
 
                 sw.Stop();
 
-                await _progressReporter.ReportAsync(progressToken, 4, 4,
+                await _progressReporter.ReportAsync(progress, 4, 4,
                     $"Content ready — page {pageNumber}/{allocation.TotalPages}", cancellationToken);
 
                 _logger.LogInformation(Resources.LogGetPrContentCompleted,
