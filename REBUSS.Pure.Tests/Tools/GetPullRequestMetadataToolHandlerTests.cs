@@ -9,6 +9,8 @@ using REBUSS.Pure.Core.Exceptions;
 using REBUSS.Pure.Core.Models;
 using REBUSS.Pure.Core.Models.Pagination;
 using REBUSS.Pure.Core.Models.ResponsePacking;
+using REBUSS.Pure.Core.Services.CopilotReview;
+using REBUSS.Pure.Services.CopilotReview;
 using REBUSS.Pure.Services.PrEnrichment;
 using REBUSS.Pure.Services.ResponsePacking;
 using REBUSS.Pure.Tools;
@@ -24,6 +26,9 @@ public class GetPullRequestMetadataToolHandlerTests
     private readonly IPageAllocator _pageAllocator = Substitute.For<IPageAllocator>();
     private readonly IOptions<WorkflowOptions> _workflowOptions =
         Options.Create(new WorkflowOptions { MetadataInternalTimeoutMs = 28_000, ContentInternalTimeoutMs = 28_000 });
+    private readonly ICopilotClientProvider _copilotClientProvider = Substitute.For<ICopilotClientProvider>();
+    private readonly IOptions<CopilotReviewOptions> _copilotReviewOptions =
+        Options.Create(new CopilotReviewOptions { Enabled = false });
     private readonly GetPullRequestMetadataToolHandler _handler;
 
     private static readonly FullPullRequestMetadata SampleMetadata = new()
@@ -90,6 +95,8 @@ public class GetPullRequestMetadataToolHandlerTests
             _enrichmentOrchestrator,
             _pageAllocator,
             _workflowOptions,
+            _copilotClientProvider,
+            _copilotReviewOptions,
             NullLogger<GetPullRequestMetadataToolHandler>.Instance);
     }
 
@@ -335,5 +342,42 @@ public class GetPullRequestMetadataToolHandlerTests
         var text = AllText(blocks);
 
         Assert.Contains("... [truncated]", text);
+    }
+
+    // ─── Feature 015: Eager Copilot SDK initialization ───────────────────────
+
+    [Fact]
+    public async Task ExecuteAsync_CopilotEnabled_TriggersEagerInit()
+    {
+        var copilotOptions = Options.Create(new CopilotReviewOptions { Enabled = true });
+        var copilotProvider = Substitute.For<ICopilotClientProvider>();
+        copilotProvider.TryEnsureStartedAsync(Arg.Any<CancellationToken>()).Returns(true);
+
+        var handler = new GetPullRequestMetadataToolHandler(
+            _dataProvider, _budgetResolver, _downloadOrchestrator,
+            _enrichmentOrchestrator, _pageAllocator, _workflowOptions,
+            copilotProvider, copilotOptions,
+            NullLogger<GetPullRequestMetadataToolHandler>.Instance);
+
+        await handler.ExecuteAsync(prNumber: 42);
+
+        await copilotProvider.Received(1).TryEnsureStartedAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_CopilotDisabled_DoesNotTriggerInit()
+    {
+        var copilotOptions = Options.Create(new CopilotReviewOptions { Enabled = false });
+        var copilotProvider = Substitute.For<ICopilotClientProvider>();
+
+        var handler = new GetPullRequestMetadataToolHandler(
+            _dataProvider, _budgetResolver, _downloadOrchestrator,
+            _enrichmentOrchestrator, _pageAllocator, _workflowOptions,
+            copilotProvider, copilotOptions,
+            NullLogger<GetPullRequestMetadataToolHandler>.Instance);
+
+        await handler.ExecuteAsync(prNumber: 42);
+
+        await copilotProvider.DidNotReceive().TryEnsureStartedAsync(Arg.Any<CancellationToken>());
     }
 }

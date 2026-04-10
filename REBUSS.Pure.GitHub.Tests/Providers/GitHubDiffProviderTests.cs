@@ -235,6 +235,87 @@ public class GitHubDiffProviderTests
         Assert.Empty(result.Files[0].Hunks);
     }
 
+    // --- Feature 015: Skip base ref fetch for added files ---
+
+    [Fact]
+    public async Task GetDiffAsync_AddedFile_FetchesHeadOnly_NotBase()
+    {
+        _apiClient.GetPullRequestDetailsAsync(42, Arg.Any<CancellationToken>()).Returns(PrDetailsJson);
+        _apiClient.GetPullRequestFilesAsync(42, Arg.Any<CancellationToken>()).Returns("""
+            [{ "filename": "src/New.cs", "status": "added", "additions": 5, "deletions": 0 }]
+            """);
+        _apiClient.GetFileContentAtRefAsync("aaa111", "src/New.cs", Arg.Any<CancellationToken>()).Returns("class New { }");
+
+        await _provider.GetDiffAsync(42);
+
+        // Head ref fetched
+        await _apiClient.Received(1).GetFileContentAtRefAsync("aaa111", "src/New.cs", Arg.Any<CancellationToken>());
+        // Base ref NOT fetched
+        await _apiClient.DidNotReceive().GetFileContentAtRefAsync("bbb222", "src/New.cs", Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GetDiffAsync_EditedFile_FetchesBothBaseAndHead()
+    {
+        SetupStandardMocks();
+        _apiClient.GetFileContentAtRefAsync("bbb222", "src/File.cs", Arg.Any<CancellationToken>()).Returns("old");
+        _apiClient.GetFileContentAtRefAsync("aaa111", "src/File.cs", Arg.Any<CancellationToken>()).Returns("new");
+
+        await _provider.GetDiffAsync(42);
+
+        // Both base and head fetched
+        await _apiClient.Received(1).GetFileContentAtRefAsync("bbb222", "src/File.cs", Arg.Any<CancellationToken>());
+        await _apiClient.Received(1).GetFileContentAtRefAsync("aaa111", "src/File.cs", Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GetDiffAsync_MixedFiles_CorrectFetchCounts_AndAddedFileHasOnlyAdditions()
+    {
+        _apiClient.GetPullRequestDetailsAsync(42, Arg.Any<CancellationToken>()).Returns(PrDetailsJson);
+        _apiClient.GetPullRequestFilesAsync(42, Arg.Any<CancellationToken>()).Returns("""
+            [
+                { "filename": "src/Add1.cs", "status": "added", "additions": 1, "deletions": 0 },
+                { "filename": "src/Add2.cs", "status": "added", "additions": 1, "deletions": 0 },
+                { "filename": "src/Add3.cs", "status": "added", "additions": 1, "deletions": 0 },
+                { "filename": "src/Edit1.cs", "status": "modified", "additions": 1, "deletions": 1 },
+                { "filename": "src/Edit2.cs", "status": "modified", "additions": 1, "deletions": 1 },
+                { "filename": "src/Del.cs", "status": "removed", "additions": 0, "deletions": 5 }
+            ]
+            """);
+
+        // Setup returns for edit files (both base + head)
+        _apiClient.GetFileContentAtRefAsync("bbb222", "src/Edit1.cs", Arg.Any<CancellationToken>()).Returns("old1");
+        _apiClient.GetFileContentAtRefAsync("aaa111", "src/Edit1.cs", Arg.Any<CancellationToken>()).Returns("new1");
+        _apiClient.GetFileContentAtRefAsync("bbb222", "src/Edit2.cs", Arg.Any<CancellationToken>()).Returns("old2");
+        _apiClient.GetFileContentAtRefAsync("aaa111", "src/Edit2.cs", Arg.Any<CancellationToken>()).Returns("new2");
+        // Setup returns for add files (head only)
+        _apiClient.GetFileContentAtRefAsync("aaa111", "src/Add1.cs", Arg.Any<CancellationToken>()).Returns("class Add1 { }");
+        _apiClient.GetFileContentAtRefAsync("aaa111", "src/Add2.cs", Arg.Any<CancellationToken>()).Returns("class Add2 { }");
+        _apiClient.GetFileContentAtRefAsync("aaa111", "src/Add3.cs", Arg.Any<CancellationToken>()).Returns("class Add3 { }");
+
+        var result = await _provider.GetDiffAsync(42);
+
+        // (a) Call counts: 2 base (edits only) + 5 head (3 add + 2 edit) = 7 total
+        var totalCalls = _apiClient.ReceivedCalls()
+            .Count(c => c.GetMethodInfo().Name == nameof(IGitHubApiClient.GetFileContentAtRefAsync));
+        Assert.Equal(7, totalCalls);
+
+        // No base fetch for added files
+        await _apiClient.DidNotReceive().GetFileContentAtRefAsync("bbb222", "src/Add1.cs", Arg.Any<CancellationToken>());
+        await _apiClient.DidNotReceive().GetFileContentAtRefAsync("bbb222", "src/Add2.cs", Arg.Any<CancellationToken>());
+        await _apiClient.DidNotReceive().GetFileContentAtRefAsync("bbb222", "src/Add3.cs", Arg.Any<CancellationToken>());
+
+        // (b) Added files have only '+' lines (FR-005/SC-004 byte-identical output)
+        var addFile = result.Files.First(f => f.Path == "src/Add1.cs");
+        Assert.NotEmpty(addFile.Hunks);
+        var addLines = addFile.Hunks.SelectMany(h => h.Lines).ToList();
+        Assert.All(addLines, l => Assert.Equal('+', l.Op));
+
+        // Delete file is skipped entirely
+        var delFile = result.Files.First(f => f.Path == "src/Del.cs");
+        Assert.NotNull(delFile.SkipReason);
+    }
+
     private void SetupStandardMocks()
     {
         _apiClient.GetPullRequestDetailsAsync(42, Arg.Any<CancellationToken>()).Returns(PrDetailsJson);
