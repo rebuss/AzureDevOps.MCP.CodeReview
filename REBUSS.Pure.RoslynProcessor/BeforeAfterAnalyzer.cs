@@ -61,7 +61,28 @@ public static class BeforeAfterAnalyzer
             // Check all descendant nodes for differences
             foreach (var afterNode in afterRoot.DescendantNodes())
             {
-                var correspondingBefore = beforeRoot.FindNode(afterNode.Span, getInnermostNodeForTie: true);
+                // Guard: afterNode.Span may reference positions beyond the before tree's extent
+                // (common when after code is longer — new methods, expanded classes).
+                if (afterNode.Span.Start >= beforeRoot.FullSpan.Length ||
+                    afterNode.Span.End > beforeRoot.FullSpan.Length)
+                {
+                    foundStructural = true;
+                    continue;
+                }
+
+                SyntaxNode? correspondingBefore;
+                try
+                {
+                    correspondingBefore = beforeRoot.FindNode(afterNode.Span, getInnermostNodeForTie: true);
+                }
+                catch (ArgumentOutOfRangeException)
+                {
+                    // Defense-in-depth: Roslyn's internal span validation may have edge cases
+                    // not covered by the bounds check above.
+                    foundStructural = true;
+                    continue;
+                }
+
                 if (correspondingBefore != null && SyntaxFactory.AreEquivalent(correspondingBefore, afterNode))
                     continue;
 

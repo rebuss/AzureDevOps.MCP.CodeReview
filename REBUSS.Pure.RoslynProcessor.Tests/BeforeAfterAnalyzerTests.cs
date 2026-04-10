@@ -78,4 +78,73 @@ public class BeforeAfterAnalyzerTests
     {
         Assert.Equal(ContextDecision.None, BeforeAfterAnalyzer.Analyze(null!, null!));
     }
+
+    // ─── Feature 016: Asymmetric tree size handling ──────────────────────────
+
+    [Fact]
+    public void Analyze_EmptyBefore_SubstantialAfter_DoesNotThrow_ReturnsNonNone()
+    {
+        var before = "";
+        var after = "namespace Foo { public class Bar { public void Baz() { } } }";
+
+        var result = BeforeAfterAnalyzer.Analyze(before, after);
+
+        Assert.NotEqual(ContextDecision.None, result);
+    }
+
+    [Fact]
+    public void Analyze_ShortBefore_LongAfter_DoesNotThrow_ReturnsNonNone()
+    {
+        var before = "class Foo { }";
+        var after = "class Foo { public void A() { } public void B() { } public void C() { } }";
+
+        var result = BeforeAfterAnalyzer.Analyze(before, after);
+
+        Assert.NotEqual(ContextDecision.None, result);
+    }
+
+    [Fact]
+    public void Analyze_LongBefore_ShortAfter_DoesNotThrow_ReturnsNonNone()
+    {
+        var before = "class Foo { public void A() { } public void B() { } public void C() { } }";
+        var after = "class Foo { }";
+
+        var result = BeforeAfterAnalyzer.Analyze(before, after);
+
+        Assert.NotEqual(ContextDecision.None, result);
+    }
+
+    [Fact]
+    public void Analyze_10xExpansion_DoesNotThrow_ReturnsNonNone()
+    {
+        var before = "class Foo { }";
+        var afterBuilder = new System.Text.StringBuilder("class Foo {\n");
+        for (var i = 0; i < 100; i++)
+            afterBuilder.AppendLine($"  public void Method{i}() {{ }}");
+        afterBuilder.AppendLine("}");
+
+        var result = BeforeAfterAnalyzer.Analyze(before, afterBuilder.ToString());
+
+        Assert.NotEqual(ContextDecision.None, result);
+    }
+
+    [Fact]
+    public void Analyze_InvalidSyntaxBoth_DoesNotThrow()
+    {
+        var ex = Record.Exception(
+            () => BeforeAfterAnalyzer.Analyze("not valid c#", "also not valid {{{"));
+
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void Analyze_NewMethodAppended_DetectsChange()
+    {
+        var before = "class Foo { public void Bar() { } }";
+        var after = "class Foo { public void Bar() { } public void Baz() { return; } }";
+
+        var result = BeforeAfterAnalyzer.Analyze(before, after);
+
+        Assert.True(result == ContextDecision.Minimal || result == ContextDecision.Full);
+    }
 }

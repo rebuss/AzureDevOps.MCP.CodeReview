@@ -217,6 +217,41 @@ public class EnricherPipelineIntegrationTests : IDisposable
         Assert.Contains("C.cs", results[2]);
     }
 
+    // ─── Feature 016 — analyzer span fix pipeline verification ─────────────
+
+    [Fact]
+    public async Task Pipeline_AsymmetricFileSize_EnrichesSuccessfully()
+    {
+        // After code is 5x longer than before — previously triggered ArgumentOutOfRangeException
+        // in BeforeAfterAnalyzer, causing the enricher to fall back to raw diff.
+        var afterCode = @"class Svc {
+    void A() { var x = 1; }
+    void B() { var y = 2; }
+    void C() { var z = 3; }
+    void D() { Console.WriteLine(); }
+    void E() { return; }
+}";
+        SetupRepo("Svc.cs", afterCode);
+
+        var sourceResolver = new DiffSourceResolver(_orchestrator, NullLogger<DiffSourceResolver>.Instance);
+        var enrichers = new IDiffEnricher[]
+        {
+            new BeforeAfterEnricher(sourceResolver, NullLogger<BeforeAfterEnricher>.Instance),
+            new ScopeAnnotatorEnricher(sourceResolver, NullLogger<ScopeAnnotatorEnricher>.Instance),
+            new StructuralChangeEnricher(sourceResolver, NullLogger<StructuralChangeEnricher>.Instance),
+            new UsingsChangeEnricher(sourceResolver, NullLogger<UsingsChangeEnricher>.Instance)
+        };
+
+        // Short before, much longer after
+        var diff = "=== src/Svc.cs (edit: +6 -1) ===\n@@ -1,1 +1,7 @@\n-class Svc { }\n+class Svc {\n+    void A() { var x = 1; }\n+    void B() { var y = 2; }\n+    void C() { var z = 3; }\n+    void D() { Console.WriteLine(); }\n+    void E() { return; }\n+}";
+        var result = await ChainEnrichersAsync(enrichers, diff);
+
+        // The enricher should have modified the diff (added annotations).
+        // If the analyzer had thrown, the result would equal the raw input unchanged.
+        Assert.NotEqual(diff, result);
+        Assert.Contains("Svc.cs", result);
+    }
+
     [Fact]
     public async Task Pipeline_RunTwice_IsByteIdentical()
     {
