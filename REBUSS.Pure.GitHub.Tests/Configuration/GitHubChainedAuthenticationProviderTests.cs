@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -223,5 +224,42 @@ public class GitHubChainedAuthenticationProviderTests
         var message = Resources.ErrorGitHubAuthRequired;
 
         Assert.Contains("rebuss-pure init", message);
+    }
+
+    [Fact]
+    public async Task GetAuthenticationAsync_CachedToken_LogsAtDebugLevel_NotInformation()
+    {
+        var options = new GitHubOptions();
+        _configStore.Load().Returns(new GitHubCachedConfig
+        {
+            AccessToken = "cached-token",
+            TokenExpiresOn = DateTime.UtcNow.AddHours(1)
+        });
+
+        var logger = Substitute.For<ILogger<GitHubChainedAuthenticationProvider>>();
+        logger.IsEnabled(Arg.Any<LogLevel>()).Returns(true);
+
+        var provider = new GitHubChainedAuthenticationProvider(
+            Options.Create(options),
+            _configStore,
+            _ghCliTokenProvider,
+            logger);
+
+        await provider.GetAuthenticationAsync();
+
+        // "Using cached GitHub token" must be logged at Debug, not Information
+        logger.Received().Log(
+            LogLevel.Debug,
+            Arg.Any<EventId>(),
+            Arg.Is<object>(o => o.ToString()!.Contains("Using cached GitHub token")),
+            Arg.Any<Exception?>(),
+            Arg.Any<Func<object, Exception?, string>>());
+
+        logger.DidNotReceive().Log(
+            LogLevel.Information,
+            Arg.Any<EventId>(),
+            Arg.Is<object>(o => o.ToString()!.Contains("Using cached GitHub token")),
+            Arg.Any<Exception?>(),
+            Arg.Any<Func<object, Exception?, string>>());
     }
 }
