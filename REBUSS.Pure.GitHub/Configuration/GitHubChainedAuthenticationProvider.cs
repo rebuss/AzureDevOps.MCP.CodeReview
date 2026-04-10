@@ -49,7 +49,7 @@ public class GitHubChainedAuthenticationProvider : IGitHubAuthenticationProvider
             var notExpired = !cached.TokenExpiresOn.HasValue || cached.TokenExpiresOn > DateTime.UtcNow.AddMinutes(5);
             if (notExpired)
             {
-                _logger.LogInformation("Using cached GitHub token");
+                _logger.LogDebug("Using cached GitHub token");
                 return new AuthenticationHeaderValue("Bearer", cached.AccessToken);
             }
 

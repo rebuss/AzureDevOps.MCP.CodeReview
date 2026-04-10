@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 using REBUSS.Pure.Core;
 
@@ -23,6 +24,7 @@ public class DiffSourceResolver
 
     private readonly IRepositoryDownloadOrchestrator _orchestrator;
     private readonly ILogger<DiffSourceResolver> _logger;
+    private readonly ConcurrentDictionary<string, Lazy<Task<DiffSourcePair?>>> _cache = new();
 
     public DiffSourceResolver(
         IRepositoryDownloadOrchestrator orchestrator,
@@ -35,6 +37,7 @@ public class DiffSourceResolver
     /// <summary>
     /// Resolves the before/after source code for the file in the given diff.
     /// Returns <c>null</c> if the file cannot be resolved (repo unavailable, file missing, too large, etc.).
+    /// Results are cached per file path so that multiple enrichers share one resolution.
     /// </summary>
     public async Task<DiffSourcePair?> ResolveAsync(string diff, CancellationToken ct = default)
     {
@@ -43,6 +46,18 @@ public class DiffSourceResolver
         if (filePath == null)
             return null;
 
+        // Cache lookup/insert: the Lazy<Task<>> pattern ensures only one resolution
+        // per file path, even under concurrent access. The first caller's ct is captured
+        // by the factory; subsequent callers reuse the completed Task.
+        var lazy = _cache.GetOrAdd(filePath,
+            _ => new Lazy<Task<DiffSourcePair?>>(() => ResolveInternalAsync(filePath, diff, ct)));
+
+        return await lazy.Value;
+    }
+
+    private async Task<DiffSourcePair?> ResolveInternalAsync(
+        string filePath, string diff, CancellationToken ct)
+    {
         // 2. Wait for repository download with timeout
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeoutCts.CancelAfter(DownloadTimeout);

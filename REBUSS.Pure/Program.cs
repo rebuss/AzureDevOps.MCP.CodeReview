@@ -105,7 +105,6 @@ namespace REBUSS.Pure
                     options.LogToStandardErrorThreshold = LogLevel.Trace;
                 });
                 builder.Logging.AddProvider(new FileLoggerProvider(GetLogDirectory()));
-                builder.Logging.SetMinimumLevel(LogLevel.Debug);
 
                 // Register business services (providers, algorithms, shared services)
                 ConfigureBusinessServices(builder.Services, configuration, parseResult.RepoPath);

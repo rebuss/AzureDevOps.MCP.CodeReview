@@ -154,4 +154,71 @@ public class DiffSourceResolverTests : IDisposable
 
         Assert.Null(result);
     }
+
+    [Fact]
+    public async Task ResolveAsync_SameFilePath_ReturnsCachedResult_NoSecondIo()
+    {
+        var wrapperDir = Path.Combine(_tempDir, "repo-abc123");
+        var srcDir = Path.Combine(wrapperDir, "src");
+        Directory.CreateDirectory(srcDir);
+
+        File.WriteAllText(Path.Combine(srcDir, "File.cs"), "class C { }");
+        _orchestrator.GetExtractedPathAsync(Arg.Any<CancellationToken>()).Returns(_tempDir);
+
+        var diff = "=== src/File.cs (edit: +1 -1) ===\n@@ -1,1 +1,1 @@\n-old\n+class C { }";
+
+        var result1 = await _resolver.ResolveAsync(diff);
+        var result2 = await _resolver.ResolveAsync(diff);
+
+        Assert.NotNull(result1);
+        Assert.Same(result1, result2); // Reference equality — cached
+
+        // GetExtractedPathAsync should be called only once (first resolve)
+        await _orchestrator.Received(1).GetExtractedPathAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ResolveAsync_NullResult_IsCached_NoSecondIo()
+    {
+        Directory.CreateDirectory(_tempDir);
+        _orchestrator.GetExtractedPathAsync(Arg.Any<CancellationToken>()).Returns(_tempDir);
+
+        var diff = "=== src/Missing.cs (edit: +1 -1) ===\n@@ -1,1 +1,1 @@\n-old\n+new";
+
+        var result1 = await _resolver.ResolveAsync(diff);
+        var result2 = await _resolver.ResolveAsync(diff);
+
+        Assert.Null(result1);
+        Assert.Null(result2);
+
+        // Only one I/O attempt — second call returns cached null
+        await _orchestrator.Received(1).GetExtractedPathAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ResolveAsync_DifferentFilePaths_ResolveSeparately()
+    {
+        var wrapperDir = Path.Combine(_tempDir, "repo-abc123");
+        var srcDir = Path.Combine(wrapperDir, "src");
+        Directory.CreateDirectory(srcDir);
+
+        File.WriteAllText(Path.Combine(srcDir, "A.cs"), "class A { }");
+        File.WriteAllText(Path.Combine(srcDir, "B.cs"), "class B { }");
+        _orchestrator.GetExtractedPathAsync(Arg.Any<CancellationToken>()).Returns(_tempDir);
+
+        var diffA = "=== src/A.cs (edit: +1 -1) ===\n@@ -1,1 +1,1 @@\n-old\n+class A { }";
+        var diffB = "=== src/B.cs (edit: +1 -1) ===\n@@ -1,1 +1,1 @@\n-old\n+class B { }";
+
+        var resultA = await _resolver.ResolveAsync(diffA);
+        var resultB = await _resolver.ResolveAsync(diffB);
+
+        Assert.NotNull(resultA);
+        Assert.NotNull(resultB);
+        Assert.NotSame(resultA, resultB);
+        Assert.Equal("src/A.cs", resultA.FilePath);
+        Assert.Equal("src/B.cs", resultB.FilePath);
+
+        // Both paths require their own resolution
+        await _orchestrator.Received(2).GetExtractedPathAsync(Arg.Any<CancellationToken>());
+    }
 }
