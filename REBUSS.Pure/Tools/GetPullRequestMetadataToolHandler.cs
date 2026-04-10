@@ -7,7 +7,9 @@ using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using REBUSS.Pure.Core;
 using REBUSS.Pure.Core.Exceptions;
+using REBUSS.Pure.Core.Services.CopilotReview;
 using REBUSS.Pure.Properties;
+using REBUSS.Pure.Services.CopilotReview;
 using REBUSS.Pure.Services.PrEnrichment;
 using REBUSS.Pure.Services.ResponsePacking;
 using REBUSS.Pure.Tools.Shared;
@@ -35,6 +37,8 @@ namespace REBUSS.Pure.Tools
         private readonly IPrEnrichmentOrchestrator _enrichmentOrchestrator;
         private readonly IPageAllocator _pageAllocator;
         private readonly IOptions<WorkflowOptions> _workflowOptions;
+        private readonly ICopilotClientProvider _copilotClientProvider;
+        private readonly IOptions<CopilotReviewOptions> _copilotReviewOptions;
         private readonly ILogger<GetPullRequestMetadataToolHandler> _logger;
 
         public GetPullRequestMetadataToolHandler(
@@ -44,6 +48,8 @@ namespace REBUSS.Pure.Tools
             IPrEnrichmentOrchestrator enrichmentOrchestrator,
             IPageAllocator pageAllocator,
             IOptions<WorkflowOptions> workflowOptions,
+            ICopilotClientProvider copilotClientProvider,
+            IOptions<CopilotReviewOptions> copilotReviewOptions,
             ILogger<GetPullRequestMetadataToolHandler> logger)
         {
             _metadataProvider = metadataProvider;
@@ -52,6 +58,8 @@ namespace REBUSS.Pure.Tools
             _enrichmentOrchestrator = enrichmentOrchestrator;
             _pageAllocator = pageAllocator;
             _workflowOptions = workflowOptions;
+            _copilotClientProvider = copilotClientProvider;
+            _copilotReviewOptions = copilotReviewOptions;
             _logger = logger;
         }
 
@@ -89,6 +97,12 @@ namespace REBUSS.Pure.Tools
                     : metadata.LastMergeSourceCommitId;
                 if (!string.IsNullOrEmpty(downloadCommitRef))
                     _downloadOrchestrator.TriggerDownloadAsync(prNumber.Value, downloadCommitRef);
+
+                // Eager Copilot SDK initialization: start in background so it overlaps with enrichment.
+                // Fire-and-forget — failure is captured in CopilotClientProvider._startException
+                // and surfaced when the review orchestrator actually needs the client.
+                if (_copilotReviewOptions.Value.Enabled)
+                    _ = _copilotClientProvider.TryEnsureStartedAsync(CancellationToken.None);
 
                 (int TotalPages, int TotalFiles, int BudgetPerPage, IReadOnlyList<(int Page, int Count)> ByPage)? paging = null;
                 bool pagingDeferred = false;

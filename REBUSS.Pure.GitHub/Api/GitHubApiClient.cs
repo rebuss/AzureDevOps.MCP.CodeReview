@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net.Http.Headers;
 using System.Text.Json;
@@ -18,6 +19,10 @@ public class GitHubApiClient : IGitHubApiClient
     private const int MaxPagesPerEndpoint = 10;
     private const int DefaultPerPage = 100;
 
+    // Static cache: persists across transient GitHubApiClient instances created by IHttpClientFactory.
+    // PR details are immutable within a review cycle (same headSha).
+    private static readonly ConcurrentDictionary<int, string> _prDetailsCache = new();
+
     private readonly HttpClient _httpClient;
     private readonly GitHubOptions _options;
     private readonly ILogger<GitHubApiClient> _logger;
@@ -37,10 +42,18 @@ public class GitHubApiClient : IGitHubApiClient
 
     public async Task<string> GetPullRequestDetailsAsync(int pullRequestNumber, CancellationToken cancellationToken = default)
     {
+        if (_prDetailsCache.TryGetValue(pullRequestNumber, out var cached))
+        {
+            _logger.LogDebug("GetPullRequestDetails cache hit for PR #{PullRequestNumber}", pullRequestNumber);
+            return cached;
+        }
+
         _logger.LogDebug("API call: GetPullRequestDetails for PR #{PullRequestNumber}", pullRequestNumber);
 
         var url = $"repos/{_options.Owner}/{_options.RepositoryName}/pulls/{pullRequestNumber}";
-        return await GetStringAsync(url, "GetPullRequestDetails", cancellationToken);
+        var result = await GetStringAsync(url, "GetPullRequestDetails", cancellationToken);
+        _prDetailsCache.TryAdd(pullRequestNumber, result);
+        return result;
     }
 
     public async Task<string> GetPullRequestFilesAsync(int pullRequestNumber, CancellationToken cancellationToken = default)
