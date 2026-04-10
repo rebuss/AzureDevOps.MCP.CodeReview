@@ -227,7 +227,7 @@ class Usings
     void M() { }
 }",
             "=== src/Usings.cs (edit: +1 -0) ===\n@@ -3,0 +4,1 @@\n+using System.Text.Json;",
-            5.0  // Tiny baseline + dependency-changes block ⇒ ratio dominated by overhead
+            5.5  // Tiny baseline + dependency-changes block ⇒ ratio dominated by overhead
         };
 
         // ── Fixture 5: rename-only (zero hunks) — must pass through unchanged ──

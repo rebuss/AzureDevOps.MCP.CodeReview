@@ -30,7 +30,7 @@ public class CopilotCliSetupStepTests
         {
             if (args.Contains("--version") && !args.Contains("copilot")) return Ok("gh 2.0");
             if (args.Contains("auth status")) return Ok("Logged in");
-            if (args.Contains("extension list")) return Ok("github/gh-copilot v0.5");
+            if (args.Contains("copilot --version")) return Ok("copilot 1.0");
             return Ok();
         });
 
@@ -47,13 +47,13 @@ public class CopilotCliSetupStepTests
         var output = new StringWriter();
         var input = new StringReader("y\n");
         var installCalled = false;
+        var copilotInstalled = false;
         var runner = Scripted(args =>
         {
             if (args.Contains("--version") && !args.Contains("copilot")) return Ok("gh 2.0");
             if (args.Contains("auth status")) return Ok("Logged in");
-            if (args.Contains("extension list")) return Ok("");
-            if (args.Contains("extension install")) { installCalled = true; return Ok(); }
-            if (args.Contains("copilot --version")) return Ok("copilot 1.0");
+            if (args.Contains("copilot --version")) return copilotInstalled ? Ok("copilot 1.0") : Fail();
+            if (args.Contains("extension install")) { installCalled = true; copilotInstalled = true; return Ok(); }
             return Ok();
         });
 
@@ -74,7 +74,7 @@ public class CopilotCliSetupStepTests
         {
             if (args.Contains("--version") && !args.Contains("copilot")) return Ok("gh 2.0");
             if (args.Contains("auth status")) return Ok("Logged in");
-            if (args.Contains("extension list")) return Ok("");
+            if (args.Contains("copilot --version")) return Fail();
             if (args.Contains("extension install")) { installCalled = true; return Ok(); }
             return Ok();
         });
@@ -92,13 +92,13 @@ public class CopilotCliSetupStepTests
     {
         // Two independent RunAsync calls simulate two init runs.
         // First run declines, second run must still prompt (Clarification Q1 — no decline memory).
+        var copilotInstalled = false;
         var runner = Scripted(args =>
         {
             if (args.Contains("--version") && !args.Contains("copilot")) return Ok("gh 2.0");
             if (args.Contains("auth status")) return Ok("Logged in");
-            if (args.Contains("extension list")) return Ok("");
-            if (args.Contains("extension install")) return Ok();
-            if (args.Contains("copilot --version")) return Ok("copilot 1.0");
+            if (args.Contains("copilot --version")) return copilotInstalled ? Ok("copilot 1.0") : Fail();
+            if (args.Contains("extension install")) { copilotInstalled = true; return Ok(); }
             return Ok();
         });
 
@@ -107,6 +107,7 @@ public class CopilotCliSetupStepTests
         await step1.RunAsync();
         Assert.Contains("NOT CONFIGURED", output1.ToString());
 
+        copilotInstalled = false; // reset state for second run
         var output2 = new StringWriter();
         var step2 = new CopilotCliSetupStep(output2, new StringReader("y\n"), runner);
         await step2.RunAsync();
@@ -135,9 +136,8 @@ public class CopilotCliSetupStepTests
             if (args.Contains("auth status"))
                 return authed ? Ok("Logged in") : Fail("not authed");
             if (args.Contains("auth login")) { authed = true; return Ok(); }
-            if (args.Contains("extension list")) return Ok("");
             if (args.Contains("extension install")) { extensionInstallCalled = true; return Ok(); }
-            if (args.Contains("copilot --version")) return Ok("copilot 1.0");
+            if (args.Contains("copilot --version")) return extensionInstallCalled ? Ok("copilot 1.0") : Fail();
             return Ok();
         });
 
@@ -159,15 +159,15 @@ public class CopilotCliSetupStepTests
         var output = new StringWriter();
         var input = new StringReader("y\ny\n"); // first "y" answers auth prompt, second answers extension prompt
         var authed = false;
+        var copilotInstalled = false;
         var runner = Scripted(args =>
         {
             if (args.Contains("--version") && !args.Contains("copilot")) return Ok("gh 2.0");
             if (args.Contains("auth status"))
                 return authed ? Ok("Logged in") : Fail("not authed");
             if (args.Contains("auth login")) { authed = true; return Ok(); }
-            if (args.Contains("extension list")) return Ok("");
-            if (args.Contains("extension install")) return Ok();
-            if (args.Contains("copilot --version")) return Ok("copilot 1.0");
+            if (args.Contains("copilot --version")) return copilotInstalled ? Ok("copilot 1.0") : Fail();
+            if (args.Contains("extension install")) { copilotInstalled = true; return Ok(); }
             return Ok();
         });
 
@@ -233,7 +233,7 @@ public class CopilotCliSetupStepTests
         {
             if (args.Contains("--version") && !args.Contains("copilot")) return Ok("gh 2.0");
             if (args.Contains("auth status")) return Ok("Logged in");
-            if (args.Contains("extension list")) return Ok("");
+            if (args.Contains("copilot --version")) return Fail();
             if (args.Contains("extension install")) return (1, "", "network error");
             return Ok();
         });
@@ -255,7 +255,7 @@ public class CopilotCliSetupStepTests
         {
             if (args.Contains("--version") && !args.Contains("copilot")) return Ok("gh 2.0");
             if (args.Contains("auth status")) return Ok("Logged in");
-            if (args.Contains("extension list")) return Ok("");
+            if (args.Contains("copilot --version")) return Fail();
             if (args.Contains("extension install")) { installCalled = true; return Ok(); }
             return Ok();
         });
@@ -280,7 +280,7 @@ public class CopilotCliSetupStepTests
         {
             if (args.Contains("--version") && !args.Contains("copilot")) return Ok("gh 2.0");
             if (args.Contains("auth status")) return Ok("Logged in");
-            if (args.Contains("extension list")) return Ok("github/gh-copilot v0.5");
+            if (args.Contains("copilot --version")) return Ok("copilot 1.0");
             return Ok();
         });
 

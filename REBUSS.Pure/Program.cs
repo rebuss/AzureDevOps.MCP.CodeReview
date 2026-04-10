@@ -164,6 +164,9 @@ namespace REBUSS.Pure
             services.AddSingleton<IDiffEnricher, CallSiteEnricher>();            // Order=300
             services.AddSingleton<ICodeProcessor, CompositeCodeProcessor>();
 
+            // Progress reporting (MCP notifications/progress)
+            services.AddSingleton<IProgressReporter, ProgressReporter>();
+
             // Workflow timeouts (progressive PR metadata feature)
             services.Configure<WorkflowOptions>(configuration.GetSection(WorkflowOptions.SectionName));
             services.AddSingleton<IPrEnrichmentOrchestrator, PrEnrichmentOrchestrator>();

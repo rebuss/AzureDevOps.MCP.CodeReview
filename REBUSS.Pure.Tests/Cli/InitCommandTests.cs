@@ -1874,14 +1874,14 @@ public class InitCommandTests
             if (args == "--version") return Task.FromResult((0, "gh 2.0", ""));
             if (args.Contains("auth token")) return Task.FromResult((0, "{\"token\":\"t\"}", ""));
             if (args.Contains("auth status")) return Task.FromResult((0, "Logged in", ""));
-            // Extension missing on first look, user accepts, install succeeds
-            if (args.Contains("extension list")) return Task.FromResult((0, "", ""));
+            // Copilot not available initially, succeeds after extension install
+            if (args.Contains("copilot --version")) return Task.FromResult(extensionInstallCalls > 0
+                ? (0, "copilot 1.0", "") : (-1, "", "not found"));
             if (args.Contains("extension install"))
             {
                 extensionInstallCalls++;
                 return Task.FromResult((0, "", ""));
             }
-            if (args.Contains("copilot --version")) return Task.FromResult((0, "copilot 1.0", ""));
             return Task.FromResult((0, "", ""));
         };
 
@@ -1936,9 +1936,9 @@ public class InitCommandTests
                 ? Task.FromResult((0, "Logged in", ""))
                 : Task.FromResult((-1, "", "not authed"));
             if (args.Contains("auth login")) { ghAuthed = true; return Task.FromResult((0, "", "")); }
-            if (args.Contains("extension list")) return Task.FromResult((0, "", ""));
             if (args.Contains("extension install")) { extensionInstalled = true; return Task.FromResult((0, "", "")); }
-            if (args.Contains("copilot --version")) return Task.FromResult((0, "copilot 1.0", ""));
+            if (args.Contains("copilot --version")) return Task.FromResult(extensionInstalled
+                ? (0, "copilot 1.0", "") : (-1, "", "not found"));
             return Task.FromResult((0, "", ""));
         };
 
@@ -1974,7 +1974,7 @@ public class InitCommandTests
             if (args == "--version") return Task.FromResult((0, "gh 2.0", ""));
             if (args.Contains("auth token")) return Task.FromResult((0, "{\"token\":\"t\"}", ""));
             if (args.Contains("auth status")) return Task.FromResult((0, "Logged in", ""));
-            if (args.Contains("extension list")) return Task.FromResult((0, "", ""));
+            if (args.Contains("copilot --version")) return Task.FromResult((-1, "", "not found"));
             if (args.Contains("extension install"))
             {
                 extensionInstallCalls++;

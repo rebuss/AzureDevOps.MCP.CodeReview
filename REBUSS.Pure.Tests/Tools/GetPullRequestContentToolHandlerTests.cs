@@ -10,6 +10,7 @@ using REBUSS.Pure.Core.Models;
 using REBUSS.Pure.Core.Models.Pagination;
 using REBUSS.Pure.Core.Models.ResponsePacking;
 using REBUSS.Pure.Core.Services.CopilotReview;
+using REBUSS.Pure.Core.Shared;
 using REBUSS.Pure.Services.PrEnrichment;
 using REBUSS.Pure.Services.ResponsePacking;
 using REBUSS.Pure.Tools;
@@ -28,6 +29,7 @@ public class GetPullRequestContentToolHandlerTests
     // content-only path unchanged. Tests that want the copilot-assisted branch override.
     private readonly ICopilotAvailabilityDetector _copilotAvailability = Substitute.For<ICopilotAvailabilityDetector>();
     private readonly ICopilotReviewOrchestrator _copilotReviewOrchestrator = Substitute.For<ICopilotReviewOrchestrator>();
+    private readonly IProgressReporter _progressReporter = Substitute.For<IProgressReporter>();
     private readonly GetPullRequestContentToolHandler _handler;
 
     private static readonly FullPullRequestMetadata SampleMetadata = new()
@@ -117,6 +119,7 @@ public class GetPullRequestContentToolHandlerTests
             _workflowOptions,
             _copilotAvailability,
             _copilotReviewOrchestrator,
+            _progressReporter,
             NullLogger<GetPullRequestContentToolHandler>.Instance);
     }
 
@@ -517,5 +520,38 @@ public class GetPullRequestContentToolHandlerTests
         await _handler.ExecuteAsync(prNumber: 42, pageNumber: 1, modelName: "gpt-4o", maxTokens: 50_000);
 
         _budgetResolver.Received(1).Resolve(50_000, "gpt-4o");
+    }
+
+    // ─── Feature 017: Progress notifications ─────────────────────────────────
+
+    [Fact]
+    public async Task ExecuteAsync_ReportsProgress_AtLeast3Times()
+    {
+        await _handler.ExecuteAsync(prNumber: 42, pageNumber: 1);
+
+        // At least 3 calls: start, intermediate, completion (FR-001, SC-001)
+        var calls = _progressReporter.ReceivedCalls()
+            .Count(c => c.GetMethodInfo().Name == nameof(IProgressReporter.ReportAsync));
+        Assert.True(calls >= 3, $"Expected at least 3 progress reports, got {calls}");
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ProgressMessages_AreShortAndContainPosition()
+    {
+        var capturedMessages = new List<string>();
+        _progressReporter.ReportAsync(
+            Arg.Any<object?>(), Arg.Any<int>(), Arg.Any<int?>(),
+            Arg.Do<string>(m => capturedMessages.Add(m)), Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
+
+        await _handler.ExecuteAsync(prNumber: 42, pageNumber: 1);
+
+        // SC-002: messages ≤80 chars
+        Assert.All(capturedMessages, m =>
+            Assert.True(m.Length <= 80, $"Message exceeds 80 chars: \"{m}\" ({m.Length} chars)"));
+
+        // SC-002: at least one message contains a position indicator (N/M pattern)
+        Assert.Contains(capturedMessages, m =>
+            System.Text.RegularExpressions.Regex.IsMatch(m, @"\d+/\d+"));
     }
 }

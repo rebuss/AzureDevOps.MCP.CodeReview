@@ -125,10 +125,9 @@ internal sealed class CopilotCliSetupStep
                 return;
         }
 
-        // Step 3 — is the `gh-copilot` extension already installed?
-        var extList = await RunGhCapturedAsync("extension list", cancellationToken);
-        if (extList.ExitCode == 0 &&
-            extList.StdOut.Contains("gh-copilot", StringComparison.OrdinalIgnoreCase))
+        // Step 3 — is `gh copilot` already available (built-in or extension)?
+        var copilotCheck = await RunGhCapturedAsync("copilot --version", cancellationToken);
+        if (copilotCheck.ExitCode == 0)
         {
             await _output.WriteLineAsync(Resources.CopilotSetup_AlreadyInstalled);
             _logger?.LogInformation("copilot-setup: already-installed");

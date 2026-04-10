@@ -8,6 +8,7 @@ using ModelContextProtocol.Server;
 using REBUSS.Pure.Core;
 using REBUSS.Pure.Core.Exceptions;
 using REBUSS.Pure.Core.Services.CopilotReview;
+using REBUSS.Pure.Core.Shared;
 using REBUSS.Pure.Properties;
 using REBUSS.Pure.Services.CopilotReview;
 using REBUSS.Pure.Services.PrEnrichment;
@@ -39,6 +40,7 @@ namespace REBUSS.Pure.Tools
         private readonly IOptions<WorkflowOptions> _workflowOptions;
         private readonly ICopilotClientProvider _copilotClientProvider;
         private readonly IOptions<CopilotReviewOptions> _copilotReviewOptions;
+        private readonly IProgressReporter _progressReporter;
         private readonly ILogger<GetPullRequestMetadataToolHandler> _logger;
 
         public GetPullRequestMetadataToolHandler(
@@ -50,6 +52,7 @@ namespace REBUSS.Pure.Tools
             IOptions<WorkflowOptions> workflowOptions,
             ICopilotClientProvider copilotClientProvider,
             IOptions<CopilotReviewOptions> copilotReviewOptions,
+            IProgressReporter progressReporter,
             ILogger<GetPullRequestMetadataToolHandler> logger)
         {
             _metadataProvider = metadataProvider;
@@ -60,6 +63,7 @@ namespace REBUSS.Pure.Tools
             _workflowOptions = workflowOptions;
             _copilotClientProvider = copilotClientProvider;
             _copilotReviewOptions = copilotReviewOptions;
+            _progressReporter = progressReporter;
             _logger = logger;
         }
 
@@ -89,6 +93,11 @@ namespace REBUSS.Pure.Tools
                 _logger.LogInformation(Resources.LogGetPrMetadataEntry, prNumber);
                 var sw = Stopwatch.StartNew();
 
+                // TODO(017): wire progressToken from request _meta once SDK injection is confirmed
+                object? progressToken = null;
+                await _progressReporter.ReportAsync(progressToken, 0, 3,
+                    $"Fetching PR #{prNumber} metadata", cancellationToken);
+
                 var metadata = await _metadataProvider.GetMetadataAsync(prNumber.Value, cancellationToken);
 
                 // Trigger background repository download of the base/target branch (fire-and-forget)
@@ -103,6 +112,9 @@ namespace REBUSS.Pure.Tools
                 // and surfaced when the review orchestrator actually needs the client.
                 if (_copilotReviewOptions.Value.Enabled)
                     _ = _copilotClientProvider.TryEnsureStartedAsync(CancellationToken.None);
+
+                await _progressReporter.ReportAsync(progressToken, 1, 3,
+                    $"PR #{prNumber} metadata retrieved", cancellationToken);
 
                 (int TotalPages, int TotalFiles, int BudgetPerPage, IReadOnlyList<(int Page, int Count)> ByPage)? paging = null;
                 bool pagingDeferred = false;
@@ -120,6 +132,9 @@ namespace REBUSS.Pure.Tools
 
                 var text = PlainTextFormatter.FormatMetadata(metadata, prNumber.Value, paging, pagingDeferred);
                 sw.Stop();
+
+                await _progressReporter.ReportAsync(progressToken, 3, 3,
+                    $"PR #{prNumber} metadata complete", cancellationToken);
 
                 _logger.LogInformation(Resources.LogGetPrMetadataCompleted, prNumber, text.Length, sw.ElapsedMilliseconds);
 

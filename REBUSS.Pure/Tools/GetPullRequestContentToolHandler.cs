@@ -10,6 +10,7 @@ using REBUSS.Pure.Core.Exceptions;
 using REBUSS.Pure.Core.Models.Pagination;
 using REBUSS.Pure.Core.Models.ResponsePacking;
 using REBUSS.Pure.Core.Services.CopilotReview;
+using REBUSS.Pure.Core.Shared;
 using REBUSS.Pure.Properties;
 using REBUSS.Pure.Services.PrEnrichment;
 using REBUSS.Pure.Services.ResponsePacking;
@@ -36,6 +37,7 @@ namespace REBUSS.Pure.Tools
         private readonly IOptions<WorkflowOptions> _workflowOptions;
         private readonly ICopilotAvailabilityDetector _copilotAvailability;
         private readonly ICopilotReviewOrchestrator _copilotReviewOrchestrator;
+        private readonly IProgressReporter _progressReporter;
         private readonly ILogger<GetPullRequestContentToolHandler> _logger;
 
         public GetPullRequestContentToolHandler(
@@ -46,6 +48,7 @@ namespace REBUSS.Pure.Tools
             IOptions<WorkflowOptions> workflowOptions,
             ICopilotAvailabilityDetector copilotAvailability,
             ICopilotReviewOrchestrator copilotReviewOrchestrator,
+            IProgressReporter progressReporter,
             ILogger<GetPullRequestContentToolHandler> logger)
         {
             _metadataProvider = metadataProvider;
@@ -55,6 +58,7 @@ namespace REBUSS.Pure.Tools
             _workflowOptions = workflowOptions;
             _copilotAvailability = copilotAvailability;
             _copilotReviewOrchestrator = copilotReviewOrchestrator;
+            _progressReporter = progressReporter;
             _logger = logger;
         }
 
@@ -85,6 +89,11 @@ namespace REBUSS.Pure.Tools
                 _logger.LogInformation(Resources.LogGetPrContentEntry, prNumber, pageNumber);
                 var sw = Stopwatch.StartNew();
 
+                // TODO(017): wire progressToken from request _meta once SDK injection is confirmed
+                object? progressToken = null;
+                await _progressReporter.ReportAsync(progressToken, 0, 4,
+                    $"Starting content retrieval for PR #{prNumber}", cancellationToken);
+
                 var budget = _budgetResolver.Resolve(maxTokens, modelName);
                 var safeBudget = budget.SafeBudgetTokens;
 
@@ -113,6 +122,9 @@ namespace REBUSS.Pure.Tools
                 using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 linkedCts.CancelAfter(_workflowOptions.Value.ContentInternalTimeoutMs);
 
+                await _progressReporter.ReportAsync(progressToken, 1, 4,
+                    $"Waiting for enrichment — PR #{prNumber}", cancellationToken);
+
                 PrEnrichmentResult result;
                 try
                 {
@@ -129,6 +141,9 @@ namespace REBUSS.Pure.Tools
                 // Feature 013 branch: if Copilot is available + enabled, the server performs
                 // the review itself and returns compact page summaries in a single response.
                 // Otherwise, fall through to the existing content-only path.
+                await _progressReporter.ReportAsync(progressToken, 2, 4,
+                    $"Enrichment complete — checking review mode", cancellationToken);
+
                 var copilotAvailable = await _copilotAvailability.IsAvailableAsync(cancellationToken);
                 if (copilotAvailable)
                 {
@@ -162,6 +177,10 @@ namespace REBUSS.Pure.Tools
                 var blocks = BuildPageBlocks(pageSlice, pageNumber.Value, allocation, result);
 
                 sw.Stop();
+
+                await _progressReporter.ReportAsync(progressToken, 4, 4,
+                    $"Content ready — page {pageNumber}/{allocation.TotalPages}", cancellationToken);
+
                 _logger.LogInformation(Resources.LogGetPrContentCompleted,
                     prNumber, pageNumber, allocation.TotalPages, pageSlice.Items.Count, sw.ElapsedMilliseconds);
 

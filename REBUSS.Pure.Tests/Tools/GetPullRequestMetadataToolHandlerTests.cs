@@ -10,6 +10,7 @@ using REBUSS.Pure.Core.Models;
 using REBUSS.Pure.Core.Models.Pagination;
 using REBUSS.Pure.Core.Models.ResponsePacking;
 using REBUSS.Pure.Core.Services.CopilotReview;
+using REBUSS.Pure.Core.Shared;
 using REBUSS.Pure.Services.CopilotReview;
 using REBUSS.Pure.Services.PrEnrichment;
 using REBUSS.Pure.Services.ResponsePacking;
@@ -29,6 +30,7 @@ public class GetPullRequestMetadataToolHandlerTests
     private readonly ICopilotClientProvider _copilotClientProvider = Substitute.For<ICopilotClientProvider>();
     private readonly IOptions<CopilotReviewOptions> _copilotReviewOptions =
         Options.Create(new CopilotReviewOptions { Enabled = false });
+    private readonly IProgressReporter _progressReporter = Substitute.For<IProgressReporter>();
     private readonly GetPullRequestMetadataToolHandler _handler;
 
     private static readonly FullPullRequestMetadata SampleMetadata = new()
@@ -97,6 +99,7 @@ public class GetPullRequestMetadataToolHandlerTests
             _workflowOptions,
             _copilotClientProvider,
             _copilotReviewOptions,
+            _progressReporter,
             NullLogger<GetPullRequestMetadataToolHandler>.Instance);
     }
 
@@ -356,7 +359,7 @@ public class GetPullRequestMetadataToolHandlerTests
         var handler = new GetPullRequestMetadataToolHandler(
             _dataProvider, _budgetResolver, _downloadOrchestrator,
             _enrichmentOrchestrator, _pageAllocator, _workflowOptions,
-            copilotProvider, copilotOptions,
+            copilotProvider, copilotOptions, _progressReporter,
             NullLogger<GetPullRequestMetadataToolHandler>.Instance);
 
         await handler.ExecuteAsync(prNumber: 42);
@@ -373,11 +376,23 @@ public class GetPullRequestMetadataToolHandlerTests
         var handler = new GetPullRequestMetadataToolHandler(
             _dataProvider, _budgetResolver, _downloadOrchestrator,
             _enrichmentOrchestrator, _pageAllocator, _workflowOptions,
-            copilotProvider, copilotOptions,
+            copilotProvider, copilotOptions, _progressReporter,
             NullLogger<GetPullRequestMetadataToolHandler>.Instance);
 
         await handler.ExecuteAsync(prNumber: 42);
 
         await copilotProvider.DidNotReceive().TryEnsureStartedAsync(Arg.Any<CancellationToken>());
+    }
+
+    // ─── Feature 017: Progress notifications ─────────────────────────────────
+
+    [Fact]
+    public async Task ExecuteAsync_ReportsProgress_StartAndCompletion()
+    {
+        await _handler.ExecuteAsync(prNumber: 42);
+
+        var calls = _progressReporter.ReceivedCalls()
+            .Count(c => c.GetMethodInfo().Name == nameof(IProgressReporter.ReportAsync));
+        Assert.True(calls >= 2, $"Expected at least 2 progress reports (start + complete), got {calls}");
     }
 }
