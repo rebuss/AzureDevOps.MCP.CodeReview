@@ -157,7 +157,7 @@ public class CopilotCliSetupStepTests
     public async Task GhInstalledButNotAuthenticated_LoginSucceeds_ProceedsToExtensionPrompt()
     {
         var output = new StringWriter();
-        var input = new StringReader("y\n"); // answers extension prompt only — not entry prompt
+        var input = new StringReader("y\ny\n"); // first "y" answers auth prompt, second answers extension prompt
         var authed = false;
         var runner = Scripted(args =>
         {

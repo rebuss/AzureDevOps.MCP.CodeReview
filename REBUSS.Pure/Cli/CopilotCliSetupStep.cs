@@ -100,10 +100,17 @@ internal sealed class CopilotCliSetupStep
             }
 
             // Authenticate `gh` if necessary.
+            // No extra prompt here — the user already consented at the entry prompt above.
             if (!await IsGhAuthenticatedAsync(cancellationToken))
             {
-                if (!await PromptAndRunAuthLoginAsync(cancellationToken))
+                await _output.WriteLineAsync("A browser window will open to authenticate GitHub CLI.");
+                var loginExit = await RunGhInteractiveAsync("auth login --web", cancellationToken);
+                if (loginExit != 0 || !await IsGhAuthenticatedAsync(cancellationToken))
+                {
+                    await WriteDeclineBannerAsync();
+                    _logger?.LogWarning("copilot-setup: login-failed");
                     return;
+                }
             }
 
             // User already consented at the entry prompt — install extension directly (Clarification Q2).
