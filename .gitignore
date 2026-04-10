@@ -30,3 +30,4 @@ REBUSS.Pure.RoslynProcessor.Tests/bin/
 REBUSS.Pure.RoslynProcessor.Tests/obj/
 REBUSS.Pure.RoslynProcessor/bin/
 REBUSS.Pure.RoslynProcessor/obj/
+.claude/

@@ -45,25 +45,6 @@ public sealed class ContextWindowOptions
     public int? GatewayMaxTokens { get; set; }
 
     /// <summary>
-    /// Context-window threshold (in tokens) above which a model is considered
-    /// "large-context" and the per-call default budget is capped to
-    /// <see cref="LargeContextCeilingTokens"/>. Default 100 000.
-    /// </summary>
-    public int LargeContextThresholdTokens { get; set; } = 100_000;
-
-    /// <summary>
-    /// Hard ceiling (in tokens) applied to the resolved budget when the source
-    /// is the model registry or the safe default AND the underlying context
-    /// window exceeds <see cref="LargeContextThresholdTokens"/>. Prevents
-    /// large-context models (Opus, GPT-4.1, Gemini Pro) from defaulting to
-    /// page budgets that, after enrichment + JSON-RPC framing, blow past
-    /// common host tool-result ceilings (~25 000 tokens).
-    /// Set to 0 or negative to disable. Explicit per-call <c>maxTokens</c>
-    /// always bypasses this cap.
-    /// </summary>
-    public int LargeContextCeilingTokens { get; set; }
-
-    /// <summary>
     /// Model identifier to total context window size (tokens) mapping.
     /// Keys are compared case-insensitively.
     /// </summary>

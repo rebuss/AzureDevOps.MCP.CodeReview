@@ -8,7 +8,7 @@ Extract:
 
 Use MCP server: REBUSS.Pure.
 
-Your job: perform a professional code review of the PR while minimizing context usage.
+Your job: perform a professional code review of the PR.
 
 ---
 
