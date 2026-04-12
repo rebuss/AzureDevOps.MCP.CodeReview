@@ -83,10 +83,10 @@ public class CopilotReviewOrchestratorTests
             .Returns(ci => Task.FromResult(CopilotPageReviewResult.Success(ci.Arg<int>(), "ok", 1)));
 
         var orchestrator = Create(reviewer);
-        orchestrator.TriggerReview(42, BuildEnrichment());
-        var result = await orchestrator.WaitForReviewAsync(42, CancellationToken.None);
+        orchestrator.TriggerReview("pr:42", BuildEnrichment());
+        var result = await orchestrator.WaitForReviewAsync("pr:42", CancellationToken.None);
 
-        Assert.Equal(42, result.PrNumber);
+        Assert.Equal("pr:42", result.ReviewKey);
         Assert.Equal(2, result.TotalPages);
         Assert.Equal(2, result.SucceededPages);
         Assert.Equal(0, result.FailedPages);
@@ -102,10 +102,10 @@ public class CopilotReviewOrchestratorTests
 
         var orchestrator = Create(reviewer);
         var enrichment = BuildEnrichment();
-        orchestrator.TriggerReview(42, enrichment);
-        orchestrator.TriggerReview(42, enrichment); // second trigger
-        orchestrator.TriggerReview(42, enrichment); // third trigger
-        _ = await orchestrator.WaitForReviewAsync(42, CancellationToken.None);
+        orchestrator.TriggerReview("pr:42", enrichment);
+        orchestrator.TriggerReview("pr:42", enrichment); // second trigger
+        orchestrator.TriggerReview("pr:42", enrichment); // third trigger
+        _ = await orchestrator.WaitForReviewAsync("pr:42", CancellationToken.None);
 
         // 2 pages × 1 trigger = 2 calls total (not 6).
         await reviewer.Received(2).ReviewPageAsync(
@@ -117,7 +117,7 @@ public class CopilotReviewOrchestratorTests
     {
         var reviewer = Substitute.For<ICopilotPageReviewer>();
         var orchestrator = Create(reviewer);
-        Assert.Null(orchestrator.TryGetSnapshot(999));
+        Assert.Null(orchestrator.TryGetSnapshot("pr:999"));
         await Task.CompletedTask;
     }
 
@@ -129,14 +129,14 @@ public class CopilotReviewOrchestratorTests
             .Returns(ci => Task.FromResult(CopilotPageReviewResult.Success(ci.Arg<int>(), "ok", 1)));
 
         var orchestrator = Create(reviewer);
-        orchestrator.TriggerReview(42, BuildEnrichment());
-        _ = await orchestrator.WaitForReviewAsync(42, CancellationToken.None);
+        orchestrator.TriggerReview("pr:42", BuildEnrichment());
+        _ = await orchestrator.WaitForReviewAsync("pr:42", CancellationToken.None);
 
-        var snapshot = orchestrator.TryGetSnapshot(42);
+        var snapshot = orchestrator.TryGetSnapshot("pr:42");
         Assert.NotNull(snapshot);
         Assert.Equal(CopilotReviewStatus.Ready, snapshot!.Status);
         Assert.NotNull(snapshot.Result);
-        Assert.Equal(42, snapshot.Result!.PrNumber);
+        Assert.Equal("pr:42", snapshot.Result!.ReviewKey);
     }
 
     [Fact]
@@ -147,10 +147,10 @@ public class CopilotReviewOrchestratorTests
             .Returns(ci => Task.FromResult(CopilotPageReviewResult.Success(ci.Arg<int>(), "ok", 1)));
 
         var orchestrator = Create(reviewer);
-        orchestrator.TriggerReview(42, BuildEnrichment());
-        _ = await orchestrator.WaitForReviewAsync(42, CancellationToken.None);
+        orchestrator.TriggerReview("pr:42", BuildEnrichment());
+        _ = await orchestrator.WaitForReviewAsync("pr:42", CancellationToken.None);
 
-        var snapshot = orchestrator.TryGetSnapshot(42);
+        var snapshot = orchestrator.TryGetSnapshot("pr:42");
         Assert.NotNull(snapshot);
         Assert.Equal(2, snapshot!.TotalPages);
         Assert.Equal(2, snapshot.CompletedPages);
@@ -162,21 +162,12 @@ public class CopilotReviewOrchestratorTests
         var reviewer = Substitute.For<ICopilotPageReviewer>();
         var orchestrator = Create(reviewer, pageAllocator: BuildAllocator(numberOfPages: 0));
 
-        orchestrator.TriggerReview(42, BuildEnrichment());
-        var result = await orchestrator.WaitForReviewAsync(42, CancellationToken.None);
+        orchestrator.TriggerReview("pr:42", BuildEnrichment());
+        var result = await orchestrator.WaitForReviewAsync("pr:42", CancellationToken.None);
 
         Assert.Equal(0, result.TotalPages);
         await reviewer.DidNotReceive().ReviewPageAsync(
             Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task TriggerReview_WrongEnrichmentType_ThrowsArgumentException()
-    {
-        var reviewer = Substitute.For<ICopilotPageReviewer>();
-        var orchestrator = Create(reviewer);
-        Assert.Throws<ArgumentException>(() => orchestrator.TriggerReview(42, "not an enrichment result"));
-        await Task.CompletedTask;
     }
 
     // ─── Feature 013 Phase 5 US3 (T037) — 3-attempt retry scenarios ──────────────
@@ -198,8 +189,8 @@ public class CopilotReviewOrchestratorTests
 
         // Single-page allocator so the failure count is predictable.
         var orchestrator = Create(reviewer, BuildAllocator(numberOfPages: 1));
-        orchestrator.TriggerReview(42, BuildEnrichment(fileCount: 2));
-        var result = await orchestrator.WaitForReviewAsync(42, CancellationToken.None);
+        orchestrator.TriggerReview("pr:42", BuildEnrichment(fileCount: 2));
+        var result = await orchestrator.WaitForReviewAsync("pr:42", CancellationToken.None);
 
         Assert.Equal(1, result.TotalPages);
         Assert.Equal(1, result.SucceededPages);
@@ -217,8 +208,8 @@ public class CopilotReviewOrchestratorTests
                 ci.Arg<int>(), Array.Empty<string>(), "persistent error", 1)));
 
         var orchestrator = Create(reviewer, BuildAllocator(numberOfPages: 1));
-        orchestrator.TriggerReview(42, BuildEnrichment(fileCount: 3));
-        var result = await orchestrator.WaitForReviewAsync(42, CancellationToken.None);
+        orchestrator.TriggerReview("pr:42", BuildEnrichment(fileCount: 3));
+        var result = await orchestrator.WaitForReviewAsync("pr:42", CancellationToken.None);
 
         Assert.Equal(1, result.TotalPages);
         Assert.Equal(0, result.SucceededPages);
@@ -249,8 +240,8 @@ public class CopilotReviewOrchestratorTests
             });
 
         var orchestrator = Create(reviewer, BuildAllocator(numberOfPages: 2));
-        orchestrator.TriggerReview(42, BuildEnrichment(fileCount: 4));
-        var result = await orchestrator.WaitForReviewAsync(42, CancellationToken.None);
+        orchestrator.TriggerReview("pr:42", BuildEnrichment(fileCount: 4));
+        var result = await orchestrator.WaitForReviewAsync("pr:42", CancellationToken.None);
 
         Assert.Equal(2, result.TotalPages);
         Assert.Equal(1, result.SucceededPages);
@@ -269,8 +260,8 @@ public class CopilotReviewOrchestratorTests
                 ci.Arg<int>(), Array.Empty<string>(), "down", 1)));
 
         var orchestrator = Create(reviewer, BuildAllocator(numberOfPages: 3));
-        orchestrator.TriggerReview(42, BuildEnrichment(fileCount: 6));
-        var result = await orchestrator.WaitForReviewAsync(42, CancellationToken.None);
+        orchestrator.TriggerReview("pr:42", BuildEnrichment(fileCount: 6));
+        var result = await orchestrator.WaitForReviewAsync("pr:42", CancellationToken.None);
 
         Assert.Equal(3, result.TotalPages);
         Assert.Equal(0, result.SucceededPages);
@@ -281,5 +272,38 @@ public class CopilotReviewOrchestratorTests
             Assert.NotEmpty(p.FailedFilePaths);
             Assert.Equal(3, p.AttemptsMade);
         });
+    }
+
+    [Fact]
+    public async Task TriggerReview_PrAndLocalKeys_ProduceIndependentJobs()
+    {
+        // Arrange: reviewer that always succeeds.
+        var reviewer = Substitute.For<ICopilotPageReviewer>();
+        reviewer.ReviewPageAsync(Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(ci => CopilotPageReviewResult.Success(ci.Arg<int>(), "ok", 1));
+
+        var orchestrator = Create(reviewer);
+        var prEnrichment = BuildEnrichment(fileCount: 2);
+
+        // Act: trigger two reviews with different key prefixes.
+        orchestrator.TriggerReview("pr:42", prEnrichment);
+        orchestrator.TriggerReview("local:staged:/repo", prEnrichment);
+
+        var prResult = await orchestrator.WaitForReviewAsync("pr:42", CancellationToken.None);
+        var localResult = await orchestrator.WaitForReviewAsync("local:staged:/repo", CancellationToken.None);
+
+        // Assert: both complete independently with their own keys.
+        Assert.Equal("pr:42", prResult.ReviewKey);
+        Assert.Equal("local:staged:/repo", localResult.ReviewKey);
+
+        var prSnapshot = orchestrator.TryGetSnapshot("pr:42");
+        var localSnapshot = orchestrator.TryGetSnapshot("local:staged:/repo");
+        Assert.NotNull(prSnapshot);
+        Assert.NotNull(localSnapshot);
+        Assert.Equal(CopilotReviewStatus.Ready, prSnapshot!.Status);
+        Assert.Equal(CopilotReviewStatus.Ready, localSnapshot!.Status);
+
+        // Snapshots are truly independent — querying a non-existent key returns null.
+        Assert.Null(orchestrator.TryGetSnapshot("pr:999"));
     }
 }

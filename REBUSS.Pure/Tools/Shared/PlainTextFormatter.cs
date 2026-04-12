@@ -306,10 +306,13 @@ internal static class PlainTextFormatter
     /// so the IDE prompt can detect the mode and adapt behavior (FR-004, FR-014).
     /// </summary>
     public static string FormatCopilotReviewHeader(int prNumber, int totalPages, int succeeded, int failed)
+        => FormatCopilotReviewHeader($"PR #{prNumber}", totalPages, succeeded, failed);
+
+    public static string FormatCopilotReviewHeader(string reviewSubject, int totalPages, int succeeded, int failed)
     {
         var sb = new StringBuilder();
         sb.AppendLine(Resources.CopilotReviewModeHeader);
-        sb.Append($"PR #{prNumber} — Review completed ({totalPages} pages reviewed, {succeeded} succeeded, {failed} failed)");
+        sb.Append($"{reviewSubject} — Review completed ({totalPages} pages reviewed, {succeeded} succeeded, {failed} failed)");
         return sb.ToString();
     }
 

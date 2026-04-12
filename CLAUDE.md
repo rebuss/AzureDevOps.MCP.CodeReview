@@ -1,6 +1,6 @@
 # REBUSS.Pure Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2026-04-11
+Auto-generated from all feature plans. Last updated: 2026-04-12
 
 ## Active Technologies
 - C# 14 on .NET 10 (`net10.0`), `<Nullable>enable</Nullable>` + Microsoft.Extensions.Logging, Microsoft.Extensions.Http (Polly via `AddStandardResilienceHandler`) (014-log-noise-reduction)
@@ -26,6 +26,7 @@ tests/
 C# 14 on .NET 10 (`net10.0`), `<Nullable>enable</Nullable>`: Follow standard conventions
 
 ## Recent Changes
+- 019-unified-self-review: Unified self-review pipeline — `IEnrichmentResult` interface, `LocalEnrichmentOrchestrator`, `CopilotReviewWaiter`, generalized `CopilotReviewOrchestrator` (string keys), rewritten `GetLocalContentToolHandler` with Copilot SDK + progress notifications + mode headers
 - 015-api-call-optimization: Added C# 14 on .NET 10 (`net10.0`), `<Nullable>enable</Nullable>` + `GitHubApiClient` (HTTP via `IHttpClientFactory`), `GitHubDiffProvider`, `CopilotClientProvider` (Copilot SDK), `CopilotReviewOptions`
 - 014-log-noise-reduction: Added C# 14 on .NET 10 (`net10.0`), `<Nullable>enable</Nullable>` + Microsoft.Extensions.Logging, Microsoft.Extensions.Http (Polly via `AddStandardResilienceHandler`)
 - 013-copilot-review-layer: Added [if applicable, e.g., PostgreSQL, CoreData, files or N/A]

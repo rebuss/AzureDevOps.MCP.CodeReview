@@ -7,7 +7,7 @@ namespace REBUSS.Pure.Core.Models.CopilotReview;
 /// </summary>
 public sealed record CopilotReviewSnapshot
 {
-    public required int PrNumber { get; init; }
+    public required string ReviewKey { get; init; }
     public required CopilotReviewStatus Status { get; init; }
     public CopilotReviewResult? Result { get; init; }
     public string? ErrorMessage { get; init; }

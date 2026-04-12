@@ -45,6 +45,30 @@ Example:
 
 ---
 
+## Response Mode Detection
+
+After calling `get_local_content`, check the **first content block** for a mode indicator:
+
+### If `[review-mode: copilot-assisted]`
+The MCP server has already performed the code review using GitHub Copilot.
+The response contains review summaries for each page — NOT raw diff content.
+
+Your task:
+1. Read all page review summaries.
+2. Organize findings by severity:
+   - **Critical Issues** — group all critical findings from all pages
+   - **Major Issues** — group all major findings from all pages
+   - **Minor Suggestions** — group all minor findings from all pages
+3. Remove duplicates (same finding reported from different pages).
+4. Produce a single coherent review report in the Output Format below.
+5. Do NOT ask the user to continue to the next page — all pages are already reviewed.
+
+### If `[review-mode: content-only]`
+Standard flow — review the diff content yourself, page by page with user confirmation.
+Follow the Mandatory Workflow below.
+
+---
+
 ## Mandatory Workflow
 
 ### Step 1 – First page

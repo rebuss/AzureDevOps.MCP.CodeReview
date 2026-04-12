@@ -187,6 +187,7 @@ namespace REBUSS.Pure
             services.AddSingleton<ICopilotAvailabilityDetector, CopilotAvailabilityDetector>();
             services.AddSingleton<ICopilotPageReviewer, CopilotPageReviewer>();
             services.AddSingleton<ICopilotReviewOrchestrator, CopilotReviewOrchestrator>();
+            services.AddSingleton<CopilotReviewWaiter>();
 
             // Context Window Awareness
             services.Configure<ContextWindowOptions>(configuration.GetSection(ContextWindowOptions.SectionName));
@@ -224,6 +225,7 @@ namespace REBUSS.Pure
             // Local self-review pipeline
             services.AddSingleton<ILocalGitClient, LocalGitClient>();
             services.AddSingleton<ILocalReviewProvider, LocalReviewProvider>();
+            services.AddSingleton<ILocalEnrichmentOrchestrator, LocalEnrichmentOrchestrator>();
         }
 
         private static Dictionary<string, string?> BuildCliConfigOverrides(CliParseResult parseResult)

@@ -130,4 +130,54 @@ public class PlainTextFormatterTests
         var text = PlainTextFormatter.FormatContentOnlyModeHeader();
         Assert.Equal("[review-mode: content-only]", text);
     }
+
+    // ─── T029: FormatCopilotReviewHeader string overload tests ──────────────────
+
+    [Fact]
+    public void FormatCopilotReviewHeader_StringOverload_ContainsModeAndCounts()
+    {
+        var text = PlainTextFormatter.FormatCopilotReviewHeader(
+            reviewSubject: "Local changes (working-tree)",
+            totalPages: 3, succeeded: 2, failed: 1);
+
+        Assert.Contains("[review-mode: copilot-assisted]", text);
+        Assert.Contains("Local changes (working-tree)", text);
+        Assert.Contains("3 pages", text);
+        Assert.Contains("2 succeeded", text);
+        Assert.Contains("1 failed", text);
+    }
+
+    [Fact]
+    public void FormatCopilotReviewHeader_StringOverload_AllSucceeded_ZeroFailed()
+    {
+        var text = PlainTextFormatter.FormatCopilotReviewHeader(
+            reviewSubject: "Local changes (staged)",
+            totalPages: 2, succeeded: 2, failed: 0);
+
+        Assert.Contains("[review-mode: copilot-assisted]", text);
+        Assert.Contains("Local changes (staged)", text);
+        Assert.Contains("2 pages", text);
+        Assert.Contains("0 failed", text);
+    }
+
+    [Fact]
+    public void FormatCopilotReviewHeader_StringOverload_DifferentSubjectThanPrNumber()
+    {
+        var text = PlainTextFormatter.FormatCopilotReviewHeader(
+            reviewSubject: "Local changes (main)",
+            totalPages: 1, succeeded: 1, failed: 0);
+
+        // Should NOT contain "PR #" since we used a string subject.
+        Assert.DoesNotContain("PR #", text);
+        Assert.Contains("Local changes (main)", text);
+    }
+
+    [Fact]
+    public void FormatCopilotReviewHeader_IntOverload_ContainsPrPrefix()
+    {
+        var text = PlainTextFormatter.FormatCopilotReviewHeader(
+            prNumber: 99, totalPages: 1, succeeded: 1, failed: 0);
+
+        Assert.Contains("PR #99", text);
+    }
 }

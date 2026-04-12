@@ -4,6 +4,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using REBUSS.Pure.Core;
+using REBUSS.Pure.Core.Models;
 using REBUSS.Pure.Core.Models.CopilotReview;
 using REBUSS.Pure.Core.Services.CopilotReview;
 using REBUSS.Pure.Properties;
@@ -12,10 +13,9 @@ using REBUSS.Pure.Services.PrEnrichment;
 namespace REBUSS.Pure.Services.CopilotReview;
 
 /// <summary>
-/// Coordinates the server-side Copilot review of every page of a PR's enriched content.
-/// Mirrors the <c>PrEnrichmentOrchestrator</c> trigger/wait/snapshot pattern with a
-/// PR-number-only cache key (Clarification Q2). Retry logic (research.md Decision 3)
-/// is layered in via T040 (Phase 5 US3) — Phase 3 US1 ships the happy path only.
+/// Coordinates the server-side Copilot review of every page of enriched content.
+/// Source-agnostic — serves both PR reviews and local self-reviews via string-based
+/// review keys. Mirrors the <c>PrEnrichmentOrchestrator</c> trigger/wait/snapshot pattern.
 /// </summary>
 internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
 {
@@ -25,7 +25,7 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
     private readonly ILogger<CopilotReviewOrchestrator> _logger;
     private readonly CancellationToken _shutdownToken;
 
-    private readonly ConcurrentDictionary<int, CopilotReviewJob> _jobs = new();
+    private readonly ConcurrentDictionary<string, CopilotReviewJob> _jobs = new();
     private readonly object _lock = new();
 
     public CopilotReviewOrchestrator(
@@ -42,54 +42,51 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
         _shutdownToken = lifetime.ApplicationStopping;
     }
 
-    public void TriggerReview(int prNumber, object enrichmentResult)
+    public void TriggerReview(string reviewKey, IEnrichmentResult enrichmentResult)
     {
+        ArgumentException.ThrowIfNullOrEmpty(reviewKey);
         ArgumentNullException.ThrowIfNull(enrichmentResult);
-        if (enrichmentResult is not PrEnrichmentResult enrichment)
-            throw new ArgumentException(
-                $"Expected PrEnrichmentResult, got {enrichmentResult.GetType().FullName}",
-                nameof(enrichmentResult));
 
         lock (_lock)
         {
-            // Idempotent per FR-010 / Clarification Q2 — cache key is prNumber only.
-            // If a job already exists for this PR, do nothing: the caller will observe
+            // Idempotent — cache key is reviewKey only.
+            // If a job already exists for this key, do nothing: the caller will observe
             // the same result via WaitForReviewAsync.
-            if (_jobs.ContainsKey(prNumber))
+            if (_jobs.ContainsKey(reviewKey))
                 return;
 
             var job = new CopilotReviewJob
             {
-                PrNumber = prNumber,
+                ReviewKey = reviewKey,
                 Completion = new TaskCompletionSource<CopilotReviewResult>(
                     TaskCreationOptions.RunContinuationsAsynchronously),
             };
-            _jobs[prNumber] = job;
+            _jobs[reviewKey] = job;
 
             // IMPORTANT: Task.Run with its own None token; the body honors _shutdownToken internally.
-            _ = Task.Run(() => BackgroundBodyAsync(job, enrichment), CancellationToken.None);
+            _ = Task.Run(() => BackgroundBodyAsync(job, enrichmentResult), CancellationToken.None);
         }
     }
 
-    public Task<CopilotReviewResult> WaitForReviewAsync(int prNumber, CancellationToken ct)
+    public Task<CopilotReviewResult> WaitForReviewAsync(string reviewKey, CancellationToken ct)
     {
-        if (!_jobs.TryGetValue(prNumber, out var job))
-            throw new InvalidOperationException($"No Copilot review job for PR #{prNumber}");
+        if (!_jobs.TryGetValue(reviewKey, out var job))
+            throw new InvalidOperationException($"No Copilot review job for key '{reviewKey}'");
 
         // Caller's ct only governs the wait; the background body keeps running (FR-011).
         return job.Completion.Task.WaitAsync(ct);
     }
 
-    public CopilotReviewSnapshot? TryGetSnapshot(int prNumber)
+    public CopilotReviewSnapshot? TryGetSnapshot(string reviewKey)
     {
-        if (!_jobs.TryGetValue(prNumber, out var job))
+        if (!_jobs.TryGetValue(reviewKey, out var job))
             return null;
 
         lock (_lock)
         {
             return new CopilotReviewSnapshot
             {
-                PrNumber = job.PrNumber,
+                ReviewKey = job.ReviewKey,
                 Status = job.Status,
                 Result = job.Result,
                 ErrorMessage = job.ErrorMessage,
@@ -100,7 +97,7 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
         }
     }
 
-    private async Task BackgroundBodyAsync(CopilotReviewJob job, PrEnrichmentResult enrichment)
+    private async Task BackgroundBodyAsync(CopilotReviewJob job, IEnrichmentResult enrichment)
     {
         var ct = _shutdownToken;
         try
@@ -111,7 +108,7 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
                 enrichment.SortedCandidates, _options.Value.ReviewBudgetTokens);
 
             _logger.LogInformation(
-                Resources.LogCopilotReviewTriggered, job.PrNumber, allocation.TotalPages);
+                Resources.LogCopilotReviewTriggered, job.ReviewKey, allocation.TotalPages);
 
             lock (_lock) { job.TotalPages = allocation.TotalPages; }
             job.CurrentActivity = $"Allocated {allocation.TotalPages} pages — starting reviews";
@@ -121,7 +118,7 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
             {
                 var emptyResult = new CopilotReviewResult
                 {
-                    PrNumber = job.PrNumber,
+                    ReviewKey = job.ReviewKey,
                     PageReviews = Array.Empty<CopilotPageReviewResult>(),
                     CompletedAt = DateTimeOffset.UtcNow,
                 };
@@ -149,7 +146,7 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
 
             var result = new CopilotReviewResult
             {
-                PrNumber = job.PrNumber,
+                ReviewKey = job.ReviewKey,
                 PageReviews = pageResults,
                 CompletedAt = DateTimeOffset.UtcNow,
             };
@@ -162,19 +159,19 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
 
             _logger.LogInformation(
                 Resources.LogCopilotReviewCompleted,
-                job.PrNumber, result.SucceededPages, result.TotalPages);
+                job.ReviewKey, result.SucceededPages, result.TotalPages);
 
             job.Completion.TrySetResult(result);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            _logger.LogInformation("Copilot review for PR {PrNumber} cancelled by shutdown", job.PrNumber);
+            _logger.LogInformation("Copilot review for '{ReviewKey}' cancelled by shutdown", job.ReviewKey);
             lock (_lock) { job.Status = CopilotReviewStatus.Failed; job.ErrorMessage = "cancelled"; }
             job.Completion.TrySetCanceled(ct);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, Resources.LogCopilotReviewFailed, job.PrNumber, ex.Message);
+            _logger.LogWarning(ex, Resources.LogCopilotReviewFailed, job.ReviewKey, ex.Message);
             lock (_lock) { job.Status = CopilotReviewStatus.Failed; job.ErrorMessage = ex.Message; }
             job.Completion.TrySetException(ex);
         }
@@ -221,7 +218,7 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
             var attemptSuffix = attempt > 1 ? $" (attempt {attempt})" : "";
             job.CurrentActivity = $"Page {pageNumber}/{job.TotalPages}: creating session{attemptSuffix}";
 
-            _logger.LogInformation(Resources.LogCopilotReviewPageStarted, job.PrNumber, pageNumber, attempt);
+            _logger.LogInformation(Resources.LogCopilotReviewPageStarted, job.ReviewKey, pageNumber, attempt);
             var sw = System.Diagnostics.Stopwatch.StartNew();
 
             job.CurrentActivity = $"Page {pageNumber}/{job.TotalPages}: waiting for Copilot response{attemptSuffix}";
@@ -248,7 +245,7 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
             {
                 _logger.LogInformation(
                     Resources.LogCopilotReviewPageCompleted,
-                    job.PrNumber, pageNumber, attempt, sw.ElapsedMilliseconds);
+                    job.ReviewKey, pageNumber, attempt, sw.ElapsedMilliseconds);
                 // Re-wrap so AttemptsMade reflects the retry that succeeded.
                 return CopilotPageReviewResult.Success(pageNumber, result.ReviewText!, attempt);
             }
@@ -256,7 +253,7 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
             lastError = result.ErrorMessage ?? "empty response";
             _logger.LogInformation(
                 Resources.LogCopilotReviewPageFailed,
-                job.PrNumber, pageNumber, attempt, lastError);
+                job.ReviewKey, pageNumber, attempt, lastError);
         }
 
         // All 3 attempts exhausted — fill in the file paths (the orchestrator is the only
@@ -266,7 +263,7 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
     }
 
     private static (string EnrichedContent, IReadOnlyList<string> FilePaths) BuildPageInput(
-        Core.Models.Pagination.PageSlice pageSlice, PrEnrichmentResult enrichment)
+        Core.Models.Pagination.PageSlice pageSlice, IEnrichmentResult enrichment)
     {
         var sb = new StringBuilder();
         var paths = new List<string>(pageSlice.Items.Count);
@@ -290,7 +287,7 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
     /// </summary>
     private sealed class CopilotReviewJob
     {
-        public required int PrNumber { get; init; }
+        public required string ReviewKey { get; init; }
         public CopilotReviewStatus Status { get; set; } = CopilotReviewStatus.Reviewing;
         public CopilotReviewResult? Result { get; set; }
         public string? ErrorMessage { get; set; }

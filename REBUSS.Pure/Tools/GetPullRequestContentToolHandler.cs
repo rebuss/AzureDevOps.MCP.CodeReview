@@ -37,6 +37,7 @@ namespace REBUSS.Pure.Tools
         private readonly IOptions<WorkflowOptions> _workflowOptions;
         private readonly ICopilotAvailabilityDetector _copilotAvailability;
         private readonly ICopilotReviewOrchestrator _copilotReviewOrchestrator;
+        private readonly Services.CopilotReview.CopilotReviewWaiter _copilotReviewWaiter;
         private readonly IProgressReporter _progressReporter;
         private readonly ILogger<GetPullRequestContentToolHandler> _logger;
 
@@ -48,6 +49,7 @@ namespace REBUSS.Pure.Tools
             IOptions<WorkflowOptions> workflowOptions,
             ICopilotAvailabilityDetector copilotAvailability,
             ICopilotReviewOrchestrator copilotReviewOrchestrator,
+            Services.CopilotReview.CopilotReviewWaiter copilotReviewWaiter,
             IProgressReporter progressReporter,
             ILogger<GetPullRequestContentToolHandler> logger)
         {
@@ -58,6 +60,7 @@ namespace REBUSS.Pure.Tools
             _workflowOptions = workflowOptions;
             _copilotAvailability = copilotAvailability;
             _copilotReviewOrchestrator = copilotReviewOrchestrator;
+            _copilotReviewWaiter = copilotReviewWaiter;
             _progressReporter = progressReporter;
             _logger = logger;
         }
@@ -168,10 +171,11 @@ namespace REBUSS.Pure.Tools
                     await _progressReporter.ReportAsync(progress, 3, null,
                         $"Copilot review started for PR #{prNumber}", cancellationToken);
 
-                    _copilotReviewOrchestrator.TriggerReview(prNumber.Value, result);
+                    var reviewKey = $"pr:{prNumber.Value}";
+                    _copilotReviewOrchestrator.TriggerReview(reviewKey, result);
 
-                    var copilotResult = await WaitForReviewWithProgressAsync(
-                        prNumber.Value, progress, cancellationToken);
+                    var copilotResult = await _copilotReviewWaiter.WaitWithProgressAsync(
+                        reviewKey, progress, 4, cancellationToken);
 
                     var copilotBlocks = BuildCopilotAssistedBlocks(prNumber.Value, copilotResult);
 
@@ -323,66 +327,5 @@ namespace REBUSS.Pure.Tools
             return categories;
         }
 
-        /// <summary>
-        /// Polls <see cref="ICopilotReviewOrchestrator.TryGetSnapshot"/> at a configurable
-        /// interval while waiting for the review to finish, sending incremental progress
-        /// notifications as pages complete. Returns the final result once all pages are done.
-        /// </summary>
-        private async Task<Core.Models.CopilotReview.CopilotReviewResult> WaitForReviewWithProgressAsync(
-            int prNumber,
-            IProgress<ProgressNotificationValue>? progress,
-            CancellationToken cancellationToken)
-        {
-            var reviewTask = _copilotReviewOrchestrator.WaitForReviewAsync(prNumber, cancellationToken);
-            var pollingIntervalMs = _workflowOptions.Value.CopilotReviewProgressPollingIntervalMs;
-
-            int lastReportedCompleted = 0;
-            string? lastReportedActivity = null;
-            int progressStep = 4; // continues after step 3 ("review started")
-
-            while (!reviewTask.IsCompleted)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                var snapshot = _copilotReviewOrchestrator.TryGetSnapshot(prNumber);
-                if (snapshot is not null)
-                {
-                    // Report page completions (higher priority).
-                    if (snapshot is { TotalPages: > 0, CompletedPages: > 0 } && snapshot.CompletedPages > lastReportedCompleted)
-                    {
-                        lastReportedCompleted = snapshot.CompletedPages;
-                        lastReportedActivity = null; // reset so next activity change is reported
-                        await _progressReporter.ReportAsync(progress,
-                            progressStep++, null,
-                            $"Copilot review — {snapshot.CompletedPages}/{snapshot.TotalPages} pages complete",
-                            cancellationToken);
-                    }
-                    // Report intermediate activity changes (e.g. "Page 2/5: creating session").
-                    else if (snapshot.CurrentActivity is not null && snapshot.CurrentActivity != lastReportedActivity)
-                    {
-                        lastReportedActivity = snapshot.CurrentActivity;
-                        await _progressReporter.ReportAsync(progress,
-                            progressStep++, null,
-                            snapshot.CurrentActivity,
-                            cancellationToken);
-                    }
-                }
-
-                await Task.WhenAny(reviewTask, Task.Delay(pollingIntervalMs, cancellationToken));
-            }
-
-            // Final snapshot check — the loop may exit before reporting the last page
-            // because reviewTask completes at the same time as the last page finishes.
-            var finalSnapshot = _copilotReviewOrchestrator.TryGetSnapshot(prNumber);
-            if (finalSnapshot is { TotalPages: > 0 } && finalSnapshot.CompletedPages > lastReportedCompleted)
-            {
-                await _progressReporter.ReportAsync(progress,
-                    progressStep++, null,
-                    $"Copilot review — {finalSnapshot.CompletedPages}/{finalSnapshot.TotalPages} pages complete",
-                    cancellationToken);
-            }
-
-            return await reviewTask;
-        }
     }
 }

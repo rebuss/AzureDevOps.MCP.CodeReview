@@ -1,3 +1,4 @@
+using REBUSS.Pure.Core.Models;
 using REBUSS.Pure.Core.Models.Pagination;
 using REBUSS.Pure.Core.Models.ResponsePacking;
 
@@ -8,7 +9,7 @@ namespace REBUSS.Pure.Services.PrEnrichment;
 /// <c>get_pr_metadata</c> and <c>get_pr_content</c> can reuse it without
 /// recomputation.
 /// </summary>
-public sealed record PrEnrichmentResult
+public sealed record PrEnrichmentResult : IEnrichmentResult
 {
     public required int PrNumber { get; init; }
 
