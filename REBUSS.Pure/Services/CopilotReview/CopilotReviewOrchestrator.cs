@@ -95,6 +95,7 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
                 ErrorMessage = job.ErrorMessage,
                 TotalPages = job.TotalPages,
                 CompletedPages = Volatile.Read(ref job.CompletedPages),
+                CurrentActivity = job.CurrentActivity,
             };
         }
     }
@@ -113,6 +114,7 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
                 Resources.LogCopilotReviewTriggered, job.PrNumber, allocation.TotalPages);
 
             lock (_lock) { job.TotalPages = allocation.TotalPages; }
+            job.CurrentActivity = $"Allocated {allocation.TotalPages} pages — starting reviews";
 
             // Empty-allocation fast path (edge case: empty PR / zero pages).
             if (allocation.TotalPages == 0)
@@ -193,7 +195,7 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
         IReadOnlyList<string> filePathsOnPage,
         CancellationToken ct)
     {
-        var result = await ReviewPageWithRetryAsync(job.PrNumber, pageNumber, enrichedContent, filePathsOnPage, ct);
+        var result = await ReviewPageWithRetryAsync(job, pageNumber, enrichedContent, filePathsOnPage, ct);
         Interlocked.Increment(ref job.CompletedPages);
         return result;
     }
@@ -205,7 +207,7 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
     /// on this page so the IDE agent can surface them for manual follow-up.
     /// </summary>
     private async Task<CopilotPageReviewResult> ReviewPageWithRetryAsync(
-        int prNumber,
+        CopilotReviewJob job,
         int pageNumber,
         string enrichedContent,
         IReadOnlyList<string> filePathsOnPage,
@@ -216,8 +218,13 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
         {
             ct.ThrowIfCancellationRequested();
 
-            _logger.LogInformation(Resources.LogCopilotReviewPageStarted, prNumber, pageNumber, attempt);
+            var attemptSuffix = attempt > 1 ? $" (attempt {attempt})" : "";
+            job.CurrentActivity = $"Page {pageNumber}/{job.TotalPages}: creating session{attemptSuffix}";
+
+            _logger.LogInformation(Resources.LogCopilotReviewPageStarted, job.PrNumber, pageNumber, attempt);
             var sw = System.Diagnostics.Stopwatch.StartNew();
+
+            job.CurrentActivity = $"Page {pageNumber}/{job.TotalPages}: waiting for Copilot response{attemptSuffix}";
 
             CopilotPageReviewResult result;
             try
@@ -241,7 +248,7 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
             {
                 _logger.LogInformation(
                     Resources.LogCopilotReviewPageCompleted,
-                    prNumber, pageNumber, attempt, sw.ElapsedMilliseconds);
+                    job.PrNumber, pageNumber, attempt, sw.ElapsedMilliseconds);
                 // Re-wrap so AttemptsMade reflects the retry that succeeded.
                 return CopilotPageReviewResult.Success(pageNumber, result.ReviewText!, attempt);
             }
@@ -249,7 +256,7 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
             lastError = result.ErrorMessage ?? "empty response";
             _logger.LogInformation(
                 Resources.LogCopilotReviewPageFailed,
-                prNumber, pageNumber, attempt, lastError);
+                job.PrNumber, pageNumber, attempt, lastError);
         }
 
         // All 3 attempts exhausted — fill in the file paths (the orchestrator is the only
@@ -294,5 +301,8 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
 
         /// <summary>Atomically incremented via <see cref="Interlocked.Increment"/> as each page finishes.</summary>
         public int CompletedPages;
+
+        /// <summary>Short status message updated at key points for progress reporting.</summary>
+        public volatile string? CurrentActivity;
     }
 }

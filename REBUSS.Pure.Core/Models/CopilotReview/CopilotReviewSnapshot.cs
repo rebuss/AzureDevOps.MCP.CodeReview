@@ -23,4 +23,11 @@ public sealed record CopilotReviewSnapshot
     /// atomically as each parallel page task finishes.
     /// </summary>
     public int CompletedPages { get; init; }
+
+    /// <summary>
+    /// Short human-readable description of the current activity (e.g. "Page 2/5: sending prompt").
+    /// Updated at key points by the orchestrator so the polling loop can report intermediate
+    /// progress between page completions.
+    /// </summary>
+    public string? CurrentActivity { get; init; }
 }

@@ -337,6 +337,7 @@ namespace REBUSS.Pure.Tools
             var pollingIntervalMs = _workflowOptions.Value.CopilotReviewProgressPollingIntervalMs;
 
             int lastReportedCompleted = 0;
+            string? lastReportedActivity = null;
             int progressStep = 4; // continues after step 3 ("review started")
 
             while (!reviewTask.IsCompleted)
@@ -344,13 +345,27 @@ namespace REBUSS.Pure.Tools
                 cancellationToken.ThrowIfCancellationRequested();
 
                 var snapshot = _copilotReviewOrchestrator.TryGetSnapshot(prNumber);
-                if (snapshot is { TotalPages: > 0, CompletedPages: > 0 } && snapshot.CompletedPages > lastReportedCompleted)
+                if (snapshot is not null)
                 {
-                    lastReportedCompleted = snapshot.CompletedPages;
-                    await _progressReporter.ReportAsync(progress,
-                        progressStep++, null,
-                        $"Copilot review — {snapshot.CompletedPages}/{snapshot.TotalPages} pages complete",
-                        cancellationToken);
+                    // Report page completions (higher priority).
+                    if (snapshot is { TotalPages: > 0, CompletedPages: > 0 } && snapshot.CompletedPages > lastReportedCompleted)
+                    {
+                        lastReportedCompleted = snapshot.CompletedPages;
+                        lastReportedActivity = null; // reset so next activity change is reported
+                        await _progressReporter.ReportAsync(progress,
+                            progressStep++, null,
+                            $"Copilot review — {snapshot.CompletedPages}/{snapshot.TotalPages} pages complete",
+                            cancellationToken);
+                    }
+                    // Report intermediate activity changes (e.g. "Page 2/5: creating session").
+                    else if (snapshot.CurrentActivity is not null && snapshot.CurrentActivity != lastReportedActivity)
+                    {
+                        lastReportedActivity = snapshot.CurrentActivity;
+                        await _progressReporter.ReportAsync(progress,
+                            progressStep++, null,
+                            snapshot.CurrentActivity,
+                            cancellationToken);
+                    }
                 }
 
                 await Task.WhenAny(reviewTask, Task.Delay(pollingIntervalMs, cancellationToken));
