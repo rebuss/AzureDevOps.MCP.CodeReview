@@ -131,18 +131,17 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
                 return;
             }
 
-            // Fire all page reviews in parallel. Each page is wrapped in the 3-attempt retry
-            // loop (T040 / research.md Decision 3, Clarification Q1).
-            var pageTasks = new List<Task<CopilotPageReviewResult>>(allocation.TotalPages);
+            // Process pages sequentially so that progress notifications advance in order
+            // (Page 1/N → 2/N → …). With the global request throttle serialising SDK calls,
+            // parallel dispatch only caused status-message races without a real throughput gain.
+            var pageResults = new CopilotPageReviewResult[allocation.TotalPages];
             for (var pageIdx = 0; pageIdx < allocation.TotalPages; pageIdx++)
             {
                 var pageSlice = allocation.Pages[pageIdx];
                 var pageNumber = pageSlice.PageNumber;
                 var (enrichedContent, filePaths) = BuildPageInput(pageSlice, enrichment);
-                pageTasks.Add(ReviewPageAndTrackAsync(job, pageNumber, enrichedContent, filePaths, ct));
+                pageResults[pageIdx] = await ReviewPageAndTrackAsync(job, pageNumber, enrichedContent, filePaths, ct);
             }
-
-            var pageResults = await Task.WhenAll(pageTasks).ConfigureAwait(false);
 
             var result = new CopilotReviewResult
             {
