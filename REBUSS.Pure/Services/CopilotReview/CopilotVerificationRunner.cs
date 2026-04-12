@@ -366,9 +366,7 @@ internal sealed class CopilotVerificationRunner : ICopilotVerificationProbe
 
         if (LooksLikeFreeTier(quota.QuotaSnapshots))
         {
-            var keys = quota.QuotaSnapshots is null
-                ? string.Empty
-                : string.Join(",", quota.QuotaSnapshots.Keys);
+            var keys = string.Join(",", quota.QuotaSnapshots!.Keys);
             _logger.LogWarning(Resources.LogCopilotFreeTierShapeWarning, keys);
         }
     }

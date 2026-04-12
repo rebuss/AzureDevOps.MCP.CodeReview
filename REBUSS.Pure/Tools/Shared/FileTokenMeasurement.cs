@@ -26,6 +26,9 @@ internal static class FileTokenMeasurement
 
         foreach (var file in diff.Files)
         {
+            if (file.Additions == 0 && file.Deletions == 0)
+                continue;
+
             var structured = MapToStructured(file);
             var plainText = PlainTextFormatter.FormatFileDiff(structured);
             var actualTokens = tokenEstimator.EstimateTokenCount(plainText);
@@ -67,6 +70,10 @@ internal static class FileTokenMeasurement
         foreach (var file in diff.Files)
         {
             ct.ThrowIfCancellationRequested();
+
+            if (file.Additions == 0 && file.Deletions == 0)
+                continue;
+
             var structured = MapToStructured(file);
             var plainText = PlainTextFormatter.FormatFileDiff(structured);
             var enriched = await codeProcessor.AddBeforeAfterContext(plainText, ct);

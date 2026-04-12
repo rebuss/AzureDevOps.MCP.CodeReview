@@ -58,6 +58,7 @@ public class RepositoryDownloadOrchestrator : IRepositoryDownloadOrchestrator
                     "Cancelling in-progress download for PR #{OldPr} to start PR #{NewPr}",
                     _state.PrNumber, prNumber);
                 _downloadCts?.Cancel();
+                _downloadCts?.Dispose();
             }
 
             // Clean up old extracted directory if switching PRs
@@ -204,6 +205,7 @@ public class RepositoryDownloadOrchestrator : IRepositoryDownloadOrchestrator
     {
         _logger.LogInformation("Server shutting down — cleaning up repository download");
         _downloadCts?.Cancel();
+        _downloadCts?.Dispose();
         TryDeleteDirectory(_instanceDir);
     }
 

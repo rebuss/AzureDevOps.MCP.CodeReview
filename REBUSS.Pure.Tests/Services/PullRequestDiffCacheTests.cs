@@ -125,12 +125,14 @@ public class PullRequestDiffCacheTests
     }
 
     [Fact]
-    public async Task GetOrFetchDiffAsync_PassesCancellationToken()
+    public async Task GetOrFetchDiffAsync_FetchUsesNoneToken_SoCallerCancellationDoesNotKillSharedFetch()
     {
         using var cts = new CancellationTokenSource();
         await _cache.GetOrFetchDiffAsync(42, ct: cts.Token);
 
-        await _inner.Received(1).GetDiffAsync(42, cts.Token);
+        // The factory uses CancellationToken.None so that one caller's cancellation
+        // does not abort the shared fetch for all waiters.
+        await _inner.Received(1).GetDiffAsync(42, CancellationToken.None);
     }
 
     // --- Staleness detection ---

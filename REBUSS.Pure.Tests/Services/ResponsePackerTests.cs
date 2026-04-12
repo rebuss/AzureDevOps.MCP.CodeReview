@@ -206,7 +206,7 @@ public class ResponsePackerTests
 
         var decision = _packer.Pack(candidates, 0);
 
-        // With 0 budget, effective budget is 0. Everything deferred.
+        // With 0 budget, nothing fits fully. Items are either Deferred or Partial (truncated to 0).
         Assert.All(decision.Items, item =>
             Assert.True(item.Status == PackingItemStatus.Deferred || item.Status == PackingItemStatus.Partial));
     }

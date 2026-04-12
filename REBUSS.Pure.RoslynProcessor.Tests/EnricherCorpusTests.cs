@@ -87,7 +87,12 @@ public class EnricherCorpusTests : IDisposable
             var parts = trimmed.Split(' ');
             var minus = parts[1].TrimStart('-').Split(',');
             var plus = parts[2].TrimStart('+').Split(',');
-            yield return (int.Parse(minus[0]), int.Parse(minus[1]), int.Parse(plus[0]), int.Parse(plus[1]));
+            // Count defaults to 1 when omitted in unified diff format (e.g. @@ -5 +5 @@)
+            yield return (
+                int.Parse(minus[0]),
+                minus.Length > 1 ? int.Parse(minus[1]) : 1,
+                int.Parse(plus[0]),
+                plus.Length > 1 ? int.Parse(plus[1]) : 1);
         }
     }
 

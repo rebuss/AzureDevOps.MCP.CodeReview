@@ -140,11 +140,14 @@ public static class CliProcessHelper
     /// directory with shadow scripts (that always exit with code 1) is prepended to
     /// PATH, shadowing the real <c>gh</c>/<c>az</c> binaries.
     /// </para>
+    /// <para>
+    /// Dispose the returned <see cref="RestrictedPathEnv"/> to clean up the shadow directory.
+    /// </para>
     /// </summary>
-    public static Dictionary<string, string> BuildRestrictedPathEnv()
+    public static RestrictedPathEnv BuildRestrictedPathEnv()
     {
         if (OperatingSystem.IsWindows())
-            return BuildRestrictedPathEnvWindows();
+            return new RestrictedPathEnv(BuildRestrictedPathEnvWindows(), shadowDir: null);
 
         return BuildRestrictedPathEnvUnix();
     }
@@ -169,7 +172,7 @@ public static class CliProcessHelper
     }
 
     [UnsupportedOSPlatform("windows")]
-    private static Dictionary<string, string> BuildRestrictedPathEnvUnix()
+    private static RestrictedPathEnv BuildRestrictedPathEnvUnix()
     {
         var shadowBin = Path.Combine(
             Path.GetTempPath(),
@@ -188,9 +191,35 @@ public static class CliProcessHelper
 
         var currentPath = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
 
-        return new Dictionary<string, string>
+        var env = new Dictionary<string, string>
         {
             ["PATH"] = shadowBin + Path.PathSeparator + currentPath
         };
+
+        return new RestrictedPathEnv(env, shadowBin);
+    }
+
+    /// <summary>
+    /// Holds restricted PATH environment overrides and cleans up any shadow directory on dispose.
+    /// </summary>
+    public sealed class RestrictedPathEnv : IDisposable
+    {
+        private readonly string? _shadowDir;
+
+        public Dictionary<string, string> Env { get; }
+
+        public RestrictedPathEnv(Dictionary<string, string> env, string? shadowDir)
+        {
+            Env = env;
+            _shadowDir = shadowDir;
+        }
+
+        public void Dispose()
+        {
+            if (_shadowDir is not null)
+            {
+                try { Directory.Delete(_shadowDir, recursive: true); } catch { }
+            }
+        }
     }
 }

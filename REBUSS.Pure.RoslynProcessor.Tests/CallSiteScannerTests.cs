@@ -52,7 +52,8 @@ public class CallSiteScannerTests : IDisposable
 
         var results = await _scanner.ScanAsync(_tempDir, targets, null, CancellationToken.None);
 
-        Assert.True(results[0].TotalCount >= 3);
+        var result = Assert.Single(results);
+        Assert.True(result.TotalCount >= 3);
     }
 
     [Fact]
@@ -63,7 +64,8 @@ public class CallSiteScannerTests : IDisposable
 
         var results = await _scanner.ScanAsync(_tempDir, targets, null, CancellationToken.None);
 
-        Assert.Equal(0, results[0].TotalCount);
+        var result = Assert.Single(results);
+        Assert.Equal(0, result.TotalCount);
     }
 
     [Fact]
@@ -74,7 +76,8 @@ public class CallSiteScannerTests : IDisposable
 
         var results = await _scanner.ScanAsync(_tempDir, targets, null, CancellationToken.None);
 
-        Assert.Equal(0, results[0].TotalCount);
+        var result = Assert.Single(results);
+        Assert.Equal(0, result.TotalCount);
     }
 
     [Fact]
@@ -85,7 +88,8 @@ public class CallSiteScannerTests : IDisposable
 
         var results = await _scanner.ScanAsync(_tempDir, targets, "src/OrderService.cs", CancellationToken.None);
 
-        Assert.Equal(0, results[0].TotalCount);
+        var result = Assert.Single(results);
+        Assert.Equal(0, result.TotalCount);
     }
 
     [Fact]
@@ -96,7 +100,8 @@ public class CallSiteScannerTests : IDisposable
 
         var results = await _scanner.ScanAsync(_tempDir, targets, null, CancellationToken.None);
 
-        Assert.Equal(0, results[0].TotalCount);
+        var result = Assert.Single(results);
+        Assert.Equal(0, result.TotalCount);
     }
 
     [Fact]
@@ -108,7 +113,8 @@ public class CallSiteScannerTests : IDisposable
 
         var results = await _scanner.ScanAsync(_tempDir, targets, null, CancellationToken.None);
 
-        Assert.Equal(0, results[0].TotalCount);
+        var result = Assert.Single(results);
+        Assert.Equal(0, result.TotalCount);
     }
 
     [Fact]
@@ -119,7 +125,8 @@ public class CallSiteScannerTests : IDisposable
 
         var results = await _scanner.ScanAsync(_tempDir, targets, null, CancellationToken.None);
 
-        Assert.Equal(0, results[0].TotalCount);
+        var result = Assert.Single(results);
+        Assert.Equal(0, result.TotalCount);
     }
 
     [Fact]
@@ -130,8 +137,9 @@ public class CallSiteScannerTests : IDisposable
 
         var results = await _scanner.ScanAsync(_tempDir, targets, null, CancellationToken.None);
 
-        Assert.Equal(0, results[0].TotalCount);
-        Assert.Empty(results[0].Locations);
+        var result = Assert.Single(results);
+        Assert.Equal(0, result.TotalCount);
+        Assert.Empty(result.Locations);
     }
 
     [Fact]
@@ -145,8 +153,9 @@ public class CallSiteScannerTests : IDisposable
 
         var results = await _scanner.ScanAsync(_tempDir, targets, null, CancellationToken.None);
 
-        Assert.Equal(15, results[0].TotalCount);
-        Assert.Equal(10, results[0].Locations.Count);
+        var result = Assert.Single(results);
+        Assert.Equal(15, result.TotalCount);
+        Assert.Equal(10, result.Locations.Count);
     }
 
     [Fact]
@@ -174,7 +183,8 @@ public class CallSiteScannerTests : IDisposable
         // The `_ = ProcessOrder` is a simple name, not in invocation context — should be filtered out
         // However, `var ProcessOrder = 5` may or may not produce an IdentifierNameSyntax depending on context
         // The key guarantee: no InvocationExpression or MemberAccessExpression parents
-        Assert.Equal(0, results[0].TotalCount);
+        var result = Assert.Single(results);
+        Assert.Equal(0, result.TotalCount);
     }
 
     [Fact]
@@ -185,7 +195,8 @@ public class CallSiteScannerTests : IDisposable
 
         var results = await _scanner.ScanAsync(_tempDir, targets, null, CancellationToken.None);
 
-        Assert.True(results[0].TotalCount > 0, "Constructor usage (new OrderService()) should be detected");
+        var result = Assert.Single(results);
+        Assert.True(result.TotalCount > 0, "Constructor usage (new OrderService()) should be detected");
     }
 
     [Fact]
@@ -196,6 +207,7 @@ public class CallSiteScannerTests : IDisposable
 
         var results = await _scanner.ScanAsync(_tempDir, targets, null, CancellationToken.None);
 
-        Assert.True(results[0].TotalCount > 0, "Base class reference should be detected");
+        var result = Assert.Single(results);
+        Assert.True(result.TotalCount > 0, "Base class reference should be detected");
     }
 }

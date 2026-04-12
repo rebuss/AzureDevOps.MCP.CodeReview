@@ -31,7 +31,7 @@ internal static class PlainTextFormatter
         {
             sb.AppendLine($"=== {file.Path} ({file.ChangeType}: skipped) ===");
             sb.Append($"Reason: {file.SkipReason}");
-            return sb.ToString();
+            return sb.ToString().TrimEnd();
         }
 
         sb.AppendLine($"=== {file.Path} ({file.ChangeType}: +{file.Additions} -{file.Deletions}) ===");

@@ -43,7 +43,7 @@ public class CallSiteTargetExtractorTests
         var targets = CallSiteTargetExtractor.ExtractTargets(diff);
 
         var target = Assert.Single(targets);
-        Assert.Equal(".ctor", target.Name);
+        Assert.Equal("Svc", target.Name);
         Assert.Equal(CallSiteTargetKind.Constructor, target.Kind);
     }
 

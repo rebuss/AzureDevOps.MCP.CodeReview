@@ -41,7 +41,8 @@ public static class ToolCallResponseExtensions
 
         var text = TryGetFirstText(result)
             ?? throw new InvalidOperationException("Tool response has no text content to parse as JSON.");
-        return JsonDocument.Parse(text).RootElement;
+        using var doc = JsonDocument.Parse(text);
+        return doc.RootElement.Clone();
     }
 
     /// <summary>

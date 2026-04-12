@@ -64,7 +64,7 @@ public class GitHubCliProcessHelperTests
     public void TryFindGhCliOnWindows_ReturnsNull_OnNonWindows()
     {
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            return; // skip on Windows — result depends on whether gh is installed
+            return; // Not applicable on Windows — result depends on whether gh is installed
 
         var result = GitHubCliProcessHelper.TryFindGhCliOnWindows();
 

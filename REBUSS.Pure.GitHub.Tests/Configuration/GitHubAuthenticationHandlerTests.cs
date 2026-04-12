@@ -16,13 +16,13 @@ public class GitHubAuthenticationHandlerTests
             .Returns(new AuthenticationHeaderValue("Bearer", "test-token"));
     }
 
-    private GitHubAuthenticationHandler CreateHandler(HttpResponseMessage innerResponse)
+    private GitHubAuthenticationHandler CreateHandler(Func<HttpResponseMessage> responseFactory)
     {
         var handler = new GitHubAuthenticationHandler(
             _authProvider,
             NullLogger<GitHubAuthenticationHandler>.Instance)
         {
-            InnerHandler = new StubHandler(innerResponse)
+            InnerHandler = new StubHandler(responseFactory)
         };
 
         return handler;
@@ -31,10 +31,12 @@ public class GitHubAuthenticationHandlerTests
     [Fact]
     public async Task SendAsync_DoesNotRetry_WhenPrimaryRateLimitExceeded()
     {
-        var response = new HttpResponseMessage(HttpStatusCode.Forbidden);
-        response.Headers.Add("X-RateLimit-Remaining", "0");
-
-        var handler = CreateHandler(response);
+        var handler = CreateHandler(() =>
+        {
+            var response = new HttpResponseMessage(HttpStatusCode.Forbidden);
+            response.Headers.Add("X-RateLimit-Remaining", "0");
+            return response;
+        });
         using var client = new HttpClient(handler);
 
         var result = await client.GetAsync("https://api.github.com/test");
@@ -46,10 +48,12 @@ public class GitHubAuthenticationHandlerTests
     [Fact]
     public async Task SendAsync_DoesNotRetry_WhenSecondaryRateLimitExceeded()
     {
-        var response = new HttpResponseMessage(HttpStatusCode.Forbidden);
-        response.Headers.Add("Retry-After", "60");
-
-        var handler = CreateHandler(response);
+        var handler = CreateHandler(() =>
+        {
+            var response = new HttpResponseMessage(HttpStatusCode.Forbidden);
+            response.Headers.Add("Retry-After", "60");
+            return response;
+        });
         using var client = new HttpClient(handler);
 
         var result = await client.GetAsync("https://api.github.com/test");
@@ -61,9 +65,7 @@ public class GitHubAuthenticationHandlerTests
     [Fact]
     public async Task SendAsync_Retries_WhenForbiddenWithoutRateLimitHeaders()
     {
-        var response = new HttpResponseMessage(HttpStatusCode.Forbidden);
-
-        var handler = CreateHandler(response);
+        var handler = CreateHandler(() => new HttpResponseMessage(HttpStatusCode.Forbidden));
         using var client = new HttpClient(handler);
 
         var result = await client.GetAsync("https://api.github.com/test");
@@ -74,9 +76,7 @@ public class GitHubAuthenticationHandlerTests
     [Fact]
     public async Task SendAsync_Retries_WhenUnauthorized()
     {
-        var response = new HttpResponseMessage(HttpStatusCode.Unauthorized);
-
-        var handler = CreateHandler(response);
+        var handler = CreateHandler(() => new HttpResponseMessage(HttpStatusCode.Unauthorized));
         using var client = new HttpClient(handler);
 
         var result = await client.GetAsync("https://api.github.com/test");
@@ -87,9 +87,7 @@ public class GitHubAuthenticationHandlerTests
     [Fact]
     public async Task SendAsync_DoesNotRetry_WhenSuccess()
     {
-        var response = new HttpResponseMessage(HttpStatusCode.OK);
-
-        var handler = CreateHandler(response);
+        var handler = CreateHandler(() => new HttpResponseMessage(HttpStatusCode.OK));
         using var client = new HttpClient(handler);
 
         var result = await client.GetAsync("https://api.github.com/test");
@@ -100,12 +98,12 @@ public class GitHubAuthenticationHandlerTests
 
     private sealed class StubHandler : HttpMessageHandler
     {
-        private readonly HttpResponseMessage _response;
+        private readonly Func<HttpResponseMessage> _factory;
 
-        public StubHandler(HttpResponseMessage response) => _response = response;
+        public StubHandler(Func<HttpResponseMessage> factory) => _factory = factory;
 
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request, CancellationToken cancellationToken) =>
-            Task.FromResult(_response);
+            Task.FromResult(_factory());
     }
 }

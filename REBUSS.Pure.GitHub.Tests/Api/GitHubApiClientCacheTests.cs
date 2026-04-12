@@ -8,8 +8,7 @@ using REBUSS.Pure.GitHub.Configuration;
 namespace REBUSS.Pure.GitHub.Tests.Api;
 
 /// <summary>
-/// Tests for the static PR details cache in <see cref="GitHubApiClient"/>.
-/// Uses unique PR numbers per test to avoid cross-test interference from the static cache.
+/// Tests for the instance-scoped PR details cache in <see cref="GitHubApiClient"/>.
 /// </summary>
 public class GitHubApiClientCacheTests
 {

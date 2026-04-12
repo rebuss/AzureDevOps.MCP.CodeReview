@@ -236,8 +236,7 @@ public class GitHubChainedAuthenticationProviderTests
             TokenExpiresOn = DateTime.UtcNow.AddHours(1)
         });
 
-        var logger = Substitute.For<ILogger<GitHubChainedAuthenticationProvider>>();
-        logger.IsEnabled(Arg.Any<LogLevel>()).Returns(true);
+        var logger = new CapturingLogger<GitHubChainedAuthenticationProvider>();
 
         var provider = new GitHubChainedAuthenticationProvider(
             Options.Create(options),
@@ -248,18 +247,26 @@ public class GitHubChainedAuthenticationProviderTests
         await provider.GetAuthenticationAsync();
 
         // "Using cached GitHub token" must be logged at Debug, not Information
-        logger.Received().Log(
-            LogLevel.Debug,
-            Arg.Any<EventId>(),
-            Arg.Is<object>(o => o.ToString()!.Contains("Using cached GitHub token")),
-            Arg.Any<Exception?>(),
-            Arg.Any<Func<object, Exception?, string>>());
+        Assert.Contains(logger.Entries,
+            e => e.Level == LogLevel.Debug && e.Message.Contains("Using cached GitHub token"));
+        Assert.DoesNotContain(logger.Entries,
+            e => e.Level == LogLevel.Information && e.Message.Contains("Using cached GitHub token"));
+    }
 
-        logger.DidNotReceive().Log(
-            LogLevel.Information,
-            Arg.Any<EventId>(),
-            Arg.Is<object>(o => o.ToString()!.Contains("Using cached GitHub token")),
-            Arg.Any<Exception?>(),
-            Arg.Any<Func<object, Exception?, string>>());
+    /// <summary>
+    /// Simple capturing logger that avoids the NSubstitute generic TState matching
+    /// issue with <see cref="ILogger.Log{TState}"/>.
+    /// </summary>
+    private sealed class CapturingLogger<T> : ILogger<T>
+    {
+        public List<(LogLevel Level, string Message)> Entries { get; } = [];
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            Entries.Add((logLevel, formatter(state, exception)));
+        }
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
     }
 }

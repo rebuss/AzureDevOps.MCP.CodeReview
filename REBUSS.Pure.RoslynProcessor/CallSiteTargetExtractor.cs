@@ -37,13 +37,16 @@ public static partial class CallSiteTargetExtractor
         // Strategy 1: Parse [structural-changes] block
         var blockMatch = StructuralBlockRegex().Match(diff);
         if (blockMatch.Success)
-            return ExtractFromStructuralBlock(blockMatch.Groups[1].Value);
+        {
+            var filePath = DiffParser.TryParseFilePath(diff);
+            return ExtractFromStructuralBlock(blockMatch.Groups[1].Value, filePath);
+        }
 
         // Strategy 2: Heuristic fallback from + lines
         return ExtractFromHeuristic(diff);
     }
 
-    private static IReadOnlyList<CallSiteTarget> ExtractFromStructuralBlock(string blockContent)
+    private static IReadOnlyList<CallSiteTarget> ExtractFromStructuralBlock(string blockContent, string? filePath)
     {
         var targets = new List<CallSiteTarget>();
         var lines = blockContent.Split('\n');
@@ -82,12 +85,18 @@ public static partial class CallSiteTargetExtractor
 
             if (ConstructorChangedRegex().IsMatch(line))
             {
-                targets.Add(new CallSiteTarget
+                // Derive the class name from the diff file path (C# convention: ClassName.cs).
+                // When the file path is unavailable, skip — we can't scan without a name.
+                var className = DeriveClassNameFromPath(filePath);
+                if (className is not null)
                 {
-                    Name = ".ctor",
-                    Reason = "constructor changed",
-                    Kind = CallSiteTargetKind.Constructor
-                });
+                    targets.Add(new CallSiteTarget
+                    {
+                        Name = className,
+                        Reason = "constructor changed",
+                        Kind = CallSiteTargetKind.Constructor
+                    });
+                }
                 continue;
             }
 
@@ -104,6 +113,14 @@ public static partial class CallSiteTargetExtractor
         }
 
         return targets;
+    }
+
+    private static string? DeriveClassNameFromPath(string? filePath)
+    {
+        if (string.IsNullOrEmpty(filePath))
+            return null;
+        var fileName = Path.GetFileNameWithoutExtension(filePath);
+        return string.IsNullOrEmpty(fileName) ? null : fileName;
     }
 
     private static IReadOnlyList<CallSiteTarget> ExtractFromHeuristic(string diff)

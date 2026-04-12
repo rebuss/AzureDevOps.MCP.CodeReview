@@ -346,9 +346,14 @@ namespace REBUSS.Pure
 
                 process.Start();
                 process.StandardInput.Close();
-                var output = process.StandardOutput.ReadToEnd();
-                process.WaitForExit(TimeSpan.FromSeconds(5));
 
+                if (!process.WaitForExit(TimeSpan.FromSeconds(5)))
+                {
+                    try { process.Kill(entireProcessTree: true); } catch { }
+                    return null;
+                }
+
+                var output = process.StandardOutput.ReadToEnd();
                 return process.ExitCode == 0 ? output.Trim() : null;
             }
             catch

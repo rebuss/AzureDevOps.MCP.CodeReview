@@ -478,11 +478,14 @@ public class GetPullRequestContentToolHandlerTests
             .Returns(completionTcs.Task);
 
         // Simulate progress snapshots: pages completing over time.
+        // Signal fires once the polling loop has called TryGetSnapshot at least once.
         var snapshotCallCount = 0;
+        var snapshotCalled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         _copilotReviewOrchestrator.TryGetSnapshot("pr:42")
             .Returns(_ =>
             {
                 snapshotCallCount++;
+                snapshotCalled.TrySetResult();
                 return new Core.Models.CopilotReview.CopilotReviewSnapshot
                 {
                     ReviewKey = "pr:42",
@@ -498,10 +501,10 @@ public class GetPullRequestContentToolHandlerTests
             Arg.Do<string>(m => capturedMessages.Add(m)), Arg.Any<CancellationToken>())
             .Returns(Task.CompletedTask);
 
-        // Complete the review after a brief delay so the polling loop iterates.
+        // Complete the review only after the polling loop has iterated at least once.
         _ = Task.Run(async () =>
         {
-            await Task.Delay(300);
+            await snapshotCalled.Task;
             completionTcs.SetResult(copilotResult);
         });
 

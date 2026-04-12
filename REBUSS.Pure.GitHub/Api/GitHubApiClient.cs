@@ -19,10 +19,11 @@ public class GitHubApiClient : IGitHubApiClient
     private const int MaxPagesPerEndpoint = 10;
     private const int DefaultPerPage = 100;
 
-    // Static caches: persist across transient GitHubApiClient instances created by IHttpClientFactory.
-    // PR details and file lists are immutable within a review cycle (same headSha).
-    private static readonly ConcurrentDictionary<int, string> _prDetailsCache = new();
-    private static readonly ConcurrentDictionary<int, string> _prFilesCache = new();
+    // Instance caches: scoped to a single DI resolution (transient client from IHttpClientFactory).
+    // Deduplicates calls within one tool handler invocation; fresh data on every new resolution
+    // so force-pushes are never masked by stale entries.
+    private readonly ConcurrentDictionary<int, string> _prDetailsCache = new();
+    private readonly ConcurrentDictionary<int, string> _prFilesCache = new();
 
     private readonly HttpClient _httpClient;
     private readonly GitHubOptions _options;

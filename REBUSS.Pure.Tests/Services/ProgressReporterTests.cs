@@ -11,12 +11,11 @@ namespace REBUSS.Pure.Tests.Services;
 public class ProgressReporterTests
 {
     private readonly IServiceProvider _serviceProvider = Substitute.For<IServiceProvider>();
-    private readonly ILogger<ProgressReporter> _logger = Substitute.For<ILogger<ProgressReporter>>();
+    private readonly CapturingLogger<ProgressReporter> _logger = new();
     private readonly ProgressReporter _reporter;
 
     public ProgressReporterTests()
     {
-        _logger.IsEnabled(Arg.Any<LogLevel>()).Returns(true);
         _reporter = new ProgressReporter(_serviceProvider, _logger);
     }
 
@@ -26,12 +25,8 @@ public class ProgressReporterTests
         await _reporter.ReportAsync(null, 1, 10, "Processing step 1/10");
 
         // Should log at Information level
-        _logger.Received().Log(
-            LogLevel.Information,
-            Arg.Any<EventId>(),
-            Arg.Is<object>(o => o.ToString()!.Contains("Processing step 1/10")),
-            Arg.Any<Exception?>(),
-            Arg.Any<Func<object, Exception?, string>>());
+        Assert.Contains(_logger.Entries,
+            e => e.Level == LogLevel.Information && e.Message.Contains("Processing step 1/10"));
 
         // Should NOT try to resolve McpServer (no token = no notification)
         _serviceProvider.DidNotReceive().GetService(typeof(McpServer));
@@ -49,12 +44,8 @@ public class ProgressReporterTests
         Assert.Null(ex);
 
         // Still logs
-        _logger.Received().Log(
-            LogLevel.Information,
-            Arg.Any<EventId>(),
-            Arg.Is<object>(o => o.ToString()!.Contains("Step 5/10")),
-            Arg.Any<Exception?>(),
-            Arg.Any<Func<object, Exception?, string>>());
+        Assert.Contains(_logger.Entries,
+            e => e.Level == LogLevel.Information && e.Message.Contains("Step 5/10"));
     }
 
     [Fact]
@@ -63,12 +54,8 @@ public class ProgressReporterTests
         // null token
         await _reporter.ReportAsync(null, 0, 5, "Starting operation");
 
-        _logger.Received(1).Log(
-            LogLevel.Information,
-            Arg.Any<EventId>(),
-            Arg.Is<object>(o => o.ToString()!.Contains("Starting operation")),
-            Arg.Any<Exception?>(),
-            Arg.Any<Func<object, Exception?, string>>());
+        Assert.Single(_logger.Entries,
+            e => e.Level == LogLevel.Information && e.Message.Contains("Starting operation"));
     }
 
     [Fact]
@@ -86,12 +73,8 @@ public class ProgressReporterTests
         _serviceProvider.DidNotReceive().GetService(typeof(McpServer));
 
         // Should still log
-        _logger.Received().Log(
-            LogLevel.Information,
-            Arg.Any<EventId>(),
-            Arg.Is<object>(o => o.ToString()!.Contains("Enriching files (2/5)")),
-            Arg.Any<Exception?>(),
-            Arg.Any<Func<object, Exception?, string>>());
+        Assert.Contains(_logger.Entries,
+            e => e.Level == LogLevel.Information && e.Message.Contains("Enriching files (2/5)"));
     }
 
     [Fact]
@@ -103,5 +86,22 @@ public class ProgressReporterTests
 
         sdkProgress.Received(1).Report(Arg.Is<ProgressNotificationValue>(v =>
             v.Progress == 1 && v.Total == null && v.Message == "Processing..."));
+    }
+
+    /// <summary>
+    /// Simple capturing logger that avoids the NSubstitute generic TState matching
+    /// issue with <see cref="ILogger.Log{TState}"/>.
+    /// </summary>
+    private sealed class CapturingLogger<T> : ILogger<T>
+    {
+        public List<(LogLevel Level, string Message)> Entries { get; } = [];
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            Entries.Add((logLevel, formatter(state, exception)));
+        }
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
     }
 }

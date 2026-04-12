@@ -70,20 +70,25 @@ public partial class FileStructureValidationEnricher : IDiffEnricher
 
     /// <summary>
     /// Validates the source code for syntax errors and balanced braces using Roslyn
-    /// syntax-only parsing (no compilation required). Brace balance is checked via raw
-    /// character counting rather than Roslyn tokens, because Roslyn's error recovery
-    /// inserts synthetic missing tokens that mask structural imbalances.
+    /// syntax-only parsing (no compilation required). Brace balance is counted from
+    /// Roslyn <see cref="SyntaxKind.OpenBraceToken"/>/<see cref="SyntaxKind.CloseBraceToken"/>
+    /// tokens, which naturally excludes braces inside string literals and comments.
     /// </summary>
     public static (bool SyntaxValid, bool BalancedBraces) Validate(string sourceCode)
     {
         var tree = CSharpSyntaxTree.ParseText(sourceCode);
         var syntaxValid = !tree.GetDiagnostics().Any(d => d.Severity == DiagnosticSeverity.Error);
 
+        var root = tree.GetRoot();
         int openBraces = 0, closeBraces = 0;
-        foreach (var ch in sourceCode)
+        foreach (var token in root.DescendantTokens())
         {
-            if (ch == '{') openBraces++;
-            else if (ch == '}') closeBraces++;
+            // Skip synthetic tokens inserted by Roslyn's error recovery —
+            // they mask structural imbalances by always adding the missing counterpart.
+            if (token.IsMissing) continue;
+
+            if (token.IsKind(SyntaxKind.OpenBraceToken)) openBraces++;
+            else if (token.IsKind(SyntaxKind.CloseBraceToken)) closeBraces++;
         }
 
         return (syntaxValid, openBraces == closeBraces);

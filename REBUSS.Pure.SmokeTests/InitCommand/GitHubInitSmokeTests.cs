@@ -56,11 +56,12 @@ public class GitHubInitSmokeTests
 
         // Restricted PATH hides gh CLI → triggers "CLI not installed" prompt.
         // "n" declines the install prompt.
+        using var restrictedPath = CliProcessHelper.BuildRestrictedPathEnv();
         var result = await CliProcessHelper.RunAsync(
             repo.RootPath,
             "init",
             stdin: "n\n",
-            environmentOverrides: CliProcessHelper.BuildRestrictedPathEnv());
+            environmentOverrides: restrictedPath.Env);
 
         // Init should succeed (exit 0) even when auth fails
         Assert.Equal(0, result.ExitCode);

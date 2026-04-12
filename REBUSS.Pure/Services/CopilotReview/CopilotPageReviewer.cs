@@ -47,7 +47,7 @@ internal sealed class CopilotPageReviewer : ICopilotPageReviewer
         string prompt;
         try
         {
-            prompt = (await LoadPromptTemplateAsync(ct).ConfigureAwait(false))
+            prompt = LoadPromptTemplate()
                 .Replace("{enrichedPageContent}", enrichedPageContent);
         }
         catch (Exception ex)
@@ -113,33 +113,32 @@ internal sealed class CopilotPageReviewer : ICopilotPageReviewer
         }
     }
 
-    private static async Task<string> LoadPromptTemplateAsync(CancellationToken ct)
+    private static string LoadPromptTemplate()
     {
-        if (_cachedPromptTemplate is not null)
-            return _cachedPromptTemplate;
-
-        var assembly = typeof(CopilotPageReviewer).Assembly;
-        var stream = assembly.GetManifestResourceStream(PromptResourceName)
-            ?? assembly.GetManifestResourceStream(PromptResourceNameUnderscore);
-        if (stream is null)
+        return LazyInitializer.EnsureInitialized(ref _cachedPromptTemplate, () =>
         {
-            // Fallback: search by suffix in case the SDK mangles file naming.
-            var match = Array.Find(
-                assembly.GetManifestResourceNames(),
-                n => n.EndsWith("copilot-page-review.md", StringComparison.OrdinalIgnoreCase)
-                  || n.EndsWith("copilot_page_review.md", StringComparison.OrdinalIgnoreCase));
-            if (match is not null)
-                stream = assembly.GetManifestResourceStream(match);
-        }
-        if (stream is null)
-            throw new FileNotFoundException(
-                "Embedded resource 'copilot-page-review.md' not found in REBUSS.Pure assembly.");
+            var assembly = typeof(CopilotPageReviewer).Assembly;
+            var stream = assembly.GetManifestResourceStream(PromptResourceName)
+                ?? assembly.GetManifestResourceStream(PromptResourceNameUnderscore);
+            if (stream is null)
+            {
+                // Fallback: search by suffix in case the SDK mangles file naming.
+                var match = Array.Find(
+                    assembly.GetManifestResourceNames(),
+                    n => n.EndsWith("copilot-page-review.md", StringComparison.OrdinalIgnoreCase)
+                      || n.EndsWith("copilot_page_review.md", StringComparison.OrdinalIgnoreCase));
+                if (match is not null)
+                    stream = assembly.GetManifestResourceStream(match);
+            }
+            if (stream is null)
+                throw new FileNotFoundException(
+                    "Embedded resource 'copilot-page-review.md' not found in REBUSS.Pure assembly.");
 
-        using (stream)
-        using (var reader = new StreamReader(stream))
-        {
-            _cachedPromptTemplate = await reader.ReadToEndAsync(ct).ConfigureAwait(false);
-        }
-        return _cachedPromptTemplate;
+            using (stream)
+            using (var reader = new StreamReader(stream))
+            {
+                return reader.ReadToEnd();
+            }
+        })!;
     }
 }

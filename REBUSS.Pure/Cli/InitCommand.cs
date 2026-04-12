@@ -271,9 +271,13 @@ public class InitCommand : ICliCommand
             using var process = Process.Start(psi);
             if (process is null) return AzureDevOpsNames.Provider;
 
-            var output = process.StandardOutput.ReadToEnd();
-            process.WaitForExit(TimeSpan.FromSeconds(5));
+            if (!process.WaitForExit(TimeSpan.FromSeconds(5)))
+            {
+                try { process.Kill(entireProcessTree: true); } catch { }
+                return AzureDevOpsNames.Provider;
+            }
 
+            var output = process.StandardOutput.ReadToEnd();
             if (process.ExitCode != 0) return AzureDevOpsNames.Provider;
 
             if (output.Contains(GitHubNames.Domain, StringComparison.OrdinalIgnoreCase))
@@ -391,6 +395,7 @@ public class InitCommand : ICliCommand
                         Path.Combine(gitRoot, VisualStudioDir, McpConfigFileName))
                 ];
 
+            throw new ArgumentException($"Unrecognized --ide value '{ide}'. Supported values: vscode, vs.");
             }
 
             var targets = new List<McpConfigTarget>();
@@ -454,7 +459,7 @@ public class InitCommand : ICliCommand
     {
         var patArgs = string.IsNullOrWhiteSpace(pat)
             ? string.Empty
-            : $", \"--pat\", \"{pat}\"";
+            : $", \"--pat\", {System.Text.Json.JsonSerializer.Serialize(pat)}";
 
         var serversKey = "servers";
 
@@ -650,7 +655,8 @@ public class InitCommand : ICliCommand
 
         while (dir is not null)
         {
-            if (Directory.Exists(Path.Combine(dir.FullName, ".git")))
+            var gitPath = Path.Combine(dir.FullName, ".git");
+            if (Directory.Exists(gitPath) || File.Exists(gitPath))
                 return dir.FullName;
 
             dir = dir.Parent;

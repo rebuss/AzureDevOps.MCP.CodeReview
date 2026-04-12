@@ -89,7 +89,7 @@ namespace REBUSS.Pure.Tools
                 if (snapshot is { Status: PrEnrichmentStatus.Failed, Failure: not null })
                 {
                     _logger.LogInformation("PR {Pr} content request hit Failed snapshot; returning friendly status", prNumber);
-                    return BuildFriendlyFailureBlocks(prNumber.Value, snapshot.Failure!);
+                    return BuildFriendlyFailureBlocks(prNumber.Value, snapshot.Failure);
                 }
 
                 if (snapshot is null)

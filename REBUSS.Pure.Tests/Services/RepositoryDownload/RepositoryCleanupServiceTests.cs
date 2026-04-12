@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
 using REBUSS.Pure.Services.RepositoryDownload;
 
@@ -7,28 +8,47 @@ public class RepositoryCleanupServiceTests : IDisposable
 {
     private readonly string _tempDir;
     private readonly RepositoryCleanupService _service;
+    private readonly int _deadPid;
 
     public RepositoryCleanupServiceTests()
     {
         _tempDir = Path.GetTempPath();
         _service = new RepositoryCleanupService(
             NullLogger<RepositoryCleanupService>.Instance);
+        _deadPid = GetDeadPid();
     }
 
     public void Dispose()
     {
         // Best-effort cleanup of any directories we created
-        foreach (var dir in Directory.EnumerateDirectories(_tempDir, "rebuss-repo-99999*"))
+        foreach (var dir in Directory.EnumerateDirectories(_tempDir, $"rebuss-repo-{_deadPid}*"))
         {
             try { Directory.Delete(dir, true); } catch { }
         }
     }
 
+    /// <summary>
+    /// Launches a short-lived process and returns its PID after it exits,
+    /// guaranteeing the PID is not occupied.
+    /// </summary>
+    private static int GetDeadPid()
+    {
+        using var process = Process.Start(new ProcessStartInfo
+        {
+            FileName = Environment.ProcessPath ?? "dotnet",
+            Arguments = "--version",
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        })!;
+        process.WaitForExit(TimeSpan.FromSeconds(5));
+        return process.Id;
+    }
+
     [Fact]
     public async Task StartAsync_DeletesOrphanedDirectories()
     {
-        // PID 99999 is almost certainly not running
-        var orphanDir = Path.Combine(_tempDir, "rebuss-repo-99999");
+        var orphanDir = Path.Combine(_tempDir, $"rebuss-repo-{_deadPid}");
         Directory.CreateDirectory(orphanDir);
         Directory.CreateDirectory(Path.Combine(orphanDir, "42"));
 

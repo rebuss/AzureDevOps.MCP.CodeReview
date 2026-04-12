@@ -6,7 +6,7 @@ namespace REBUSS.Pure.Tests.Logging;
 
 public class LogConfigurationTests
 {
-    private static ILoggerFactory BuildLoggerFactoryFromConfig(
+    private static ServiceProvider BuildServiceProviderFromConfig(
         Dictionary<string, string?>? overrides = null)
     {
         var configBuilder = new ConfigurationBuilder()
@@ -26,7 +26,7 @@ public class LogConfigurationTests
             builder.AddConsole(); // Need at least one provider for IsEnabled to work
         });
 
-        return services.BuildServiceProvider().GetRequiredService<ILoggerFactory>();
+        return services.BuildServiceProvider();
     }
 
     [Theory]
@@ -34,8 +34,8 @@ public class LogConfigurationTests
     [InlineData("Polly")]
     public void DefaultConfig_FrameworkCategories_SuppressBelowWarning(string categoryName)
     {
-        using var factory = BuildLoggerFactoryFromConfig();
-        var logger = factory.CreateLogger(categoryName);
+        using var sp = BuildServiceProviderFromConfig();
+        var logger = sp.GetRequiredService<ILoggerFactory>().CreateLogger(categoryName);
 
         // Framework categories configured at Warning level must not emit Debug or Information
         Assert.False(logger.IsEnabled(LogLevel.Debug),
@@ -47,8 +47,8 @@ public class LogConfigurationTests
     [Fact]
     public void DefaultConfig_ApplicationCategories_DoNotEmitDebug()
     {
-        using var factory = BuildLoggerFactoryFromConfig();
-        var logger = factory.CreateLogger("REBUSS.Pure.Services.SomeService");
+        using var sp = BuildServiceProviderFromConfig();
+        var logger = sp.GetRequiredService<ILoggerFactory>().CreateLogger("REBUSS.Pure.Services.SomeService");
 
         // Application categories at Default (Information) must not emit Debug
         Assert.False(logger.IsEnabled(LogLevel.Debug),
@@ -63,7 +63,8 @@ public class LogConfigurationTests
             ["Logging:LogLevel:REBUSS.Pure.GitHub.Configuration.GitHubChainedAuthenticationProvider"] = "Debug"
         };
 
-        using var factory = BuildLoggerFactoryFromConfig(overrides);
+        using var sp = BuildServiceProviderFromConfig(overrides);
+        var factory = sp.GetRequiredService<ILoggerFactory>();
 
         var targetLogger = factory.CreateLogger(
             "REBUSS.Pure.GitHub.Configuration.GitHubChainedAuthenticationProvider");

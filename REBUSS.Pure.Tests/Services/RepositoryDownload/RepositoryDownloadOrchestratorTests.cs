@@ -45,8 +45,8 @@ public class RepositoryDownloadOrchestratorTests : IDisposable
         Assert.Equal("abc123", state.CommitRef);
 
         tcs.SetResult();
-        // Allow background task to complete
-        await Task.Delay(100);
+        // Let background task settle (no zip created, so extraction fails — expected)
+        await _orchestrator.GetExtractedPathAsync();
     }
 
     [Fact]
@@ -64,10 +64,10 @@ public class RepositoryDownloadOrchestratorTests : IDisposable
             });
 
         _orchestrator.TriggerDownloadAsync(42, "abc123");
-        await Task.Delay(500); // Let first complete (download + extraction)
+        await _orchestrator.GetExtractedPathAsync();
 
         _orchestrator.TriggerDownloadAsync(42, "abc123");
-        await Task.Delay(200);
+        await _orchestrator.GetExtractedPathAsync();
 
         Assert.Equal(1, callCount);
     }
@@ -87,10 +87,10 @@ public class RepositoryDownloadOrchestratorTests : IDisposable
             });
 
         _orchestrator.TriggerDownloadAsync(42, "abc123");
-        await Task.Delay(500);
+        await _orchestrator.GetExtractedPathAsync();
 
         _orchestrator.TriggerDownloadAsync(99, "def456");
-        await Task.Delay(500);
+        await _orchestrator.GetExtractedPathAsync();
 
         Assert.Equal(2, callCount);
         var state = _orchestrator.GetState();
@@ -105,7 +105,7 @@ public class RepositoryDownloadOrchestratorTests : IDisposable
             .ThrowsAsync(new HttpRequestException("Network error"));
 
         _orchestrator.TriggerDownloadAsync(42, "abc123");
-        await Task.Delay(200);
+        await _orchestrator.GetExtractedPathAsync();
 
         var state = _orchestrator.GetState();
         Assert.Equal(DownloadStatus.Failed, state.Status);
@@ -148,7 +148,7 @@ public class RepositoryDownloadOrchestratorTests : IDisposable
             });
 
         _orchestrator.TriggerDownloadAsync(42, "abc123");
-        await Task.Delay(500);
+        await _orchestrator.GetExtractedPathAsync();
 
         Assert.NotNull(zipPath);
         Assert.False(File.Exists(zipPath), "ZIP file should be deleted after extraction");
@@ -205,12 +205,14 @@ public class RepositoryDownloadOrchestratorTests : IDisposable
     [Fact]
     public async Task TriggerDownload_OnSuccess_CallsAllReadyHandlers()
     {
+        var handler1Called = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var handler2Called = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var handler1 = Substitute.For<IRepositoryReadyHandler>();
         var handler2 = Substitute.For<IRepositoryReadyHandler>();
         handler1.OnRepositoryReadyAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns(Task.CompletedTask);
+            .Returns(ci => { handler1Called.TrySetResult(); return Task.CompletedTask; });
         handler2.OnRepositoryReadyAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns(Task.CompletedTask);
+            .Returns(ci => { handler2Called.TrySetResult(); return Task.CompletedTask; });
 
         _archiveProvider.DownloadRepositoryZipAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(callInfo =>
@@ -227,7 +229,7 @@ public class RepositoryDownloadOrchestratorTests : IDisposable
 
         orchestrator.TriggerDownloadAsync(42, "abc123");
         await orchestrator.GetExtractedPathAsync();
-        await Task.Delay(200); // Allow fire-and-forget handlers to complete
+        await Task.WhenAll(handler1Called.Task, handler2Called.Task);
 
         await handler1.Received(1).OnRepositoryReadyAsync(Arg.Any<string>(), 42, Arg.Any<CancellationToken>());
         await handler2.Received(1).OnRepositoryReadyAsync(Arg.Any<string>(), 42, Arg.Any<CancellationToken>());
@@ -246,7 +248,7 @@ public class RepositoryDownloadOrchestratorTests : IDisposable
             NullLogger<RepositoryDownloadOrchestrator>.Instance);
 
         orchestrator.TriggerDownloadAsync(42, "abc123");
-        await Task.Delay(300);
+        await orchestrator.GetExtractedPathAsync();
 
         await handler.DidNotReceive().OnRepositoryReadyAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
     }
@@ -254,12 +256,13 @@ public class RepositoryDownloadOrchestratorTests : IDisposable
     [Fact]
     public async Task TriggerDownload_HandlerThrows_OtherHandlersStillCalled()
     {
+        var handler2Called = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var handler1 = Substitute.For<IRepositoryReadyHandler>();
         var handler2 = Substitute.For<IRepositoryReadyHandler>();
         handler1.OnRepositoryReadyAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
             .ThrowsAsync(new InvalidOperationException("handler1 failed"));
         handler2.OnRepositoryReadyAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns(Task.CompletedTask);
+            .Returns(ci => { handler2Called.TrySetResult(); return Task.CompletedTask; });
 
         _archiveProvider.DownloadRepositoryZipAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(callInfo =>
@@ -276,7 +279,7 @@ public class RepositoryDownloadOrchestratorTests : IDisposable
 
         orchestrator.TriggerDownloadAsync(42, "abc123");
         await orchestrator.GetExtractedPathAsync();
-        await Task.Delay(300);
+        await handler2Called.Task;
 
         await handler2.Received(1).OnRepositoryReadyAsync(Arg.Any<string>(), 42, Arg.Any<CancellationToken>());
     }
@@ -339,7 +342,7 @@ public class RepositoryDownloadOrchestratorTests : IDisposable
         orchestrator.TriggerDownloadAsync(99, "def456");
         handlerContinue.SetResult(); // Let handler finish
 
-        await Task.Delay(300);
+        await orchestrator.GetExtractedPathAsync();
         var state = orchestrator.GetState();
         Assert.Equal(99, state.PrNumber);
     }

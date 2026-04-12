@@ -95,7 +95,11 @@ public sealed class TempGitRepoFixture : IDisposable
         using var process = Process.Start(psi)
             ?? throw new InvalidOperationException($"Failed to start: git {arguments}");
 
-        process.WaitForExit(TimeSpan.FromSeconds(10));
+        if (!process.WaitForExit(TimeSpan.FromSeconds(10)))
+        {
+            try { process.Kill(entireProcessTree: true); } catch { }
+            throw new InvalidOperationException($"git {arguments} timed out after 10s");
+        }
 
         if (process.ExitCode != 0)
         {

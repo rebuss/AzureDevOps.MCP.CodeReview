@@ -140,8 +140,9 @@ public static class BeforeAfterAnalyzer
                 return true;
         }
 
-        // Expression logic changes
-        if (before is ExpressionSyntax || after is ExpressionSyntax)
+        // Expression logic changes — restricted to high-signal subtypes that alter
+        // call targets, operators, assignments, or control flow expressions.
+        if (IsSemanticExpression(before) || IsSemanticExpression(after))
         {
             if (before == null || after == null || !SyntaxFactory.AreEquivalent(before, after))
                 return true;
@@ -192,6 +193,15 @@ public static class BeforeAfterAnalyzer
             or WhileStatementSyntax
             or ForEachStatementSyntax
             or TryStatementSyntax;
+
+    private static bool IsSemanticExpression(SyntaxNode? node) =>
+        node is InvocationExpressionSyntax
+            or BinaryExpressionSyntax
+            or AssignmentExpressionSyntax
+            or ConditionalExpressionSyntax
+            or CastExpressionSyntax
+            or AwaitExpressionSyntax
+            or ThrowExpressionSyntax;
 
     private static bool IsMinorExpression(SyntaxNode? node) =>
         node is ArgumentListSyntax

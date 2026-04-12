@@ -68,11 +68,13 @@ public sealed class PrEnrichmentOrchestrator : IPrEnrichmentOrchestrator
                 Cts = jobCts,
                 StartedAt = DateTimeOffset.UtcNow,
             };
-            _jobs[prNumber] = job;
 
             // IMPORTANT: pass CancellationToken.None to Task.Run itself; the body
             // honors job.Cts.Token internally. The caller's ct is not in scope here.
+            // Assign ResultTask BEFORE inserting into _jobs so that WaitForEnrichmentAsync
+            // (which reads _jobs without the lock) never sees a null ResultTask.
             job.ResultTask = Task.Run(() => BackgroundBodyAsync(job, safeBudgetTokens), CancellationToken.None);
+            _jobs[prNumber] = job;
         }
     }
 
@@ -80,6 +82,9 @@ public sealed class PrEnrichmentOrchestrator : IPrEnrichmentOrchestrator
     {
         if (!_jobs.TryGetValue(prNumber, out var job))
             throw new InvalidOperationException($"No enrichment job for PR #{prNumber}");
+
+        if (job.ResultTask is null)
+            throw new InvalidOperationException($"Enrichment job for PR #{prNumber} has not started yet");
 
         // Caller's ct only governs the wait — the background body keeps running.
         return job.ResultTask.WaitAsync(ct);

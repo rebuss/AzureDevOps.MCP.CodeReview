@@ -64,8 +64,22 @@ public class RepositoryCleanupService : IHostedService
             var zipCandidates = Directory.EnumerateFiles(tempDir, $"{prefix}*.zip");
             foreach (var zipFile in zipCandidates)
             {
-                var fileName = Path.GetFileName(zipFile);
-                _logger.LogInformation("Deleting orphaned ZIP file {FileName}", fileName);
+                var fileName = Path.GetFileNameWithoutExtension(zipFile);
+                if (!TryExtractPid(fileName, prefix, out var zipPid))
+                    continue;
+
+                if (zipPid == currentPid)
+                    continue;
+
+                if (IsProcessRunning(zipPid))
+                {
+                    _logger.LogDebug(
+                        "Skipping ZIP {FileName} — process {Pid} is still running",
+                        Path.GetFileName(zipFile), zipPid);
+                    continue;
+                }
+
+                _logger.LogInformation("Deleting orphaned ZIP file {FileName} (PID {Pid} no longer running)", Path.GetFileName(zipFile), zipPid);
                 TryDeleteFile(zipFile);
             }
         }

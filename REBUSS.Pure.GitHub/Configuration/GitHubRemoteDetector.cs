@@ -116,9 +116,13 @@ public partial class GitHubRemoteDetector : IGitHubRemoteDetector
         process.Start();
         process.StandardInput.Close();
 
-        var output = process.StandardOutput.ReadToEnd();
-        process.WaitForExit(TimeSpan.FromSeconds(5));
+        if (!process.WaitForExit(TimeSpan.FromSeconds(5)))
+        {
+            try { process.Kill(entireProcessTree: true); } catch { }
+            return null;
+        }
 
+        var output = process.StandardOutput.ReadToEnd();
         return process.ExitCode == 0 ? output.Trim() : null;
     }
 
@@ -146,7 +150,8 @@ public partial class GitHubRemoteDetector : IGitHubRemoteDetector
 
         while (dir is not null)
         {
-            if (Directory.Exists(Path.Combine(dir.FullName, ".git")))
+            var gitPath = Path.Combine(dir.FullName, ".git");
+            if (Directory.Exists(gitPath) || File.Exists(gitPath))
                 return dir.FullName;
 
             dir = dir.Parent;

@@ -262,8 +262,8 @@ public class GitHubDiffProvider
         if (hunks.Count == 0)
             return false;
 
-        var oldLineCount = baseContent.Replace("\r\n", "\n").Split('\n').Length;
-        var newLineCount = targetContent.Replace("\r\n", "\n").Split('\n').Length;
+        var oldLineCount = baseContent.Replace("\r\n", "\n").TrimEnd('\n').Split('\n').Length;
+        var newLineCount = targetContent.Replace("\r\n", "\n").TrimEnd('\n').Split('\n').Length;
 
         if (oldLineCount < FullRewriteMinLineCount && newLineCount < FullRewriteMinLineCount)
             return false;

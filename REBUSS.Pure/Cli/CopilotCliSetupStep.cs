@@ -119,10 +119,10 @@ internal sealed class CopilotCliSetupStep
             }
 
             // User already consented at the entry prompt — install extension directly (Clarification Q2).
-            await InstallExtensionAsync(cancellationToken, skipPrompt: true);
             // FR-017 design: verification runs only when gh-CLI + extension are confirmed present.
             // See tasks.md T031(d) — other exit paths already print WriteDeclineBannerAsync.
-            await VerifyCopilotSessionAsync(cancellationToken);
+            if (await InstallExtensionAsync(cancellationToken, skipPrompt: true))
+                await VerifyCopilotSessionAsync(cancellationToken);
             return;
         }
 
@@ -145,9 +145,9 @@ internal sealed class CopilotCliSetupStep
         }
 
         // Step 4 — extension missing. Prompt user.
-        await InstallExtensionAsync(cancellationToken, skipPrompt: false);
         // FR-017 design: verification runs only when gh-CLI + extension are confirmed present.
-        await VerifyCopilotSessionAsync(cancellationToken);
+        if (await InstallExtensionAsync(cancellationToken, skipPrompt: false))
+            await VerifyCopilotSessionAsync(cancellationToken);
     }
 
     /// <summary>
@@ -245,7 +245,7 @@ internal sealed class CopilotCliSetupStep
         return true;
     }
 
-    private async Task InstallExtensionAsync(CancellationToken cancellationToken, bool skipPrompt)
+    private async Task<bool> InstallExtensionAsync(CancellationToken cancellationToken, bool skipPrompt)
     {
         if (!skipPrompt)
         {
@@ -257,7 +257,7 @@ internal sealed class CopilotCliSetupStep
                 await _output.WriteLineAsync();
                 await WriteDeclineBannerAsync();
                 _logger?.LogInformation("copilot-setup: declined-extension");
-                return;
+                return false;
             }
             await _output.WriteLineAsync();
         }
@@ -268,7 +268,7 @@ internal sealed class CopilotCliSetupStep
             await _output.WriteLineAsync(Resources.CopilotSetup_InstallFailed);
             await _output.WriteLineAsync(Resources.CopilotSetup_ManualInstallHint);
             _logger?.LogWarning("copilot-setup: install-failed");
-            return;
+            return false;
         }
 
         var verify = await RunGhCapturedAsync("copilot --version", cancellationToken);
@@ -277,11 +277,12 @@ internal sealed class CopilotCliSetupStep
             await _output.WriteLineAsync(Resources.CopilotSetup_InstallFailed);
             await _output.WriteLineAsync(Resources.CopilotSetup_ManualInstallHint);
             _logger?.LogWarning("copilot-setup: install-failed (verify)");
-            return;
+            return false;
         }
 
         await _output.WriteLineAsync(Resources.CopilotSetup_InstallSuccess);
         _logger?.LogInformation("copilot-setup: installed");
+        return true;
     }
 
     private async Task WriteDeclineBannerAsync()

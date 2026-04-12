@@ -47,12 +47,25 @@ public class DiffSourceResolver
             return null;
 
         // Cache lookup/insert: the Lazy<Task<>> pattern ensures only one resolution
-        // per file path, even under concurrent access. The first caller's ct is captured
-        // by the factory; subsequent callers reuse the completed Task.
+        // per file path, even under concurrent access. If the cached task is
+        // cancelled or faulted, evict it so the next caller gets a fresh attempt.
         var lazy = _cache.GetOrAdd(filePath,
             _ => new Lazy<Task<DiffSourcePair?>>(() => ResolveInternalAsync(filePath, diff, ct)));
 
-        return await lazy.Value;
+        try
+        {
+            return await lazy.Value;
+        }
+        catch (OperationCanceledException)
+        {
+            _cache.TryRemove(filePath, out _);
+            throw;
+        }
+        catch
+        {
+            _cache.TryRemove(filePath, out _);
+            throw;
+        }
     }
 
     private async Task<DiffSourcePair?> ResolveInternalAsync(

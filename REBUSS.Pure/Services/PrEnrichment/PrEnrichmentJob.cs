@@ -18,7 +18,7 @@ internal sealed class PrEnrichmentJob
     public required DateTimeOffset StartedAt { get; init; }
 
     /// <summary>The awaitable representing background completion. Set once when the job starts.</summary>
-    public Task<PrEnrichmentResult> ResultTask { get; set; } = null!;
+    public Task<PrEnrichmentResult>? ResultTask { get; set; }
 
     /// <summary>Mutated under the orchestrator's lock.</summary>
     public PrEnrichmentStatus Status { get; set; } = PrEnrichmentStatus.FetchingDiff;

@@ -64,7 +64,7 @@ public class AzureCliProcessHelperTests
     public void TryFindAzCliOnWindows_ReturnsNull_OnNonWindows()
     {
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            return; // skip on Windows — result depends on whether az is installed
+            return; // Not applicable on Windows — result depends on whether az is installed
 
         var result = AzureCliProcessHelper.TryFindAzCliOnWindows();
 

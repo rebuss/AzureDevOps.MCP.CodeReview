@@ -71,10 +71,11 @@ public class FullInstallSmokeTests : IAsyncLifetime
         // forward --pat correctly, the init command enters an interactive az-login
         // flow that blocks indefinitely. Shadowing az/gh ensures the "Install CLI?"
         // prompt appears instead, which the stdin "n\n" answer declines immediately.
+        using var restrictedPath = CliProcessHelper.BuildRestrictedPathEnv();
         var initResult = await RunProcessAsync(toolExe, "init --pat smoke-test-token",
             workingDirectory: repo.RootPath, stdin: "n\n",
             timeout: TimeSpan.FromSeconds(60),
-            environmentOverrides: CliProcessHelper.BuildRestrictedPathEnv());
+            environmentOverrides: restrictedPath.Env);
 
         Assert.True(initResult.ExitCode == 0,
             $"init failed (exit {initResult.ExitCode}). stdout: {initResult.StdOut}\nstderr: {initResult.StdErr}");

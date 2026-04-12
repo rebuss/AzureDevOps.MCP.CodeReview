@@ -40,11 +40,9 @@ public class CallSiteScanner
         if (targets.Count == 0)
             return [];
 
-        var targetNames = targets.Select(t => t.Name).Where(n => n != ".ctor").ToHashSet();
-        // For constructors, search for the class name (which will be resolved from context)
-        var ctorTargets = targets.Where(t => t.Kind == CallSiteTargetKind.Constructor).ToList();
+        var targetNames = targets.Select(t => t.Name).ToHashSet();
 
-        if (targetNames.Count == 0 && ctorTargets.Count == 0)
+        if (targetNames.Count == 0)
             return [];
 
         var results = new Dictionary<string, List<CallSiteLocation>>();
