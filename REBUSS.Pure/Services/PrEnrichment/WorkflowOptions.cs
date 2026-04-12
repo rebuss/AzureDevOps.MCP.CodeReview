@@ -24,4 +24,12 @@ public sealed class WorkflowOptions
     /// Default: 28 000 ms.
     /// </summary>
     public int ContentInternalTimeoutMs { get; set; } = 28_000;
+
+    /// <summary>
+    /// Polling interval (milliseconds) for checking Copilot review progress
+    /// and sending incremental progress notifications to the client. Shorter
+    /// intervals give more responsive UX at the cost of snapshot reads.
+    /// Default: 2 000 ms.
+    /// </summary>
+    public int CopilotReviewProgressPollingIntervalMs { get; set; } = 2_000;
 }

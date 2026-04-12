@@ -162,6 +162,7 @@ namespace REBUSS.Pure
             services.AddSingleton<IDiffEnricher, UsingsChangeEnricher>();        // Order=250
             services.AddSingleton<CallSiteScanner>();
             services.AddSingleton<IDiffEnricher, CallSiteEnricher>();            // Order=300
+            services.AddSingleton<IDiffEnricher, FileStructureValidationEnricher>(); // Order=400
             services.AddSingleton<ICodeProcessor, CompositeCodeProcessor>();
 
             // Progress reporting (MCP notifications/progress)
@@ -176,6 +177,9 @@ namespace REBUSS.Pure
             // alias so consumers can depend on ICopilotClientProvider, (3) IHostedService so
             // the generic host calls StopAsync on shutdown. All three resolve to the same instance.
             services.Configure<CopilotReviewOptions>(configuration.GetSection(CopilotReviewOptions.SectionName));
+            services.AddSingleton<ICopilotTokenResolver, CopilotTokenResolver>();
+            services.AddSingleton<CopilotVerificationRunner>();
+            services.AddSingleton<ICopilotVerificationProbe>(sp => sp.GetRequiredService<CopilotVerificationRunner>());
             services.AddSingleton<CopilotClientProvider>();
             services.AddSingleton<ICopilotClientProvider>(sp => sp.GetRequiredService<CopilotClientProvider>());
             services.AddHostedService(sp => sp.GetRequiredService<CopilotClientProvider>());

@@ -9,8 +9,9 @@ public interface ICopilotClientProvider
 {
     /// <summary>
     /// Ensures the client has been started. On first call, attempts <c>StartAsync</c>.
-    /// On subsequent calls, returns the cached outcome. Never throws — returns
-    /// <c>false</c> if the start attempt failed.
+    /// On subsequent calls, returns the cached outcome. Never throws for start failures —
+    /// returns <c>false</c> if the start attempt failed. Cancellation still propagates
+    /// as <see cref="OperationCanceledException"/>.
     /// </summary>
     Task<bool> TryEnsureStartedAsync(CancellationToken ct = default);
 
@@ -23,4 +24,13 @@ public interface ICopilotClientProvider
     /// but in the SDK-referencing project.
     /// </summary>
     object Client { get; }
+
+    /// <summary>
+    /// The <see cref="CopilotVerdict"/> produced by the first verification run
+    /// (successful or failed). <c>null</c> until
+    /// <see cref="TryEnsureStartedAsync"/> has completed at least once without
+    /// cancellation. Read by <c>CopilotAvailabilityDetector</c> to cache the
+    /// process-lifetime availability decision. Feature 018 (FR-007, T018).
+    /// </summary>
+    CopilotVerdict? StartupVerdict { get; }
 }

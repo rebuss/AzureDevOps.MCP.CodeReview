@@ -147,3 +147,37 @@ args → CliArgumentParser.Parse → Program.RunCliCommandAsync → InitCommand.
 **Auth chain (per provider):** PAT → cached token → CLI tool (`az account get-access-token` / `gh auth token`) → error with actionable instructions.
 
 **Provider detection:** explicit `--provider` → `GitHub.Owner` present → `AzureDevOps.OrganizationName` present → git remote URL → default `AzureDevOps`.
+
+### Copilot review layer auth (feature 018)
+
+The Copilot review layer has its OWN token resolution chain, separate from the GitHub API provider, because Copilot chat requires an OAuth token with the `copilot` scope — a classic GitHub Personal Access Token is NOT sufficient.
+
+**Resolution order (highest priority first):**
+
+1. `REBUSS_COPILOT_TOKEN` environment variable (for CI / headless / containerised deployments).
+2. `CopilotReview:GitHubToken` in `appsettings.json` / `appsettings.Local.json`.
+3. Default fallback: the SDK uses `UseLoggedInUser = true` and reads the OAuth session stored by `gh auth login`.
+
+The order is **deliberately the opposite** of `GitHubChainedAuthenticationProvider` (which puts explicit config above env vars). CI operators expect to inject secrets via environment variables without editing shipped config files.
+
+**⚠️ Classic GitHub PATs will NOT work for Copilot.** Copilot entitlement lives on OAuth tokens minted by first-party GitHub clients (VS Code, `gh auth login` with Copilot scopes). If a classic PAT is supplied via either override channel, verification fails with a remediation banner that names the issue explicitly.
+
+**Verification is lazy and one-shot per process:** `CopilotVerificationRunner` runs the full sequence (token resolve → `StartAsync` → `GetAuthStatusAsync` → `ListModelsAsync` model-entitlement → best-effort `Account.GetQuotaAsync` free-tier heuristic) on the first review request and caches the resulting `CopilotVerdict`. Subsequent requests read the cache. A process restart is required to re-probe.
+
+**`CopilotReview:StrictMode` (default `false`):** when `true`, `ICopilotAvailabilityDetector.IsAvailableAsync` throws `CopilotUnavailableException` on verification failure instead of returning `false` — the orchestrator surfaces this as an MCP tool error on the `get_pr_content` call. Non-review MCP tools keep serving normally. `Enabled = false` is NOT a verification failure and is never escalated into a throw even in strict mode.
+
+**Privacy invariant (FR-013a):** the token value NEVER appears in log lines, exception messages, or init-banner output. Only the `CopilotTokenSource` label (`env-override` / `config-override` / `logged-in-user`) identifies which channel supplied the token.
+
+**Configuration schema:**
+
+```jsonc
+{
+  "CopilotReview": {
+    "Enabled": true,                // FR-016 short-circuit when false
+    "ReviewBudgetTokens": 128000,
+    "Model": "claude-sonnet-4.6",   // must be in ListModelsAsync result
+    "GitHubToken": null,            // feature 018 — optional override (NOT a PAT)
+    "StrictMode": false             // feature 018 — lazy throw on first review when true
+  }
+}
+```

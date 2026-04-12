@@ -140,6 +140,23 @@ public class CopilotReviewOrchestratorTests
     }
 
     [Fact]
+    public async Task TryGetSnapshot_AfterCompletion_ExposesTotalAndCompletedPages()
+    {
+        var reviewer = Substitute.For<ICopilotPageReviewer>();
+        reviewer.ReviewPageAsync(Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(ci => Task.FromResult(CopilotPageReviewResult.Success(ci.Arg<int>(), "ok", 1)));
+
+        var orchestrator = Create(reviewer);
+        orchestrator.TriggerReview(42, BuildEnrichment());
+        _ = await orchestrator.WaitForReviewAsync(42, CancellationToken.None);
+
+        var snapshot = orchestrator.TryGetSnapshot(42);
+        Assert.NotNull(snapshot);
+        Assert.Equal(2, snapshot!.TotalPages);
+        Assert.Equal(2, snapshot.CompletedPages);
+    }
+
+    [Fact]
     public async Task TriggerReview_EmptyAllocation_ReturnsEmptyResult()
     {
         var reviewer = Substitute.For<ICopilotPageReviewer>();

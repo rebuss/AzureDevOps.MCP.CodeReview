@@ -373,4 +373,60 @@ summarization) will not be available until the Copilot CLI is installed.</value>
   <data name="ContentOnlyModeHeader" xml:space="preserve">
     <value>[review-mode: content-only]</value>
   </data>
+  <data name="LogCopilotReviewUnavailable" xml:space="preserve">
+    <value>Copilot review layer unavailable: {Reason}. Remediation: {Remediation}. TokenSource={TokenSource}, ConfiguredModel={ConfiguredModel}, EntitledModels=[{EntitledModels}], Login={Login}, Host={Host}</value>
+  </data>
+  <data name="LogCopilotReviewAuthenticatedSuccess" xml:space="preserve">
+    <value>Copilot authenticated as {Login} via {AuthType} (host={Host}). TokenSource={TokenSource}, Model={Model}</value>
+  </data>
+  <data name="LogCopilotFreeTierShapeWarning" xml:space="preserve">
+    <value>Copilot quota snapshot looks like a free tier — the configured model may silently downgrade mid-session. QuotaKeys=[{QuotaKeys}]</value>
+  </data>
+  <data name="ErrorCopilotNotAuthenticatedRemediation" xml:space="preserve">
+    <value>Copilot session is not authenticated. Run 'gh auth login --web' with Copilot scopes, then restart the MCP server. Alternatively set REBUSS_COPILOT_TOKEN (env var) or CopilotReview:GitHubToken (config) to a pre-minted Copilot-entitled OAuth token.</value>
+  </data>
+  <data name="ErrorCopilotOverrideTokenRejectedRemediation" xml:space="preserve">
+    <value>The override token supplied via {0} failed Copilot verification. Classic GitHub Personal Access Tokens are NOT valid Copilot-entitled tokens; you need an OAuth token with the 'copilot' scope minted by a first-party GitHub client. Run 'gh auth login --web' to obtain one, or remove the override and use the gh CLI session.</value>
+  </data>
+  <data name="ErrorCopilotModelNotEntitledRemediation" xml:space="preserve">
+    <value>Your Copilot session is not entitled to model '{0}'. Entitled models: [{1}]. Switch CopilotReview:Model in appsettings.json to one of the entitled models, or upgrade your Copilot subscription at https://github.com/settings/copilot.</value>
+  </data>
+  <data name="ErrorCopilotStartFailureRemediation" xml:space="preserve">
+    <value>Copilot SDK client failed to start: {0}. Verify that 'gh' CLI is installed and the 'github/gh-copilot' extension is available (run 'rebuss-pure init' to set them up). Classic GitHub Personal Access Tokens will not work as Copilot tokens.</value>
+  </data>
+  <data name="ErrorCopilotVerificationTimeoutRemediation" xml:space="preserve">
+    <value>Copilot verification exceeded its deadline. The SDK did not respond within the expected window. Retry by restarting the MCP server; if the problem persists, check 'gh copilot --version' and the output of 'gh auth status'.</value>
+  </data>
+  <data name="CopilotSetup_VerificationOk" xml:space="preserve">
+    <value>Copilot session verified ({0}, login={1}, model={2}).</value>
+  </data>
+  <data name="BannerCopilotNotAuthenticatedTitle" xml:space="preserve">
+    <value>  COPILOT SESSION NOT AUTHENTICATED</value>
+  </data>
+  <data name="BannerCopilotNotAuthenticatedBody" xml:space="preserve" xml:lang="en">
+    <value>Your GitHub CLI login does not currently grant access to the configured Copilot model '{0}'.
+
+Reason: {1} ({2})
+{3}
+
+To fix:
+
+  OPTION 1 — Re-run 'gh auth login' with Copilot scopes:
+
+    gh auth login --web
+
+  OPTION 2 — Set a pre-minted Copilot-entitled token (CI/headless):
+
+    set REBUSS_COPILOT_TOKEN=&lt;token&gt;            (Windows)
+    export REBUSS_COPILOT_TOKEN=&lt;token&gt;         (Linux/macOS)
+
+    NOTE: Classic GitHub Personal Access Tokens are NOT valid
+    Copilot-entitled tokens. You need an OAuth token minted by a
+    first-party GitHub client with the 'copilot' scope.
+
+  OPTION 3 — Check your Copilot subscription:
+
+    https://github.com/settings/copilot
+</value>
+  </data>
 </root>

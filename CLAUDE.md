@@ -1,6 +1,6 @@
 # REBUSS.Pure Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2026-04-10
+Auto-generated from all feature plans. Last updated: 2026-04-11
 
 ## Active Technologies
 - C# 14 on .NET 10 (`net10.0`), `<Nullable>enable</Nullable>` + Microsoft.Extensions.Logging, Microsoft.Extensions.Http (Polly via `AddStandardResilienceHandler`) (014-log-noise-reduction)

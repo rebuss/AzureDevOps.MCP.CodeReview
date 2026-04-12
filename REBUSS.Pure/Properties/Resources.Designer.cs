@@ -871,5 +871,49 @@ namespace REBUSS.Pure.Properties {
         internal static string ContentOnlyModeHeader {
             get { return ResourceManager.GetString("ContentOnlyModeHeader", resourceCulture)!; }
         }
+
+        internal static string LogCopilotReviewUnavailable {
+            get { return ResourceManager.GetString("LogCopilotReviewUnavailable", resourceCulture)!; }
+        }
+
+        internal static string LogCopilotReviewAuthenticatedSuccess {
+            get { return ResourceManager.GetString("LogCopilotReviewAuthenticatedSuccess", resourceCulture)!; }
+        }
+
+        internal static string LogCopilotFreeTierShapeWarning {
+            get { return ResourceManager.GetString("LogCopilotFreeTierShapeWarning", resourceCulture)!; }
+        }
+
+        internal static string ErrorCopilotNotAuthenticatedRemediation {
+            get { return ResourceManager.GetString("ErrorCopilotNotAuthenticatedRemediation", resourceCulture)!; }
+        }
+
+        internal static string ErrorCopilotOverrideTokenRejectedRemediation {
+            get { return ResourceManager.GetString("ErrorCopilotOverrideTokenRejectedRemediation", resourceCulture)!; }
+        }
+
+        internal static string ErrorCopilotModelNotEntitledRemediation {
+            get { return ResourceManager.GetString("ErrorCopilotModelNotEntitledRemediation", resourceCulture)!; }
+        }
+
+        internal static string ErrorCopilotStartFailureRemediation {
+            get { return ResourceManager.GetString("ErrorCopilotStartFailureRemediation", resourceCulture)!; }
+        }
+
+        internal static string ErrorCopilotVerificationTimeoutRemediation {
+            get { return ResourceManager.GetString("ErrorCopilotVerificationTimeoutRemediation", resourceCulture)!; }
+        }
+
+        internal static string CopilotSetup_VerificationOk {
+            get { return ResourceManager.GetString("CopilotSetup_VerificationOk", resourceCulture)!; }
+        }
+
+        internal static string BannerCopilotNotAuthenticatedTitle {
+            get { return ResourceManager.GetString("BannerCopilotNotAuthenticatedTitle", resourceCulture)!; }
+        }
+
+        internal static string BannerCopilotNotAuthenticatedBody {
+            get { return ResourceManager.GetString("BannerCopilotNotAuthenticatedBody", resourceCulture)!; }
+        }
     }
 }

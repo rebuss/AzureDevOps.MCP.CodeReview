@@ -93,6 +93,8 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
                 Status = job.Status,
                 Result = job.Result,
                 ErrorMessage = job.ErrorMessage,
+                TotalPages = job.TotalPages,
+                CompletedPages = Volatile.Read(ref job.CompletedPages),
             };
         }
     }
@@ -109,6 +111,8 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
 
             _logger.LogInformation(
                 Resources.LogCopilotReviewTriggered, job.PrNumber, allocation.TotalPages);
+
+            lock (_lock) { job.TotalPages = allocation.TotalPages; }
 
             // Empty-allocation fast path (edge case: empty PR / zero pages).
             if (allocation.TotalPages == 0)
@@ -136,7 +140,7 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
                 var pageSlice = allocation.Pages[pageIdx];
                 var pageNumber = pageSlice.PageNumber;
                 var (enrichedContent, filePaths) = BuildPageInput(pageSlice, enrichment);
-                pageTasks.Add(ReviewPageWithRetryAsync(job.PrNumber, pageNumber, enrichedContent, filePaths, ct));
+                pageTasks.Add(ReviewPageAndTrackAsync(job, pageNumber, enrichedContent, filePaths, ct));
             }
 
             var pageResults = await Task.WhenAll(pageTasks).ConfigureAwait(false);
@@ -175,6 +179,24 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
     }
 
     private const int MaxAttemptsPerPage = 3;
+
+    /// <summary>
+    /// Wraps <see cref="ReviewPageWithRetryAsync"/> and atomically increments the job's
+    /// completed-page counter when the page finishes (whether it succeeded or failed after
+    /// exhausting retries). Cancellation (<see cref="OperationCanceledException"/>) is
+    /// re-thrown without incrementing — the orchestrator-level catch handles that state.
+    /// </summary>
+    private async Task<CopilotPageReviewResult> ReviewPageAndTrackAsync(
+        CopilotReviewJob job,
+        int pageNumber,
+        string enrichedContent,
+        IReadOnlyList<string> filePathsOnPage,
+        CancellationToken ct)
+    {
+        var result = await ReviewPageWithRetryAsync(job.PrNumber, pageNumber, enrichedContent, filePathsOnPage, ct);
+        Interlocked.Increment(ref job.CompletedPages);
+        return result;
+    }
 
     /// <summary>
     /// Wraps <see cref="ICopilotPageReviewer.ReviewPageAsync"/> in a bounded 3-attempt retry
@@ -266,5 +288,11 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
         public CopilotReviewResult? Result { get; set; }
         public string? ErrorMessage { get; set; }
         public required TaskCompletionSource<CopilotReviewResult> Completion { get; init; }
+
+        /// <summary>Set under <c>_lock</c> once the allocation is computed.</summary>
+        public int TotalPages { get; set; }
+
+        /// <summary>Atomically incremented via <see cref="Interlocked.Increment"/> as each page finishes.</summary>
+        public int CompletedPages;
     }
 }

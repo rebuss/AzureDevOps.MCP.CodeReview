@@ -31,4 +31,34 @@ public sealed class CopilotReviewOptions
     /// the canonical form via <c>client.ListModelsAsync()</c> and update this value.
     /// </summary>
     public string Model { get; set; } = "claude-sonnet-4.6";
+
+    /// <summary>
+    /// Optional pre-minted, Copilot-entitled GitHub token override. Lower priority
+    /// than the <see cref="GitHubTokenEnvironmentVariable"/> environment variable;
+    /// higher priority than the default gh-CLI logged-in-user session. Classic
+    /// GitHub Personal Access Tokens are <b>NOT</b> valid Copilot-entitled tokens
+    /// and will fail verification (FR-013). Blank / whitespace values are treated
+    /// as unset (FR-012). Feature 018 (FR-009).
+    /// </summary>
+    public string? GitHubToken { get; set; }
+
+    /// <summary>
+    /// When <c>true</c>, a verification failure throws
+    /// <c>CopilotUnavailableException</c> from
+    /// <c>ICopilotAvailabilityDetector.IsAvailableAsync</c> instead of returning
+    /// <c>false</c>. Strict mode is <b>lazy</b> — it only fires from the first
+    /// review request, never from server startup (FR-015). Default <c>false</c>
+    /// (graceful degradation, FR-014). FR-016 takes precedence: when
+    /// <see cref="Enabled"/> is <c>false</c>, strict mode does NOT escalate the
+    /// disabled-by-config short-circuit into a throw.
+    /// </summary>
+    public bool StrictMode { get; set; } = false;
+
+    /// <summary>
+    /// Environment variable name for the token override channel (FR-010).
+    /// Highest priority in the token resolution chain (FR-011). Note: the value
+    /// at this env var must be a Copilot-entitled OAuth token; classic PATs
+    /// will fail verification.
+    /// </summary>
+    public const string GitHubTokenEnvironmentVariable = "REBUSS_COPILOT_TOKEN";
 }

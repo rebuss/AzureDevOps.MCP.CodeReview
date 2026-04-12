@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Logging;
+using REBUSS.Pure.Core.Services.CopilotReview;
 using REBUSS.Pure.GitHub.Configuration;
 using REBUSS.Pure.Properties;
+using REBUSS.Pure.Services.CopilotReview;
 
 namespace REBUSS.Pure.Cli;
 
@@ -22,6 +24,7 @@ internal sealed class CopilotCliSetupStep
     private readonly TextReader _input;
     private readonly Func<string, CancellationToken, Task<(int ExitCode, string StdOut, string StdErr)>>? _processRunner;
     private readonly ILogger<CopilotCliSetupStep>? _logger;
+    private readonly ICopilotVerificationProbe? _verificationProbe;
     private string? _ghCliPathOverride;
 
     public CopilotCliSetupStep(
@@ -29,13 +32,15 @@ internal sealed class CopilotCliSetupStep
         TextReader input,
         Func<string, CancellationToken, Task<(int ExitCode, string StdOut, string StdErr)>>? processRunner = null,
         string? ghCliPathOverride = null,
-        ILogger<CopilotCliSetupStep>? logger = null)
+        ILogger<CopilotCliSetupStep>? logger = null,
+        ICopilotVerificationProbe? verificationProbe = null)
     {
         _output = output;
         _input = input;
         _processRunner = processRunner;
         _ghCliPathOverride = ghCliPathOverride;
         _logger = logger;
+        _verificationProbe = verificationProbe;
     }
 
     /// <summary>
@@ -115,6 +120,9 @@ internal sealed class CopilotCliSetupStep
 
             // User already consented at the entry prompt — install extension directly (Clarification Q2).
             await InstallExtensionAsync(cancellationToken, skipPrompt: true);
+            // FR-017 design: verification runs only when gh-CLI + extension are confirmed present.
+            // See tasks.md T031(d) — other exit paths already print WriteDeclineBannerAsync.
+            await VerifyCopilotSessionAsync(cancellationToken);
             return;
         }
 
@@ -131,11 +139,81 @@ internal sealed class CopilotCliSetupStep
         {
             await _output.WriteLineAsync(Resources.CopilotSetup_AlreadyInstalled);
             _logger?.LogInformation("copilot-setup: already-installed");
+            // FR-017 design: verification runs only when gh-CLI + extension are confirmed present.
+            await VerifyCopilotSessionAsync(cancellationToken);
             return;
         }
 
         // Step 4 — extension missing. Prompt user.
         await InstallExtensionAsync(cancellationToken, skipPrompt: false);
+        // FR-017 design: verification runs only when gh-CLI + extension are confirmed present.
+        await VerifyCopilotSessionAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Feature 018 (FR-017, T031). Runs the same Copilot verification as the
+    /// runtime server start: delegates to <see cref="ICopilotVerificationProbe.ProbeAsync"/>
+    /// and either prints a single confirmation line on success or writes the
+    /// remediation banner on failure. Never throws — matches the existing
+    /// soft-exit policy at lines 48-57: any exception is logged at Warning and
+    /// swallowed so the init exit code stays 0.
+    /// </summary>
+    private async Task VerifyCopilotSessionAsync(CancellationToken cancellationToken)
+    {
+        if (_verificationProbe is null)
+        {
+            // No probe configured (e.g. DI bootstrap failed in InitCommand).
+            // FR-017 soft-exit: silently skip the verification step.
+            _logger?.LogDebug("copilot-setup: verification probe not configured, skipping");
+            return;
+        }
+
+        CopilotVerdict verdict;
+        try
+        {
+            verdict = await _verificationProbe.ProbeAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "copilot-setup: verification probe threw — skipping");
+            return;
+        }
+
+        if (verdict.IsAvailable)
+        {
+            await _output.WriteLineAsync(string.Format(
+                Resources.CopilotSetup_VerificationOk,
+                verdict.TokenSource.ToLogLabel(),
+                verdict.Login ?? "(unknown)",
+                verdict.ConfiguredModel ?? "(unknown)"));
+            _logger?.LogInformation("copilot-setup: verification-ok");
+            return;
+        }
+
+        // Graceful degradation: print the banner but do NOT fail the init step.
+        await WriteCopilotAuthFailureBannerAsync(verdict);
+        _logger?.LogInformation("copilot-setup: verification-failed: {Reason}", verdict.Reason);
+    }
+
+    private async Task WriteCopilotAuthFailureBannerAsync(CopilotVerdict verdict)
+    {
+        await _output.WriteLineAsync();
+        await _output.WriteLineAsync("========================================");
+        await _output.WriteLineAsync(Resources.BannerCopilotNotAuthenticatedTitle);
+        await _output.WriteLineAsync("========================================");
+        await _output.WriteLineAsync();
+        await _output.WriteLineAsync(string.Format(
+            Resources.BannerCopilotNotAuthenticatedBody,
+            verdict.ConfiguredModel ?? "(unknown)",
+            verdict.Reason,
+            verdict.TokenSource.ToLogLabel(),
+            verdict.Remediation));
+        await _output.WriteLineAsync("========================================");
+        await _output.WriteLineAsync();
     }
 
     /// <summary>

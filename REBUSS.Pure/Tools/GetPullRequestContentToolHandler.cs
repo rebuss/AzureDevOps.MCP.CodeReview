@@ -142,15 +142,36 @@ namespace REBUSS.Pure.Tools
                 // Feature 013 branch: if Copilot is available + enabled, the server performs
                 // the review itself and returns compact page summaries in a single response.
                 // Otherwise, fall through to the existing content-only path.
-                await _progressReporter.ReportAsync(progress, 2, 4,
-                    $"Enrichment complete — checking review mode", cancellationToken);
+                await _progressReporter.ReportAsync(progress, 2, null,
+                    "Enrichment complete — checking review mode", cancellationToken);
 
-                var copilotAvailable = await _copilotAvailability.IsAvailableAsync(cancellationToken);
+                bool copilotAvailable;
+                try
+                {
+                    copilotAvailable = await _copilotAvailability.IsAvailableAsync(cancellationToken);
+                }
+                catch (Services.CopilotReview.CopilotUnavailableException ex)
+                {
+                    // Feature 018 (FR-015 strict mode): when CopilotReview:StrictMode = true
+                    // and the cached verdict is unavailable for a real verification failure,
+                    // IsAvailableAsync throws instead of returning false. Surface the
+                    // remediation string as an MCP tool error so the operator sees a loud,
+                    // unambiguous signal on this exact request.
+                    sw.Stop();
+                    _logger.LogWarning(
+                        "PR {Pr} Copilot review layer unavailable (strict mode): {Reason}. Remediation: {Remediation}",
+                        prNumber, ex.Verdict.Reason, ex.Verdict.Remediation);
+                    throw;
+                }
                 if (copilotAvailable)
                 {
+                    await _progressReporter.ReportAsync(progress, 3, null,
+                        $"Copilot review started for PR #{prNumber}", cancellationToken);
+
                     _copilotReviewOrchestrator.TriggerReview(prNumber.Value, result);
-                    var copilotResult = await _copilotReviewOrchestrator.WaitForReviewAsync(
-                        prNumber.Value, cancellationToken);
+
+                    var copilotResult = await WaitForReviewWithProgressAsync(
+                        prNumber.Value, progress, cancellationToken);
 
                     var copilotBlocks = BuildCopilotAssistedBlocks(prNumber.Value, copilotResult);
 
@@ -300,6 +321,53 @@ namespace REBUSS.Pure.Tools
                 categories[key] = categories.GetValueOrDefault(key) + 1;
             }
             return categories;
+        }
+
+        /// <summary>
+        /// Polls <see cref="ICopilotReviewOrchestrator.TryGetSnapshot"/> at a configurable
+        /// interval while waiting for the review to finish, sending incremental progress
+        /// notifications as pages complete. Returns the final result once all pages are done.
+        /// </summary>
+        private async Task<Core.Models.CopilotReview.CopilotReviewResult> WaitForReviewWithProgressAsync(
+            int prNumber,
+            IProgress<ProgressNotificationValue>? progress,
+            CancellationToken cancellationToken)
+        {
+            var reviewTask = _copilotReviewOrchestrator.WaitForReviewAsync(prNumber, cancellationToken);
+            var pollingIntervalMs = _workflowOptions.Value.CopilotReviewProgressPollingIntervalMs;
+
+            int lastReportedCompleted = 0;
+            int progressStep = 4; // continues after step 3 ("review started")
+
+            while (!reviewTask.IsCompleted)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var snapshot = _copilotReviewOrchestrator.TryGetSnapshot(prNumber);
+                if (snapshot is { TotalPages: > 0, CompletedPages: > 0 } && snapshot.CompletedPages > lastReportedCompleted)
+                {
+                    lastReportedCompleted = snapshot.CompletedPages;
+                    await _progressReporter.ReportAsync(progress,
+                        progressStep++, null,
+                        $"Copilot review — {snapshot.CompletedPages}/{snapshot.TotalPages} pages complete",
+                        cancellationToken);
+                }
+
+                await Task.WhenAny(reviewTask, Task.Delay(pollingIntervalMs, cancellationToken));
+            }
+
+            // Final snapshot check — the loop may exit before reporting the last page
+            // because reviewTask completes at the same time as the last page finishes.
+            var finalSnapshot = _copilotReviewOrchestrator.TryGetSnapshot(prNumber);
+            if (finalSnapshot is { TotalPages: > 0 } && finalSnapshot.CompletedPages > lastReportedCompleted)
+            {
+                await _progressReporter.ReportAsync(progress,
+                    progressStep++, null,
+                    $"Copilot review — {finalSnapshot.CompletedPages}/{finalSnapshot.TotalPages} pages complete",
+                    cancellationToken);
+            }
+
+            return await reviewTask;
         }
     }
 }

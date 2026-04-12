@@ -14,6 +14,7 @@ using REBUSS.Pure.Core.Shared;
 using REBUSS.Pure.Services.PrEnrichment;
 using REBUSS.Pure.Services.ResponsePacking;
 using REBUSS.Pure.Tools;
+using CopilotUnavailableException = global::REBUSS.Pure.Services.CopilotReview.CopilotUnavailableException;
 
 namespace REBUSS.Pure.Tests.Tools;
 
@@ -24,7 +25,12 @@ public class GetPullRequestContentToolHandlerTests
     private readonly IPrEnrichmentOrchestrator _orchestrator = Substitute.For<IPrEnrichmentOrchestrator>();
     private readonly IPageAllocator _pageAllocator = Substitute.For<IPageAllocator>();
     private readonly IOptions<WorkflowOptions> _workflowOptions =
-        Options.Create(new WorkflowOptions { MetadataInternalTimeoutMs = 28_000, ContentInternalTimeoutMs = 28_000 });
+        Options.Create(new WorkflowOptions
+        {
+            MetadataInternalTimeoutMs = 28_000,
+            ContentInternalTimeoutMs = 28_000,
+            CopilotReviewProgressPollingIntervalMs = 50,
+        });
     // Feature 013 defaults: Copilot is NOT available so existing tests exercise the
     // content-only path unchanged. Tests that want the copilot-assisted branch override.
     private readonly ICopilotAvailabilityDetector _copilotAvailability = Substitute.For<ICopilotAvailabilityDetector>();
@@ -553,5 +559,173 @@ public class GetPullRequestContentToolHandlerTests
         // SC-002: at least one message contains a position indicator (N/M pattern)
         Assert.Contains(capturedMessages, m =>
             System.Text.RegularExpressions.Regex.IsMatch(m, @"\d+/\d+"));
+    }
+
+    // ─── Feature 013: Copilot review progress notifications ──────────────────
+
+    [Fact]
+    public async Task Execute_CopilotAvailable_SendsCopilotReviewStartedProgress()
+    {
+        _copilotAvailability.IsAvailableAsync(Arg.Any<CancellationToken>()).Returns(true);
+        var copilotResult = new Core.Models.CopilotReview.CopilotReviewResult
+        {
+            PrNumber = 42,
+            PageReviews = new[]
+            {
+                Core.Models.CopilotReview.CopilotPageReviewResult.Success(1, "ok", 1),
+            },
+            CompletedAt = DateTimeOffset.UtcNow,
+        };
+        _copilotReviewOrchestrator
+            .WaitForReviewAsync(42, Arg.Any<CancellationToken>())
+            .Returns(copilotResult);
+
+        var capturedMessages = new List<string>();
+        _progressReporter.ReportAsync(
+            Arg.Any<object?>(), Arg.Any<int>(), Arg.Any<int?>(),
+            Arg.Do<string>(m => capturedMessages.Add(m)), Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
+
+        await _handler.ExecuteAsync(prNumber: 42, pageNumber: 1);
+
+        Assert.Contains(capturedMessages, m =>
+            m.Contains("Copilot review started", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task Execute_CopilotReviewInProgress_ReportsPageLevelProgress()
+    {
+        _copilotAvailability.IsAvailableAsync(Arg.Any<CancellationToken>()).Returns(true);
+
+        var copilotResult = new Core.Models.CopilotReview.CopilotReviewResult
+        {
+            PrNumber = 42,
+            PageReviews = new[]
+            {
+                Core.Models.CopilotReview.CopilotPageReviewResult.Success(1, "review page 1", 1),
+                Core.Models.CopilotReview.CopilotPageReviewResult.Success(2, "review page 2", 1),
+                Core.Models.CopilotReview.CopilotPageReviewResult.Success(3, "review page 3", 1),
+            },
+            CompletedAt = DateTimeOffset.UtcNow,
+        };
+
+        // WaitForReviewAsync completes after a short delay to allow the polling loop to run.
+        var completionTcs = new TaskCompletionSource<Core.Models.CopilotReview.CopilotReviewResult>();
+        _copilotReviewOrchestrator
+            .WaitForReviewAsync(42, Arg.Any<CancellationToken>())
+            .Returns(completionTcs.Task);
+
+        // Simulate progress snapshots: pages completing over time.
+        var snapshotCallCount = 0;
+        _copilotReviewOrchestrator.TryGetSnapshot(42)
+            .Returns(_ =>
+            {
+                snapshotCallCount++;
+                return new Core.Models.CopilotReview.CopilotReviewSnapshot
+                {
+                    PrNumber = 42,
+                    Status = Core.Models.CopilotReview.CopilotReviewStatus.Reviewing,
+                    TotalPages = 3,
+                    CompletedPages = Math.Min(snapshotCallCount, 3),
+                };
+            });
+
+        var capturedMessages = new List<string>();
+        _progressReporter.ReportAsync(
+            Arg.Any<object?>(), Arg.Any<int>(), Arg.Any<int?>(),
+            Arg.Do<string>(m => capturedMessages.Add(m)), Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
+
+        // Complete the review after a brief delay so the polling loop iterates.
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(300);
+            completionTcs.SetResult(copilotResult);
+        });
+
+        var blocks = (await _handler.ExecuteAsync(prNumber: 42, pageNumber: 1)).ToList();
+
+        // Verify page-level progress was reported (at least one "K/3 pages complete" message).
+        Assert.Contains(capturedMessages, m =>
+            m.Contains("pages complete", StringComparison.OrdinalIgnoreCase) &&
+            m.Contains("/3", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Execute_CopilotReview_ContentOnlyPath_NoReviewStartedProgress()
+    {
+        // Default: Copilot not available — no "review started" message should appear.
+        var capturedMessages = new List<string>();
+        _progressReporter.ReportAsync(
+            Arg.Any<object?>(), Arg.Any<int>(), Arg.Any<int?>(),
+            Arg.Do<string>(m => capturedMessages.Add(m)), Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
+
+        await _handler.ExecuteAsync(prNumber: 42, pageNumber: 1);
+
+        Assert.DoesNotContain(capturedMessages, m =>
+            m.Contains("Copilot review started", StringComparison.OrdinalIgnoreCase));
+    }
+
+    // ─── Feature 018 US2 (T026) — strict-mode CopilotUnavailableException handling ───
+
+    private static CopilotVerdict StrictModeVerdict() => new(
+        IsAvailable: false,
+        Reason: CopilotAuthReason.NotAuthenticated,
+        TokenSource: CopilotTokenSource.LoggedInUser,
+        ConfiguredModel: "claude-sonnet-4.6",
+        EntitledModels: Array.Empty<string>(),
+        Login: null,
+        Host: null,
+        Remediation: "Run 'gh auth login' with Copilot scopes.");
+
+    [Fact]
+    public async Task Execute_StrictModeCopilotUnavailable_SurfacesAsMcpErrorWithRemediation()
+    {
+        // T026(a): strict mode throws CopilotUnavailableException from IsAvailableAsync.
+        // The handler lets it bubble; the MCP tool-handler infrastructure wraps it in an
+        // McpException (the tool-error envelope) whose message + InnerException carry the
+        // remediation string. Review MUST NOT be triggered.
+        var verdict = StrictModeVerdict();
+        _copilotAvailability.IsAvailableAsync(Arg.Any<CancellationToken>())
+            .Returns<Task<bool>>(_ => throw new CopilotUnavailableException(verdict));
+
+        var ex = await Assert.ThrowsAsync<ModelContextProtocol.McpException>(
+            () => _handler.ExecuteAsync(prNumber: 42, pageNumber: 1));
+
+        // The remediation must reach the operator — either inline or via the inner exception.
+        Assert.True(
+            ex.Message.Contains(verdict.Remediation, StringComparison.Ordinal)
+                || ex.InnerException is CopilotUnavailableException { Verdict.Remediation: var r } && r == verdict.Remediation,
+            $"Expected the McpException to carry the remediation string. Got: {ex.Message}");
+        _copilotReviewOrchestrator.DidNotReceive().TriggerReview(Arg.Any<int>(), Arg.Any<object>());
+    }
+
+    [Fact]
+    public async Task Execute_GracefulModeCopilotUnavailable_FallsBackToContentOnly()
+    {
+        // T026(b): regression guard — graceful mode path is untouched.
+        // IsAvailableAsync returns false (no throw) and the handler falls back to
+        // the content-only path as before.
+        _copilotAvailability.IsAvailableAsync(Arg.Any<CancellationToken>()).Returns(false);
+
+        var blocks = (await _handler.ExecuteAsync(prNumber: 42, pageNumber: 1)).ToList();
+        var text = AllText(blocks);
+
+        Assert.Contains("src/A.cs", text);
+        _copilotReviewOrchestrator.DidNotReceive().TriggerReview(Arg.Any<int>(), Arg.Any<object>());
+    }
+
+    [Fact]
+    public async Task Execute_UnrelatedExceptionFromIsAvailableAsync_StillPropagates()
+    {
+        // T026(c): regression guard — non-CopilotUnavailableException exceptions from
+        // IsAvailableAsync must still bubble out via the existing error-handling path.
+        // The new catch block must NOT swallow them.
+        _copilotAvailability.IsAvailableAsync(Arg.Any<CancellationToken>())
+            .Returns<Task<bool>>(_ => throw new InvalidOperationException("unrelated failure"));
+
+        await Assert.ThrowsAnyAsync<Exception>(
+            () => _handler.ExecuteAsync(prNumber: 42, pageNumber: 1));
     }
 }

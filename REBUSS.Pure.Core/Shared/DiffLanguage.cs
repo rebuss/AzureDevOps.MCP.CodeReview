@@ -92,6 +92,7 @@ public static partial class DiffLanguageDetector
         if (diff.Contains("[structural-changes]", StringComparison.Ordinal)) return true;
         if (diff.Contains("[dependency-changes]", StringComparison.Ordinal)) return true;
         if (diff.Contains("[call-sites]", StringComparison.Ordinal)) return true;
+        if (diff.Contains("[file-structure:", StringComparison.Ordinal)) return true;
         return false;
     }
 }

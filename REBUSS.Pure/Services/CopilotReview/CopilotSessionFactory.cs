@@ -39,6 +39,20 @@ internal sealed class CopilotSessionFactory : ICopilotSessionFactory
 
         var client = (CopilotClient)_provider.Client;
 
+        // Diagnostic: log available models at Debug level.
+        // Upstream CopilotVerificationRunner already verified model entitlement per
+        // research.md Decision 6 (feature 018 T020); a warning here would be redundant.
+        try
+        {
+            var models = await client.ListModelsAsync(ct).ConfigureAwait(false);
+            var modelList = string.Join(", ", models.Select(m => m.Id));
+            _logger.LogDebug("Copilot SDK available models: [{Models}]", modelList);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "ListModelsAsync failed — model availability unknown");
+        }
+
         var config = new SessionConfig
         {
             Model = model,
@@ -47,8 +61,9 @@ internal sealed class CopilotSessionFactory : ICopilotSessionFactory
             Streaming = false,
         };
 
+        await CopilotRequestThrottle.WaitAsync(ct).ConfigureAwait(false);
         var session = await client.CreateSessionAsync(config, ct).ConfigureAwait(false);
-        return new CopilotSessionHandle(session);
+        return new CopilotSessionHandle(session, client, _logger);
     }
 }
 
@@ -63,14 +78,21 @@ internal sealed class CopilotSessionFactory : ICopilotSessionFactory
 internal sealed class CopilotSessionHandle : ICopilotSessionHandle
 {
     private readonly CopilotSession _session;
+    private readonly CopilotClient _client;
+    private readonly ILogger _logger;
 
-    public CopilotSessionHandle(CopilotSession session)
+    public CopilotSessionHandle(CopilotSession session, CopilotClient client, ILogger logger)
     {
         _session = session;
+        _client = client;
+        _logger = logger;
     }
 
-    public Task<string> SendAsync(string prompt, CancellationToken ct) =>
-        _session.SendAsync(new MessageOptions { Prompt = prompt }, ct);
+    public async Task<string> SendAsync(string prompt, CancellationToken ct)
+    {
+        await CopilotRequestThrottle.WaitAsync(ct).ConfigureAwait(false);
+        return await _session.SendAsync(new MessageOptions { Prompt = prompt }, ct).ConfigureAwait(false);
+    }
 
     public IDisposable On(Action<object> handler)
     {
@@ -80,5 +102,20 @@ internal sealed class CopilotSessionHandle : ICopilotSessionHandle
         return _session.On(bridge);
     }
 
-    public ValueTask DisposeAsync() => _session.DisposeAsync();
+    public async ValueTask DisposeAsync()
+    {
+        var sessionId = _session.SessionId;
+        await _session.DisposeAsync().ConfigureAwait(false);
+
+        // Delete the session from the CLI process so it does not appear
+        // in the VS Code Copilot chat history panel.
+        try
+        {
+            await _client.DeleteSessionAsync(sessionId).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Failed to delete Copilot session {SessionId} — it may still appear in history", sessionId);
+        }
+    }
 }
