@@ -21,7 +21,7 @@ rebuss-pure init --provider azuredevops
 rebuss-pure init --ide vscode
 rebuss-pure init --ide vs
 
-# Global mode — writes user-level config (~\.mcp.json & %APPDATA%\Code\User\mcp.json)
+# Global mode — writes user-level config (~\.mcp.json, %APPDATA%\Code\User\mcp.json & ~\.copilot\mcp-config.json)
 rebuss-pure init -g
 ```
 
@@ -98,7 +98,7 @@ opts into the feature via `CopilotReview.Enabled` plus the feature-012 onboardin
 **Global mode (`-g` / `--global`):**
 
 When the `-g` flag is used, the MCP configuration is written to the user-level directories
-(`~/.mcp.json` for Visual Studio, `%APPDATA%\Code\User\mcp.json` for VS Code on Windows / `~/.config/Code/User/mcp.json` on Linux/macOS) instead of the repository-local directories.
+(`~/.mcp.json` for Visual Studio, `%APPDATA%\Code\User\mcp.json` for VS Code on Windows / `~/.config/Code/User/mcp.json` on Linux/macOS, `~/.copilot/mcp-config.json` for Copilot CLI) instead of the repository-local directories.
 The `--repo` argument in the config points to the current repository's git root.
 
 This is useful when Visual Studio does not detect the local `.vs/mcp.json` file.

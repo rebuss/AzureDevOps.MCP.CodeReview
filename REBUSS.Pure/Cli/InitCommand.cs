@@ -36,6 +36,7 @@ public class InitCommand : ICliCommand
     private const string VisualStudioDir = ".vs";
     private const string McpConfigFileName = "mcp.json";
     private const string VsGlobalMcpConfigFileName = ".mcp.json";
+    private const string CopilotCliMcpConfigFileName = "mcp-config.json";
     private const string ResourcePrefix = AppConstants.ServerName + ".Cli.Prompts.";
 
     private static readonly string[] PromptFileNames =
@@ -426,7 +427,8 @@ public class InitCommand : ICliCommand
     /// Visual Studio reads <c>~/.mcp.json</c> directly from the user's home directory.
     /// VS Code reads <c>%APPDATA%/Code/User/mcp.json</c> on Windows
     /// (<c>~/.config/Code/User/mcp.json</c> on Linux).
-    /// Writing to both ensures every workspace picks up the configuration.
+    /// Copilot CLI reads <c>~/.copilot/mcp-config.json</c>.
+    /// Writing to all ensures every workspace picks up the configuration.
     /// </summary>
     internal static List<McpConfigTarget> ResolveGlobalConfigTargets()
     {
@@ -443,7 +445,12 @@ public class InitCommand : ICliCommand
             new McpConfigTarget(
                 "VS Code (global)",
                 Path.Combine(appData, "Code", "User"),
-                Path.Combine(appData, "Code", "User", McpConfigFileName))
+                Path.Combine(appData, "Code", "User", McpConfigFileName)),
+
+            new McpConfigTarget(
+                "Copilot CLI (global)",
+                Path.Combine(userHome, ".copilot"),
+                Path.Combine(userHome, ".copilot", CopilotCliMcpConfigFileName))
         ];
     }
 

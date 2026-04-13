@@ -1594,6 +1594,7 @@ public class InitCommandTests
 
         Assert.True(File.Exists(ctx.GlobalVsConfig), $"Expected global VS config at {ctx.GlobalVsConfig}");
         Assert.True(File.Exists(ctx.GlobalVsCodeConfig), $"Expected global VS Code config at {ctx.GlobalVsCodeConfig}");
+        Assert.True(File.Exists(ctx.GlobalCopilotCliConfig), $"Expected global Copilot CLI config at {ctx.GlobalCopilotCliConfig}");
 
         var content = await File.ReadAllTextAsync(ctx.GlobalVsConfig);
         Assert.Contains("REBUSS.Pure", content);
@@ -1669,14 +1670,16 @@ public class InitCommandTests
     {
         var targets = InitCommand.ResolveGlobalConfigTargets();
 
-        Assert.Equal(2, targets.Count);
+        Assert.Equal(3, targets.Count);
         Assert.Contains(targets, t => t.IdeName == "Visual Studio (global)");
         Assert.Contains(targets, t => t.IdeName == "VS Code (global)");
+        Assert.Contains(targets, t => t.IdeName == "Copilot CLI (global)");
 
         var userHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var appData  = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
         Assert.Contains(targets, t => t.ConfigPath == Path.Combine(userHome, ".mcp.json"));
         Assert.Contains(targets, t => t.ConfigPath == Path.Combine(appData, "Code", "User", "mcp.json"));
+        Assert.Contains(targets, t => t.ConfigPath == Path.Combine(userHome, ".copilot", "mcp-config.json"));
     }
 
     // -------------------------------------------------------------------------
@@ -2013,6 +2016,7 @@ public class InitCommandTests
         public string GlobalDir { get; }
         public string GlobalVsConfig { get; }
         public string GlobalVsCodeConfig { get; }
+        public string GlobalCopilotCliConfig { get; }
         public List<McpConfigTarget> GlobalTargets { get; }
 
         public GlobalTestContext()
@@ -2024,10 +2028,13 @@ public class InitCommandTests
             GlobalVsConfig = Path.Combine(GlobalDir, ".mcp.json");
             var globalVsCodeDir = Path.Combine(GlobalDir, "Code", "User");
             GlobalVsCodeConfig = Path.Combine(globalVsCodeDir, "mcp.json");
+            var globalCopilotCliDir = Path.Combine(GlobalDir, ".copilot");
+            GlobalCopilotCliConfig = Path.Combine(globalCopilotCliDir, "mcp-config.json");
             GlobalTargets =
             [
                 new McpConfigTarget("Visual Studio (global)", GlobalDir, GlobalVsConfig),
-                new McpConfigTarget("VS Code (global)", globalVsCodeDir, GlobalVsCodeConfig)
+                new McpConfigTarget("VS Code (global)", globalVsCodeDir, GlobalVsCodeConfig),
+                new McpConfigTarget("Copilot CLI (global)", globalCopilotCliDir, GlobalCopilotCliConfig)
             ];
         }
 
