@@ -30,6 +30,7 @@
     <EmbeddedResource Include="Cli\Prompts\self-review.prompt.md" />
     <EmbeddedResource Include="Cli\Prompts\create-pr.md" />
     <EmbeddedResource Include="Services\CopilotReview\Prompts\copilot-page-review.md" />
+    <EmbeddedResource Include="Services\CopilotReview\Prompts\copilot-finding-validation.md" />
     <EmbeddedResource Update="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>

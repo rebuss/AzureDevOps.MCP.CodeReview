@@ -50,7 +50,14 @@ public partial class FileStructureValidationEnricher : IDiffEnricher
 
             var pair = await _sourceResolver.ResolveAsync(diff, ct);
             if (pair == null)
-                return diff;
+            {
+                // Source unavailable (download timeout, file missing, >100KB) — emit
+                // `unknown` rather than omitting the annotation. Feature 021: a missing
+                // annotation was previously interpreted by the reviewer as "file may be
+                // broken", producing structural false positives.
+                var unknownAnnotation = FormatAnnotation(null, null);
+                return InsertAfterHeader(diff, unknownAnnotation);
+            }
 
             var (syntaxValid, balancedBraces) = Validate(pair.AfterCode);
             var annotation = FormatAnnotation(syntaxValid, balancedBraces);
@@ -94,10 +101,14 @@ public partial class FileStructureValidationEnricher : IDiffEnricher
         return (syntaxValid, openBraces == closeBraces);
     }
 
-    public static string FormatAnnotation(bool syntaxValid, bool balancedBraces)
+    /// <summary>
+    /// Formats the <c>[file-structure]</c> annotation. Feature 021: accepts nullable
+    /// inputs so callers can emit <c>unknown</c> when the source is unavailable.
+    /// </summary>
+    public static string FormatAnnotation(bool? syntaxValid, bool? balancedBraces)
     {
-        var compiles = syntaxValid ? "yes" : "no";
-        var braces = balancedBraces ? "yes" : "no";
+        var compiles = syntaxValid switch { true => "yes", false => "no", null => "unknown" };
+        var braces = balancedBraces switch { true => "yes", false => "no", null => "unknown" };
         return $"[file-structure: compiles={compiles}, balanced-braces={braces}]\n";
     }
 

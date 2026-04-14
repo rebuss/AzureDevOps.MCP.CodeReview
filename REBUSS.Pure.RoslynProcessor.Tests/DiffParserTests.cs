@@ -74,11 +74,49 @@ public class DiffParserTests
 
         var result = DiffParser.RebuildDiffWithContext(diff, sourceLines, hunks, ContextDecision.Minimal);
 
-        // Should contain context lines (space-prefixed)
-        Assert.Contains(" line", result);
+        // Should contain enricher-added context lines (feature 021: "[ctx] " prefix).
+        Assert.Contains("[ctx] line", result);
         // Should contain the original change
         Assert.Contains("-old", result);
         Assert.Contains("+new", result);
+    }
+
+    [Fact]
+    public void RebuildDiffWithContext_EnricherAddedContext_UsesCtxPrefix()
+    {
+        // Feature 021: enricher-added context lines must be prefixed with "[ctx] "
+        // so the Copilot reviewer can distinguish them from original unified-diff
+        // context lines (space-prefixed). This reduces false positives from
+        // cross-referencing context against changed lines.
+        var diff = "=== src/A.cs (edit: +1 -1) ===\n@@ -10,1 +10,1 @@\n-old\n+new";
+        var sourceLines = Enumerable.Range(1, 20).Select(i => $"line{i}").ToArray();
+        var hunks = DiffParser.ParseHunks(diff);
+
+        var result = DiffParser.RebuildDiffWithContext(diff, sourceLines, hunks, ContextDecision.Minimal);
+
+        // Leading context present, [ctx]-prefixed.
+        Assert.Contains("[ctx] line7", result);
+        Assert.Contains("[ctx] line8", result);
+        Assert.Contains("[ctx] line9", result);
+        // Trailing context present, [ctx]-prefixed.
+        Assert.Contains("[ctx] line11", result);
+    }
+
+    [Fact]
+    public void RebuildDiffWithContext_InterHunkGapContext_UsesCtxPrefix()
+    {
+        // Adjacent hunks merge — the gap between them is filled with inter-hunk
+        // context, which must also carry the "[ctx] " prefix.
+        var diff = "=== src/A.cs (edit: +2 -2) ===\n" +
+                   "@@ -10,1 +10,1 @@\n-old1\n+new1\n" +
+                   "@@ -15,1 +15,1 @@\n-old2\n+new2";
+        var sourceLines = Enumerable.Range(1, 50).Select(i => $"line{i}").ToArray();
+        var hunks = DiffParser.ParseHunks(diff);
+
+        var result = DiffParser.RebuildDiffWithContext(diff, sourceLines, hunks, ContextDecision.Full);
+
+        // line12 sits in the gap between hunks and must be [ctx]-prefixed.
+        Assert.Contains("[ctx] line12", result);
     }
 
     // ─── Feature 011 — fix duplicated/overlapping hunks + negative line numbers ──────────────
@@ -139,7 +177,8 @@ public class DiffParserTests
 
         // Source line "line12" sits between the two hunks. It must appear EXACTLY ONCE in output
         // (used to appear twice — once as trailing context of hunk 1, once as leading context of hunk 2).
-        var line12Count = result.Split('\n').Count(l => l.TrimEnd('\r') == " line12");
+        // Feature 021: enricher-added context uses "[ctx] " prefix.
+        var line12Count = result.Split('\n').Count(l => l.TrimEnd('\r') == "[ctx] line12");
         Assert.Equal(1, line12Count);
     }
 

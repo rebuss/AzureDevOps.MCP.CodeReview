@@ -232,7 +232,9 @@ class Usings
     void M() { }
 }",
             "=== src/Usings.cs (edit: +1 -0) ===\n@@ -3,0 +4,1 @@\n+using System.Text.Json;",
-            5.5  // Tiny baseline + dependency-changes block ⇒ ratio dominated by overhead
+            6.0  // Tiny baseline + dependency-changes block ⇒ ratio dominated by overhead.
+                 // Feature 021 bump: "[ctx] " prefix adds ~4 bytes per context line (+40B
+                 // across 10 Full-context lines), which matters on a 76-byte baseline.
         };
 
         // ── Fixture 5: rename-only (zero hunks) — must pass through unchanged ──

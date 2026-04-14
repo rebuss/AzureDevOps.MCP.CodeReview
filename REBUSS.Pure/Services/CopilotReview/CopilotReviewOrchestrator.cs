@@ -8,6 +8,7 @@ using REBUSS.Pure.Core.Models;
 using REBUSS.Pure.Core.Models.CopilotReview;
 using REBUSS.Pure.Core.Services.CopilotReview;
 using REBUSS.Pure.Properties;
+using REBUSS.Pure.Services.CopilotReview.Validation;
 using REBUSS.Pure.Services.PrEnrichment;
 
 namespace REBUSS.Pure.Services.CopilotReview;
@@ -25,6 +26,11 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
     private readonly ILogger<CopilotReviewOrchestrator> _logger;
     private readonly CancellationToken _shutdownToken;
 
+    // Feature 021: optional finding validator. Null when ValidateFindings == false
+    // (opt-out per spec US4). Also null if DI couldn't resolve it.
+    private readonly FindingValidator? _findingValidator;
+    private readonly FindingScopeResolver? _findingScopeResolver;
+
     private readonly ConcurrentDictionary<string, CopilotReviewJob> _jobs = new();
     private readonly object _lock = new();
 
@@ -33,13 +39,17 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
         IPageAllocator pageAllocator,
         IOptions<CopilotReviewOptions> options,
         IHostApplicationLifetime lifetime,
-        ILogger<CopilotReviewOrchestrator> logger)
+        ILogger<CopilotReviewOrchestrator> logger,
+        FindingValidator? findingValidator = null,
+        FindingScopeResolver? findingScopeResolver = null)
     {
         _pageReviewer = pageReviewer;
         _pageAllocator = pageAllocator;
         _options = options;
         _logger = logger;
         _shutdownToken = lifetime.ApplicationStopping;
+        _findingValidator = findingValidator;
+        _findingScopeResolver = findingScopeResolver;
     }
 
     public void TriggerReview(string reviewKey, IEnrichmentResult enrichmentResult)
@@ -202,8 +212,78 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
         CancellationToken ct)
     {
         var result = await ReviewPageWithRetryAsync(job, pageNumber, enrichedContent, filePathsOnPage, ct);
+
+        // Feature 021: post-review finding validation. Runs only when the review
+        // succeeded, the feature is enabled, and the validator+resolver are wired in DI.
+        if (result.Succeeded
+            && _options.Value.ValidateFindings
+            && _findingValidator is not null
+            && _findingScopeResolver is not null)
+        {
+            try
+            {
+                result = await ValidateAndFilterAsync(job, pageNumber, result, ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                // Graceful degradation (FR-012): validation failure must not break the
+                // review — pass the original result through unfiltered.
+                _logger.LogWarning(ex,
+                    "Validation pass failed for '{ReviewKey}' page {PageNumber}; returning original result",
+                    job.ReviewKey, pageNumber);
+            }
+        }
+
         Interlocked.Increment(ref job.CompletedPages);
         return result;
+    }
+
+    /// <summary>
+    /// Parses findings from the review text, resolves each finding's enclosing scope,
+    /// validates them via a second Copilot pass, and rebuilds the result with
+    /// false-positives removed and uncertain findings tagged. Feature 021.
+    /// </summary>
+    private async Task<CopilotPageReviewResult> ValidateAndFilterAsync(
+        CopilotReviewJob job,
+        int pageNumber,
+        CopilotPageReviewResult original,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(original.ReviewText))
+            return original;
+
+        job.CurrentActivity = $"Page {pageNumber}/{job.TotalPages}: parsing findings for validation";
+        var (findings, remainder) = FindingParser.Parse(original.ReviewText!);
+
+        // Zero parseable findings → nothing to validate. Return the original review
+        // text as-is (no summary footer; SC-005 scoping excludes this case).
+        if (findings.Count == 0)
+            return original;
+
+        // Over-threshold → skip validation for this page (FR-015). Likely a systemic
+        // issue; individual validation isn't the right tool.
+        var maxValidatable = _options.Value.MaxValidatableFindings;
+        if (maxValidatable > 0 && findings.Count > maxValidatable)
+        {
+            _logger.LogInformation(
+                "Skipping validation for '{ReviewKey}' page {PageNumber}: {Count} findings exceed MaxValidatableFindings={Max}",
+                job.ReviewKey, pageNumber, findings.Count, maxValidatable);
+            return original;
+        }
+
+        job.CurrentActivity = $"Page {pageNumber}/{job.TotalPages}: resolving {findings.Count} scopes";
+        var withScopes = await _findingScopeResolver!.ResolveAsync(
+            findings, _options.Value.MaxScopeLines, ct).ConfigureAwait(false);
+
+        job.CurrentActivity = $"Page {pageNumber}/{job.TotalPages}: validating {findings.Count} findings";
+        var validated = await _findingValidator!.ValidateAsync(withScopes, ct).ConfigureAwait(false);
+
+        var filteredText = FindingFilterer.Apply(remainder, validated);
+        return CopilotPageReviewResult.Success(pageNumber, filteredText, attemptsMade: original.AttemptsMade);
     }
 
     /// <summary>
