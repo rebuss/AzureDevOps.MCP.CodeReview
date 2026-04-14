@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
@@ -334,6 +335,11 @@ public class FileSystemCopilotInspectionWriterTests : IDisposable
     [Fact]
     public async Task Cleanup_OneFileLocked_OthersStillProcessed()
     {
+        // File locking with FileShare.None only prevents deletion on Windows.
+        // On Unix, unlink() removes the directory entry regardless of open handles.
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            return;
+
         var prDir = Path.Combine(_tempDir, "pr-7");
         Directory.CreateDirectory(prDir);
         var lockedFile = Path.Combine(prDir, "20260412-000000-000-001-locked-prompt.md");
