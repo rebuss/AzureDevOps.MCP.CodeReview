@@ -1,8 +1,10 @@
 using GitHub.Copilot.SDK;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using NSubstitute;
 using REBUSS.Pure.Core.Services.CopilotReview;
 using REBUSS.Pure.Services.CopilotReview;
+using REBUSS.Pure.Services.CopilotReview.Inspection;
 
 namespace REBUSS.Pure.Tests.Services.CopilotReview;
 
@@ -19,10 +21,13 @@ namespace REBUSS.Pure.Tests.Services.CopilotReview;
 /// </summary>
 public class CopilotPageReviewerTests
 {
-    private static CopilotPageReviewer CreateReviewer(FakeSessionFactory factory) =>
+    private static CopilotPageReviewer CreateReviewer(
+        FakeSessionFactory factory,
+        ICopilotInspectionWriter? inspection = null) =>
         new(factory,
             Options.Create(new CopilotReviewOptions { Model = "claude-sonnet-4.6" }),
-            NullLogger<CopilotPageReviewer>.Instance);
+            NullLogger<CopilotPageReviewer>.Instance,
+            inspection ?? new NoOpCopilotInspectionWriter());
 
     [Fact]
     public async Task ReviewPage_AssistantMessageThenIdle_ReturnsSuccessWithReviewText()
@@ -35,7 +40,7 @@ public class CopilotPageReviewerTests
         };
 
         var reviewer = CreateReviewer(factory);
-        var result = await reviewer.ReviewPageAsync(1, "diff content");
+        var result = await reviewer.ReviewPageAsync("pr:42", 1, "diff content");
 
         Assert.True(result.Succeeded);
         Assert.Equal(1, result.PageNumber);
@@ -53,7 +58,7 @@ public class CopilotPageReviewerTests
         };
 
         var reviewer = CreateReviewer(factory);
-        var result = await reviewer.ReviewPageAsync(2, "diff");
+        var result = await reviewer.ReviewPageAsync("pr:42", 2, "diff");
 
         Assert.False(result.Succeeded);
         Assert.Contains("model unavailable", result.ErrorMessage);
@@ -70,7 +75,7 @@ public class CopilotPageReviewerTests
         };
 
         var reviewer = CreateReviewer(factory);
-        var result = await reviewer.ReviewPageAsync(3, "diff");
+        var result = await reviewer.ReviewPageAsync("pr:42", 3, "diff");
 
         Assert.False(result.Succeeded);
         Assert.Contains("idle without assistant message", result.ErrorMessage);
@@ -89,7 +94,7 @@ public class CopilotPageReviewerTests
         };
 
         var reviewer = CreateReviewer(factory);
-        _ = await reviewer.ReviewPageAsync(1, "MY_DIFF_MARKER_xyz");
+        _ = await reviewer.ReviewPageAsync("pr:42", 1, "MY_DIFF_MARKER_xyz");
 
         Assert.NotNull(capturedPrompt);
         Assert.Contains("Code Review Task", capturedPrompt); // from template
@@ -108,10 +113,83 @@ public class CopilotPageReviewerTests
 
         var reviewer = CreateReviewer(factory);
         using var cts = new CancellationTokenSource();
-        var task = reviewer.ReviewPageAsync(1, "diff", cts.Token);
+        var task = reviewer.ReviewPageAsync("pr:42", 1, "diff", cts.Token);
         cts.Cancel();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await task);
+    }
+
+    // ─── Feature 022 — inspection writer integration ─────────────────────────────
+
+    [Fact]
+    public async Task ReviewPage_SuccessfulPath_WritesPromptAndResponseToInspection()
+    {
+        // Arrange: reviewer with a Substitute inspection writer; successful review.
+        var factory = new FakeSessionFactory();
+        factory.OnSendAsync = (h, _) =>
+        {
+            h.PushEvent(new AssistantMessageEvent { Data = new AssistantMessageData { MessageId = "m1", Content = "review body" } });
+            h.PushEvent(new SessionIdleEvent { Data = new SessionIdleData() });
+        };
+        var inspection = Substitute.For<ICopilotInspectionWriter>();
+        var reviewer = CreateReviewer(factory, inspection);
+
+        // Act
+        var result = await reviewer.ReviewPageAsync("pr:42", 1, "MY_DIFF_MARKER");
+
+        // Assert: review succeeded, and both prompt and response were captured with the
+        // correct review key and step descriptor.
+        Assert.True(result.Succeeded);
+        await inspection.Received(1).WritePromptAsync(
+            "pr:42", "page-1-review",
+            Arg.Is<string>(s => s.Contains("MY_DIFF_MARKER")),
+            Arg.Any<CancellationToken>());
+        await inspection.Received(1).WriteResponseAsync(
+            "pr:42", "page-1-review", "review body",
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ReviewPage_NoOpInspection_ReviewTextUnchanged()
+    {
+        // Feature 022 US4 (T022): verify the NoOp inspection writer doesn't mutate the
+        // review text in any way. The reviewer's output must match what Copilot returned
+        // byte-for-byte regardless of which inspection writer is wired in.
+        const string copilotResponse = "**[critical]** `src/Foo.cs` (line 5): null deref";
+        var factory = new FakeSessionFactory();
+        factory.OnSendAsync = (h, _) =>
+        {
+            h.PushEvent(new AssistantMessageEvent { Data = new AssistantMessageData { MessageId = "m", Content = copilotResponse } });
+            h.PushEvent(new SessionIdleEvent { Data = new SessionIdleData() });
+        };
+        var reviewer = CreateReviewer(factory, new NoOpCopilotInspectionWriter());
+
+        var result = await reviewer.ReviewPageAsync("pr:42", 1, "diff content");
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(copilotResponse, result.ReviewText);
+    }
+
+    [Fact]
+    public async Task ReviewPage_FailurePath_OnlyPromptIsCaptured()
+    {
+        // When the SDK session errors, the response was never produced, so the response
+        // capture must NOT fire. Prompt capture still happens (it's sent before the SDK call).
+        var factory = new FakeSessionFactory();
+        factory.OnSendAsync = (h, _) =>
+        {
+            h.PushEvent(new SessionErrorEvent { Data = new SessionErrorData { ErrorType = "model", Message = "boom" } });
+        };
+        var inspection = Substitute.For<ICopilotInspectionWriter>();
+        var reviewer = CreateReviewer(factory, inspection);
+
+        var result = await reviewer.ReviewPageAsync("pr:42", 1, "content");
+
+        Assert.False(result.Succeeded);
+        await inspection.Received(1).WritePromptAsync(
+            "pr:42", "page-1-review", Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await inspection.DidNotReceive().WriteResponseAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     // ─── Fakes ────────────────────────────────────────────────────────────────────

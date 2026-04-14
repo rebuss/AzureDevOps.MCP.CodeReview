@@ -79,7 +79,7 @@ public class CopilotReviewOrchestratorTests
     public async Task TriggerReview_AllPagesSucceed_ResultContainsAllPages()
     {
         var reviewer = Substitute.For<ICopilotPageReviewer>();
-        reviewer.ReviewPageAsync(Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        reviewer.ReviewPageAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(ci => Task.FromResult(CopilotPageReviewResult.Success(ci.Arg<int>(), "ok", 1)));
 
         var orchestrator = Create(reviewer);
@@ -97,7 +97,7 @@ public class CopilotReviewOrchestratorTests
     public async Task TriggerReview_Idempotent_SamePrDoesNotRetrigger()
     {
         var reviewer = Substitute.For<ICopilotPageReviewer>();
-        reviewer.ReviewPageAsync(Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        reviewer.ReviewPageAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(ci => Task.FromResult(CopilotPageReviewResult.Success(ci.Arg<int>(), "ok", 1)));
 
         var orchestrator = Create(reviewer);
@@ -109,7 +109,7 @@ public class CopilotReviewOrchestratorTests
 
         // 2 pages × 1 trigger = 2 calls total (not 6).
         await reviewer.Received(2).ReviewPageAsync(
-            Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+            Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -125,7 +125,7 @@ public class CopilotReviewOrchestratorTests
     public async Task TryGetSnapshot_AfterCompletion_ReturnsReadyWithResult()
     {
         var reviewer = Substitute.For<ICopilotPageReviewer>();
-        reviewer.ReviewPageAsync(Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        reviewer.ReviewPageAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(ci => Task.FromResult(CopilotPageReviewResult.Success(ci.Arg<int>(), "ok", 1)));
 
         var orchestrator = Create(reviewer);
@@ -143,7 +143,7 @@ public class CopilotReviewOrchestratorTests
     public async Task TryGetSnapshot_AfterCompletion_ExposesTotalAndCompletedPages()
     {
         var reviewer = Substitute.For<ICopilotPageReviewer>();
-        reviewer.ReviewPageAsync(Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        reviewer.ReviewPageAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(ci => Task.FromResult(CopilotPageReviewResult.Success(ci.Arg<int>(), "ok", 1)));
 
         var orchestrator = Create(reviewer);
@@ -167,7 +167,7 @@ public class CopilotReviewOrchestratorTests
 
         Assert.Equal(0, result.TotalPages);
         await reviewer.DidNotReceive().ReviewPageAsync(
-            Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+            Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     // ─── Feature 013 Phase 5 US3 (T037) — 3-attempt retry scenarios ──────────────
@@ -177,7 +177,7 @@ public class CopilotReviewOrchestratorTests
     {
         var reviewer = Substitute.For<ICopilotPageReviewer>();
         var callCount = 0;
-        reviewer.ReviewPageAsync(Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        reviewer.ReviewPageAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(ci =>
             {
                 callCount++;
@@ -203,7 +203,7 @@ public class CopilotReviewOrchestratorTests
     public async Task ReviewPage_AllThreeAttemptsFail_ResultMarkedFailedWithFilePaths()
     {
         var reviewer = Substitute.For<ICopilotPageReviewer>();
-        reviewer.ReviewPageAsync(Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        reviewer.ReviewPageAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(ci => Task.FromResult(CopilotPageReviewResult.Failure(
                 ci.Arg<int>(), Array.Empty<string>(), "persistent error", 1)));
 
@@ -222,7 +222,7 @@ public class CopilotReviewOrchestratorTests
 
         // Reviewer invoked exactly 3 times (one page × 3 attempts).
         await reviewer.Received(3).ReviewPageAsync(
-            Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+            Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -230,7 +230,7 @@ public class CopilotReviewOrchestratorTests
     {
         // Page 1 always succeeds, page 2 always fails.
         var reviewer = Substitute.For<ICopilotPageReviewer>();
-        reviewer.ReviewPageAsync(Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        reviewer.ReviewPageAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(ci =>
             {
                 var pageNumber = ci.Arg<int>();
@@ -255,7 +255,7 @@ public class CopilotReviewOrchestratorTests
     public async Task Orchestrator_AllPagesFail_ResultReturnsAllFailedNotException()
     {
         var reviewer = Substitute.For<ICopilotPageReviewer>();
-        reviewer.ReviewPageAsync(Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        reviewer.ReviewPageAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(ci => Task.FromResult(CopilotPageReviewResult.Failure(
                 ci.Arg<int>(), Array.Empty<string>(), "down", 1)));
 
@@ -279,7 +279,7 @@ public class CopilotReviewOrchestratorTests
     {
         // Arrange: reviewer that always succeeds.
         var reviewer = Substitute.For<ICopilotPageReviewer>();
-        reviewer.ReviewPageAsync(Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        reviewer.ReviewPageAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(ci => CopilotPageReviewResult.Success(ci.Arg<int>(), "ok", 1));
 
         var orchestrator = Create(reviewer);
@@ -316,7 +316,7 @@ public class CopilotReviewOrchestratorTests
         const int pageCount = 3;
 
         var reviewer = Substitute.For<ICopilotPageReviewer>();
-        reviewer.ReviewPageAsync(Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        reviewer.ReviewPageAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(async ci =>
             {
                 await Task.Delay(pageDelayMs);
@@ -339,5 +339,23 @@ public class CopilotReviewOrchestratorTests
         var sequentialMinMs = pageCount * pageDelayMs;
         Assert.True(sw.ElapsedMilliseconds < sequentialMinMs,
             $"Expected parallel execution under {sequentialMinMs}ms, but took {sw.ElapsedMilliseconds}ms");
+    }
+
+    [Fact]
+    public async Task TriggerReview_PropagatesReviewKeyToPageReviewer()
+    {
+        // Feature 022: orchestrator must pass the review key as the first argument to
+        // ICopilotPageReviewer.ReviewPageAsync so the inspection writer can group output
+        // under a per-PR subdirectory.
+        var reviewer = Substitute.For<ICopilotPageReviewer>();
+        reviewer.ReviewPageAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(ci => Task.FromResult(CopilotPageReviewResult.Success(ci.Arg<int>(), "ok", 1)));
+
+        var orchestrator = Create(reviewer);
+        orchestrator.TriggerReview("pr:42", BuildEnrichment());
+        _ = await orchestrator.WaitForReviewAsync("pr:42", CancellationToken.None);
+
+        await reviewer.Received().ReviewPageAsync(
+            "pr:42", Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 }

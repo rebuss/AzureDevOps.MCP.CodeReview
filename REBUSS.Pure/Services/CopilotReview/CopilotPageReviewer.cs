@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using REBUSS.Pure.Core.Models.CopilotReview;
 using REBUSS.Pure.Core.Services.CopilotReview;
+using REBUSS.Pure.Services.CopilotReview.Inspection;
 
 namespace REBUSS.Pure.Services.CopilotReview;
 
@@ -22,15 +23,18 @@ internal sealed class CopilotPageReviewer : ICopilotPageReviewer
     private readonly ICopilotSessionFactory _sessionFactory;
     private readonly IOptions<CopilotReviewOptions> _options;
     private readonly ILogger<CopilotPageReviewer> _logger;
+    private readonly ICopilotInspectionWriter _inspection;
 
     public CopilotPageReviewer(
         ICopilotSessionFactory sessionFactory,
         IOptions<CopilotReviewOptions> options,
-        ILogger<CopilotPageReviewer> logger)
+        ILogger<CopilotPageReviewer> logger,
+        ICopilotInspectionWriter inspection)
     {
         _sessionFactory = sessionFactory;
         _options = options;
         _logger = logger;
+        _inspection = inspection;
     }
 
     private const string PromptResourceName = "REBUSS.Pure.Services.CopilotReview.Prompts.copilot-page-review.md";
@@ -38,10 +42,12 @@ internal sealed class CopilotPageReviewer : ICopilotPageReviewer
     private static string? _cachedPromptTemplate;
 
     public async Task<CopilotPageReviewResult> ReviewPageAsync(
+        string reviewKey,
         int pageNumber,
         string enrichedPageContent,
         CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(reviewKey);
         ArgumentNullException.ThrowIfNull(enrichedPageContent);
 
         string prompt;
@@ -55,6 +61,12 @@ internal sealed class CopilotPageReviewer : ICopilotPageReviewer
             return CopilotPageReviewResult.Failure(
                 pageNumber, Array.Empty<string>(), $"prompt template load failed: {ex.Message}", 1);
         }
+
+        // Feature 022: capture the prompt that will be sent to Copilot. Fires only on the
+        // happy path — the inspection writer is a NoOp when the env var is unset, so this
+        // is effectively free when disabled.
+        var inspectionKind = $"page-{pageNumber}-review";
+        await _inspection.WritePromptAsync(reviewKey, inspectionKind, prompt, ct).ConfigureAwait(false);
 
         ICopilotSessionHandle? handle = null;
         try
@@ -91,6 +103,10 @@ internal sealed class CopilotPageReviewer : ICopilotPageReviewer
 
             await handle.SendAsync(prompt, ct).ConfigureAwait(false);
             var reviewText = await tcs.Task.WaitAsync(ct).ConfigureAwait(false);
+
+            // Feature 022: capture the response. Only on the happy path — failure paths
+            // (session error, empty response) fall to the catch blocks below.
+            await _inspection.WriteResponseAsync(reviewKey, inspectionKind, reviewText, ct).ConfigureAwait(false);
 
             return CopilotPageReviewResult.Success(pageNumber, reviewText, attemptsMade: 1);
         }
