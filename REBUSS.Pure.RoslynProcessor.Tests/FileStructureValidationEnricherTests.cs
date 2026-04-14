@@ -129,6 +129,23 @@ public class FileStructureValidationEnricherTests : IDisposable
     }
 
     [Fact]
+    public void FormatAnnotation_BothNull_EmitsUnknown()
+    {
+        // Feature 021: nullable inputs produce `unknown` status. Callers emit this
+        // when source is unavailable so the annotation is still present — the
+        // reviewer prompt treats `unknown` as "assume structurally valid".
+        var annotation = FileStructureValidationEnricher.FormatAnnotation(null, null);
+        Assert.Equal("[file-structure: compiles=unknown, balanced-braces=unknown]\n", annotation);
+    }
+
+    [Fact]
+    public void FormatAnnotation_MixedNullAndBool_FormatsCorrectly()
+    {
+        var annotation = FileStructureValidationEnricher.FormatAnnotation(true, null);
+        Assert.Equal("[file-structure: compiles=yes, balanced-braces=unknown]\n", annotation);
+    }
+
+    [Fact]
     public async Task EnrichAsync_ValidFile_InsertsAnnotationAfterHeader()
     {
         var wrapperDir = Path.Combine(_tempDir, "repo");
@@ -169,12 +186,18 @@ public class FileStructureValidationEnricherTests : IDisposable
     }
 
     [Fact]
-    public async Task EnrichAsync_ResolverReturnsNull_ReturnsDiffUnchanged()
+    public async Task EnrichAsync_ResolverReturnsNull_EmitsUnknownAnnotation()
     {
+        // Feature 021: when source is unavailable, the enricher must still emit an
+        // annotation (with `unknown` values) rather than returning the diff unchanged.
+        // Otherwise, a missing annotation is interpreted by the reviewer as "file may
+        // be broken", producing structural false positives.
         _orchestrator.GetExtractedPathAsync(Arg.Any<CancellationToken>()).Returns((string?)null);
 
         var diff = "=== src/Missing.cs (edit: +1 -1) ===\n@@ -1,1 +1,1 @@\n-old\n+new";
         var result = await _enricher.EnrichAsync(diff);
-        Assert.Equal(diff, result);
+
+        Assert.NotEqual(diff, result);
+        Assert.Contains("[file-structure: compiles=unknown, balanced-braces=unknown]", result);
     }
 }

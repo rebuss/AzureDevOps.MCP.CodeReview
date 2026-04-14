@@ -204,6 +204,12 @@ namespace REBUSS.Pure
                     REBUSS.Pure.Services.CopilotReview.Inspection.ICopilotInspectionWriter,
                     REBUSS.Pure.Services.CopilotReview.Inspection.NoOpCopilotInspectionWriter>();
             }
+            // Feature 021 — Finding validation pipeline (false positive reduction).
+            // Registered unconditionally; CopilotReviewOrchestrator short-circuits at
+            // runtime based on CopilotReviewOptions.ValidateFindings (per Principle V
+            // deferred resolution — the flag is read at first review, not at DI time).
+            services.AddSingleton<REBUSS.Pure.Services.CopilotReview.Validation.FindingScopeResolver>();
+            services.AddSingleton<REBUSS.Pure.Services.CopilotReview.Validation.FindingValidator>();
 
             services.AddSingleton<ICopilotReviewOrchestrator, CopilotReviewOrchestrator>();
             services.AddSingleton<CopilotReviewWaiter>();

@@ -32,6 +32,9 @@ public class CopilotReviewOrchestratorTests
             Options.Create(new CopilotReviewOptions { ReviewBudgetTokens = budget }),
             lifetime,
             NullLogger<CopilotReviewOrchestrator>.Instance);
+        // Note: FindingValidator and FindingScopeResolver are left at null — tests
+        // operate in opt-out mode (feature 021 US4). The orchestrator must produce
+        // unchanged review text when either dependency is null.
     }
 
     /// <summary>Default allocator: echoes its input into a single page.</summary>
@@ -357,5 +360,29 @@ public class CopilotReviewOrchestratorTests
 
         await reviewer.Received().ReviewPageAsync(
             "pr:42", Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+    // ─── Feature 021 — Finding validation integration (T028, T040) ────────────────
+    }
+  
+    [Fact]
+    public async Task TriggerReview_NullValidator_ReviewTextUnchanged()
+    {
+        // When FindingValidator is null (opt-out path — spec US4), the orchestrator
+        // must return the original review text without appending a validation footer.
+        var reviewer = Substitute.For<ICopilotPageReviewer>();
+        reviewer.ReviewPageAsync(Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(ci => Task.FromResult(CopilotPageReviewResult.Success(
+                ci.Arg<int>(),
+                "**[critical]** `src/A.cs` (line 5): untouched finding",
+                1)));
+
+        // Create() passes null for validator/resolver.
+        var orchestrator = Create(reviewer, BuildAllocator(numberOfPages: 1));
+        orchestrator.TriggerReview("pr:42", BuildEnrichment(fileCount: 2));
+        var result = await orchestrator.WaitForReviewAsync("pr:42", CancellationToken.None);
+
+        var reviewText = result.PageReviews[0].ReviewText;
+        Assert.Contains("untouched finding", reviewText);
+        // Feature 021: no validation footer when validator is null.
+        Assert.DoesNotContain("_Validation:", reviewText);
     }
 }

@@ -61,4 +61,31 @@ public sealed class CopilotReviewOptions
     /// will fail verification.
     /// </summary>
     public const string GitHubTokenEnvironmentVariable = "REBUSS_COPILOT_TOKEN";
+
+    // ─── Feature 021: Finding validation ────────────────────────────────────
+
+    /// <summary>
+    /// When <c>true</c>, each page's findings are re-checked against the full source
+    /// of their enclosing method/scope via a second Copilot call. False positives are
+    /// filtered from the final output. Feature 021 (FR-014).
+    /// </summary>
+    public bool ValidateFindings { get; set; } = true;
+
+    /// <summary>
+    /// Max findings per validation Copilot call. Smaller batches give each finding
+    /// more model attention at the cost of more calls. Feature 021 (FR-009).
+    /// </summary>
+    public int ValidationBatchSize { get; set; } = 5;
+
+    /// <summary>
+    /// If a review page produces more findings than this, validation is skipped for that
+    /// page (likely a systemic issue, not individual false positives). Feature 021 (FR-015).
+    /// </summary>
+    public int MaxValidatableFindings { get; set; } = 40;
+
+    /// <summary>
+    /// Truncate method bodies exceeding this line count, centered on the finding's line.
+    /// Bounds token usage for validation calls. Feature 021 (FR-016).
+    /// </summary>
+    public int MaxScopeLines { get; set; } = 150;
 }

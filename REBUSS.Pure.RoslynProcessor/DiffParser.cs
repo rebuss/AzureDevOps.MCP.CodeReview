@@ -127,9 +127,13 @@ public static partial class DiffParser
             var lines = new List<string>();
 
             // Leading context — sliced from the AFTER file at NEW-axis start.
+            // Prefix with "[ctx]" (feature 021) so Copilot distinguishes enricher-added
+            // context from original unified-diff context lines (space-prefixed). This
+            // reduces false positives where the model cross-references context against
+            // changed lines.
             int leadStartIdx = Math.Max(0, firstHunk.NewStart - 1 - leadingCount);
             for (int j = 0; j < leadingCount && leadStartIdx + j < sourceLines.Length; j++)
-                lines.Add(" " + sourceLines[leadStartIdx + j]);
+                lines.Add("[ctx] " + sourceLines[leadStartIdx + j]);
 
             for (int hi = 0; hi < cluster.Count; hi++)
             {
@@ -155,13 +159,13 @@ public static partial class DiffParser
                     int gapStart = h.NewStart - 1 + h.NewCount;        // first context line after this hunk
                     int gapEnd = nextH.NewStart - 1;                   // exclusive
                     for (int j = gapStart; j < gapEnd && j < sourceLines.Length; j++)
-                        lines.Add(" " + sourceLines[j]);
+                        lines.Add("[ctx] " + sourceLines[j]);
                 }
             }
 
             // Trailing context after the last hunk in the cluster.
             for (int j = 0; j < trailingCount; j++)
-                lines.Add(" " + sourceLines[afterPos + j]);
+                lines.Add("[ctx] " + sourceLines[afterPos + j]);
 
             expanded.Add(new ExpandedHunk
             {

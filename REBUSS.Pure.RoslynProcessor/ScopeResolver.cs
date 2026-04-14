@@ -33,7 +33,12 @@ public static class ScopeResolver
         return FormatScope(enclosing);
     }
 
-    private static SyntaxNode? FindEnclosingMember(SyntaxNode node)
+    /// <summary>
+    /// Walks the parent chain to find the innermost enclosing member (method, property,
+    /// constructor, type, namespace, etc.) for the given node. <c>internal</c> so
+    /// <c>FindingScopeExtractor</c> (feature 021) can reuse the walk.
+    /// </summary>
+    internal static SyntaxNode? FindEnclosingMember(SyntaxNode node)
     {
         var current = node;
         while (current != null)
