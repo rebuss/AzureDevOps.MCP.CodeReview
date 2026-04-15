@@ -11,12 +11,25 @@ namespace REBUSS.Pure.Services.CopilotReview.Validation;
 /// </summary>
 public static partial class FindingParser
 {
-    // One line per finding. Captures: severity, filePath, optional lineNumber, description.
-    // Example: **[critical]** `src/Foo.cs` (line 42): Null deref when X is empty
+    // One line per finding. Captures: severity, filePath, optional lineExpression, description.
+    //
+    // Expected prompt-enforced format:
+    //   **[severity]** `file/path.cs` (line 42): description
+    //
+    // Copilot is an LLM and does not always follow the format — this regex is a tolerant
+    // safety net over what the prompt demands (see copilot-page-review.md):
+    //   - Leading list markers (`- `, `* `, `1. `, whitespace) before `**[` are swallowed.
+    //   - `lineExpr` is free-form inside the parens: `42`, `~42`, `≈42`, `42-50`, `42,50`,
+    //     `approx 42`, `unknown`. The first integer (if any) is extracted by LineNumberExtractor.
     [GeneratedRegex(
-        @"^\*\*\[(?<sev>critical|major|minor)\]\*\*\s+`(?<file>[^`]+)`(?:\s*\(line\s+(?<line>\d+)\))?\s*:\s*(?<desc>.+?)$",
+        @"^\s*(?:[-*+•]\s+|\d+[.)]\s+)?\*\*\[(?<sev>critical|major|minor)\]\*\*\s+`(?<file>[^`]+)`(?:\s*\((?:lines?)\s+(?<lineExpr>[^)]+)\))?\s*:\s*(?<desc>.+?)$",
         RegexOptions.Multiline | RegexOptions.IgnoreCase)]
     private static partial Regex FindingPattern();
+
+    // Extracts the first integer from a line expression like "~42", "42-50", "approx 42",
+    // "42, 50", "≈42". Returns null when no integer is present (e.g. "unknown").
+    [GeneratedRegex(@"\d+")]
+    private static partial Regex LineNumberExtractor();
 
     /// <summary>
     /// Parses <paramref name="reviewText"/> into structured findings plus any
@@ -48,14 +61,22 @@ public static partial class FindingParser
 
             var sev = m.Groups["sev"].Value.ToLowerInvariant();
             var file = m.Groups["file"].Value.Trim();
-            var lineStr = m.Groups["line"].Success ? m.Groups["line"].Value : null;
+            var lineExpr = m.Groups["lineExpr"].Success ? m.Groups["lineExpr"].Value : null;
             var desc = m.Groups["desc"].Value.Trim();
+
+            int? lineNumber = null;
+            if (lineExpr is not null)
+            {
+                var intMatch = LineNumberExtractor().Match(lineExpr);
+                if (intMatch.Success && int.TryParse(intMatch.Value, out var n))
+                    lineNumber = n;
+            }
 
             findings.Add(new ParsedFinding
             {
                 Index = i,
                 FilePath = file,
-                LineNumber = lineStr is null ? null : int.Parse(lineStr),
+                LineNumber = lineNumber,
                 Severity = sev,
                 Description = desc,
                 OriginalText = m.Value,

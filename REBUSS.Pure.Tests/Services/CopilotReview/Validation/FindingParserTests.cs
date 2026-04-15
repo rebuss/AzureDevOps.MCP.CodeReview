@@ -137,4 +137,51 @@ public class FindingParserTests
         Assert.Contains("src/Foo.cs", f.OriginalText);
         Assert.Contains("Null dereference", f.OriginalText);
     }
+
+    // ─── Tolerance for Copilot output variations (safety net over the prompt) ──
+
+    [Theory]
+    [InlineData("- **[major]** `src/Foo.cs` (line 42): Leaks")]
+    [InlineData("* **[major]** `src/Foo.cs` (line 42): Leaks")]
+    [InlineData("1. **[major]** `src/Foo.cs` (line 42): Leaks")]
+    [InlineData("2) **[major]** `src/Foo.cs` (line 42): Leaks")]
+    [InlineData("  **[major]** `src/Foo.cs` (line 42): Leaks")]
+    public void Parse_LeadingListMarkers_StillExtractsFinding(string input)
+    {
+        var (findings, _) = FindingParser.Parse(input);
+
+        var f = Assert.Single(findings);
+        Assert.Equal("src/Foo.cs", f.FilePath);
+        Assert.Equal(42, f.LineNumber);
+    }
+
+    [Theory]
+    [InlineData("(line ~138)", 138)]
+    [InlineData("(line ≈138)", 138)]
+    [InlineData("(line approx 138)", 138)]
+    [InlineData("(line 138-150)", 138)]
+    [InlineData("(lines 100-150)", 100)]
+    [InlineData("(line 138, 142)", 138)]
+    [InlineData("(lines 42)", 42)]
+    public void Parse_ApproximateLineForms_ExtractsFirstInteger(string lineExpr, int expected)
+    {
+        var input = $"**[major]** `src/Foo.cs` {lineExpr}: issue text";
+
+        var (findings, _) = FindingParser.Parse(input);
+
+        var f = Assert.Single(findings);
+        Assert.Equal(expected, f.LineNumber);
+    }
+
+    [Fact]
+    public void Parse_LineUnknownLiteral_LineNumberIsNull()
+    {
+        // Prompt instructs Copilot to write `(line unknown)` when no specific line applies.
+        var input = "**[major]** `src/Foo.cs` (line unknown): broad issue";
+
+        var (findings, _) = FindingParser.Parse(input);
+
+        var f = Assert.Single(findings);
+        Assert.Null(f.LineNumber);
+    }
 }

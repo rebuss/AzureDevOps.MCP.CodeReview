@@ -75,9 +75,12 @@ public class FindingScopeResolverTests : IDisposable
     }
 
     [Fact]
-    public async Task ResolveAsync_ScopeNotFound_WhenLineNumberMissing()
+    public async Task ResolveAsync_NoLineAndNoIdentifiers_FallsBackToWholeFile()
     {
-        // Arrange: file source is available, but the finding has no line number.
+        // When Copilot gives neither a line number nor any backtick identifier that
+        // FindingLineResolver can match, the resolver should still send the file to
+        // validation using the whole-file fallback — ResolutionFailure.None, scope
+        // name marked as an entire-file anchor.
         SetupFileSource("Foo.cs", """
             namespace Test;
             public class Foo
@@ -91,7 +94,84 @@ public class FindingScopeResolverTests : IDisposable
         var result = await _resolver.ResolveAsync(findings, 150, CancellationToken.None);
 
         var r = Assert.Single(result);
-        Assert.Equal(ScopeResolutionFailure.ScopeNotFound, r.ResolutionFailure);
+        Assert.Equal(ScopeResolutionFailure.None, r.ResolutionFailure);
+        Assert.Contains("entire file", r.ScopeName);
+        Assert.Contains("Bar", r.ScopeSource);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_NoLineButIdentifierInDescription_RecoversLineViaRoslyn()
+    {
+        // Copilot omitted the line number but mentioned `Bar` in backticks — the
+        // FindingLineResolver should walk the syntax tree, find the method
+        // declaration, and feed its line into the scope extractor. Result: proper
+        // method-level scope, not whole-file fallback.
+        SetupFileSource("Foo.cs", """
+            namespace Test;
+            public class Foo
+            {
+                public void Bar()
+                {
+                    var x = 1;
+                }
+            }
+            """);
+
+        var finding = new ParsedFinding
+        {
+            Index = 0,
+            FilePath = "Foo.cs",
+            LineNumber = null,
+            Severity = "major",
+            Description = "`Bar` leaks something",
+            OriginalText = "...",
+        };
+
+        var result = await _resolver.ResolveAsync(new[] { finding }, 150, CancellationToken.None);
+
+        var r = Assert.Single(result);
+        Assert.Equal(ScopeResolutionFailure.None, r.ResolutionFailure);
+        Assert.Contains("Bar", r.ScopeName);
+        Assert.DoesNotContain("entire file", r.ScopeName);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_LineOutsideAnyMember_FallsBackViaIdentifier()
+    {
+        // When Copilot's line points somewhere Roslyn cannot find an enclosing
+        // member (e.g. a `using` or `namespace` line), but the description cites
+        // an identifier, the resolver retries with the hint and recovers the
+        // correct scope.
+        SetupFileSource("Foo.cs", """
+            using System;
+
+            namespace Test;
+
+            public class Foo
+            {
+                public void Bar()
+                {
+                    var x = 1;
+                }
+            }
+            """);
+
+        var finding = new ParsedFinding
+        {
+            Index = 0,
+            FilePath = "Foo.cs",
+            LineNumber = 1,                     // "using System;" — not inside any member
+            Severity = "major",
+            Description = "`Bar` has an issue",
+            OriginalText = "...",
+        };
+
+        var result = await _resolver.ResolveAsync(new[] { finding }, 150, CancellationToken.None);
+
+        var r = Assert.Single(result);
+        Assert.Equal(ScopeResolutionFailure.None, r.ResolutionFailure);
+        Assert.Contains("Bar", r.ScopeName);
+        Assert.DoesNotContain("entire file", r.ScopeName);
     }
 
     [Fact]
@@ -163,14 +243,17 @@ public class FindingScopeResolverTests : IDisposable
         {
             MakeFinding("config.json", line: 5),            // NotCSharp
             MakeFinding("Foo.cs", line: 4),                 // None (method body line)
-            MakeFinding("Foo.cs", line: null),              // ScopeNotFound (no line)
+            MakeFinding("Foo.cs", line: null),              // None (whole-file fallback)
         };
 
         var result = await _resolver.ResolveAsync(findings, 150, CancellationToken.None);
 
         Assert.Equal(ScopeResolutionFailure.NotCSharp, result[0].ResolutionFailure);
         Assert.Equal(ScopeResolutionFailure.None, result[1].ResolutionFailure);
-        Assert.Equal(ScopeResolutionFailure.ScopeNotFound, result[2].ResolutionFailure);
+        // Third finding has no line and no backtick identifier in description →
+        // whole-file fallback (still ResolutionFailure.None so it reaches Copilot).
+        Assert.Equal(ScopeResolutionFailure.None, result[2].ResolutionFailure);
+        Assert.Contains("entire file", result[2].ScopeName);
     }
 
     private void SetupFileSource(string relativePath, string content)

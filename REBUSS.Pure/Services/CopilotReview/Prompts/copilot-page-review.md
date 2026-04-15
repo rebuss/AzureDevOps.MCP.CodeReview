@@ -38,17 +38,28 @@ Treat the file as structurally valid — do NOT report structural issues.
 
 ## Review Instructions
 
-For each real issue found, format it as:
+For each real issue found, emit it on its **own line** in exactly this format:
 
 ```
 **[severity]** `file/path.cs` (line N): description
 ```
 
-- `severity` is one of: `critical`, `major`, `minor`
-- `file/path.cs` is the file path in backticks
-- `(line N)` is optional — omit if no specific line applies
-- `description` is a single-line issue description; add a multi-line elaboration on
-  subsequent lines if needed
+Format rules — the downstream tool parses findings with a strict regex, so deviations
+drop findings silently:
+
+- **No leading markers** before `**[severity]**`. Do not prefix the line with `- `,
+  `* `, `1. `, or any indentation. The `**[` must be the first non-whitespace
+  characters on the finding line.
+- `severity` is exactly one of: `critical`, `major`, `minor` (lowercase preferred; case-insensitive).
+- `file/path.cs` must be wrapped in single backticks — one path, no extra formatting
+  around it (no `**` bold, no additional backticks inside).
+- `(line N)` — **N is a single integer**. Do NOT write `(line ~138)`, `(line 100-150)`,
+  `(line approx 100)`, `(line 100, 120)`, or any range/approximation. If you cannot
+  cite a specific line, write `(line unknown)` instead.
+- `description` is a single-line issue description. Multi-line elaboration / code
+  fences / additional prose belongs on subsequent lines (they will be preserved).
+- Separate findings with a blank line (or `---`) — each finding header must stand
+  alone on its own line so the regex anchors match.
 
 Focus on: correctness, null safety, concurrency, async/await correctness, security,
 error handling, performance, missing tests.

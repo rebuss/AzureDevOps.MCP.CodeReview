@@ -84,29 +84,97 @@ public sealed class FindingScopeResolver
             // (c) Per-finding scope extraction against the single resolved source.
             foreach (var (f, idx) in group)
             {
-                if (f.LineNumber is null)
+                // Smart line resolution: when Copilot omitted a line (`(line unknown)`)
+                // or wrote an approximation (`~138`) we may have LineNumber == null or
+                // a line that doesn't cleanly map to a scope. FindingLineResolver walks
+                // the syntax tree looking for the identifiers cited in backticks in the
+                // finding description, biased by proximity to the hint line if one was
+                // parsed. See Feature 021 clarification: Copilot imprecision is validated
+                // and corrected using Roslyn before the scope is extracted.
+                var effectiveLine = f.LineNumber
+                    ?? FindingLineResolver.TryResolveLine(pair.AfterCode, f.Description, hintLine: null);
+
+                if (effectiveLine is int line)
                 {
-                    // No line number cited → cannot locate enclosing scope.
-                    results[idx] = UnresolvedResult(f, ScopeResolutionFailure.ScopeNotFound);
-                    continue;
+                    var (body, name, resolved) = FindingScopeExtractor.ExtractScopeBody(
+                        pair.AfterCode, line, maxScopeLines);
+
+                    if (resolved)
+                    {
+                        results[idx] = new FindingWithScope
+                        {
+                            Finding = f,
+                            ScopeSource = body,
+                            ScopeName = name,
+                            ResolutionFailure = ScopeResolutionFailure.None,
+                        };
+                        continue;
+                    }
+
+                    // Hint line resolved but Roslyn could not find an enclosing member
+                    // (e.g. line falls on a using, top-level statement, or malformed
+                    // syntax) — try once more, without the hint, using identifier search
+                    // alone. Sometimes Copilot's line is off by a lot and the identifier
+                    // lookup gives a cleaner anchor.
+                    var fallbackLine = FindingLineResolver.TryResolveLine(
+                        pair.AfterCode, f.Description, hintLine: line);
+                    if (fallbackLine is int fl && fl != line)
+                    {
+                        var (body2, name2, resolved2) = FindingScopeExtractor.ExtractScopeBody(
+                            pair.AfterCode, fl, maxScopeLines);
+                        if (resolved2)
+                        {
+                            results[idx] = new FindingWithScope
+                            {
+                                Finding = f,
+                                ScopeSource = body2,
+                                ScopeName = name2,
+                                ResolutionFailure = ScopeResolutionFailure.None,
+                            };
+                            continue;
+                        }
+                    }
                 }
 
-                var (body, name, resolved) = FindingScopeExtractor.ExtractScopeBody(
-                    pair.AfterCode, f.LineNumber.Value, maxScopeLines);
-
-                results[idx] = resolved
-                    ? new FindingWithScope
-                    {
-                        Finding = f,
-                        ScopeSource = body,
-                        ScopeName = name,
-                        ResolutionFailure = ScopeResolutionFailure.None,
-                    }
-                    : UnresolvedResult(f, ScopeResolutionFailure.ScopeNotFound);
+                // Whole-file fallback: scope extraction failed OR no line could be
+                // recovered at all. Pass the truncated file source to the validator so
+                // Copilot still gets a chance to reason about the issue. Budget is
+                // MaxScopeLines × 2 — modestly larger than method-level context because
+                // the validator may need more surrounding code to locate the issue.
+                var (fileBody, fileName) = BuildWholeFileFallback(pair.AfterCode, filePath, maxScopeLines);
+                results[idx] = new FindingWithScope
+                {
+                    Finding = f,
+                    ScopeSource = fileBody,
+                    ScopeName = fileName,
+                    ResolutionFailure = ScopeResolutionFailure.None,
+                };
             }
         }
 
         return results;
+    }
+
+    /// <summary>
+    /// Produces a whole-file context block used when per-finding scope extraction could
+    /// not locate an enclosing member. The body is truncated to
+    /// <c>maxScopeLines × 2</c> to keep the validation prompt bounded, with clearly
+    /// labelled truncation markers so Copilot knows content was elided.
+    /// </summary>
+    private static (string Body, string Name) BuildWholeFileFallback(
+        string source, string filePath, int maxScopeLines)
+    {
+        var limit = Math.Max(1, maxScopeLines) * 2;
+        var lines = source.Replace("\r\n", "\n").Split('\n');
+        if (lines.Length <= limit)
+            return (source, $"<entire file: {filePath}>");
+
+        var half = limit / 2;
+        var window = new List<string>(limit + 2);
+        window.AddRange(lines.Take(half));
+        window.Add($"// ... ({lines.Length - limit} lines omitted from middle) ...");
+        window.AddRange(lines.Skip(lines.Length - (limit - half)));
+        return (string.Join("\n", window), $"<entire file: {filePath} (truncated)>");
     }
 
     private static FindingWithScope UnresolvedResult(ParsedFinding finding, ScopeResolutionFailure failure) =>
