@@ -291,4 +291,109 @@ public class CopilotCliSetupStepTests
         Assert.Null(ex);
         Assert.Contains("already installed", output.ToString(), StringComparison.OrdinalIgnoreCase);
     }
+
+    // ---------------------------------------------------------------
+    // Built-in copilot (newer gh CLI versions ≥ 2.89)
+    // ---------------------------------------------------------------
+
+    [Fact]
+    public async Task BuiltInCopilot_DetectedAtStep3_InstallsInteractively()
+    {
+        // Newer gh CLI (≥ 2.89) ships copilot as a built-in command. When
+        // `copilot --version` fails with "not installed" in captured mode (Step 3),
+        // the step detects built-in copilot and runs interactively — letting gh
+        // handle its own download prompt. No prompt from our code.
+        var output = new StringWriter();
+        var input = new StringReader(""); // our code must NOT read input
+        var copilotCallCount = 0;
+        var runner = Scripted(args =>
+        {
+            if (args.Contains("--version") && !args.Contains("copilot")) return Ok("gh 2.89");
+            if (args.Contains("auth status")) return Ok("Logged in");
+            if (args.Contains("copilot --version"))
+            {
+                copilotCallCount++;
+                // First call is the captured check (Step 3) — fails because not downloaded.
+                // Second call is the interactive install (Step 3.5) — succeeds.
+                return copilotCallCount == 1
+                    ? Fail("! Copilot CLI not installed")
+                    : Ok("copilot 1.0");
+            }
+            return Ok();
+        });
+
+        var step = new CopilotCliSetupStep(output, input, runner);
+        await step.RunAsync();
+
+        var text = output.ToString();
+        Assert.Equal(2, copilotCallCount);
+        Assert.Contains("installed successfully", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("installation failed", text, StringComparison.OrdinalIgnoreCase);
+        // No prompt from our code — gh handles the only prompt interactively
+        Assert.DoesNotContain("[y/N]", text);
+    }
+
+    [Fact]
+    public async Task BuiltInCopilot_InteractiveInstallDeclined_ShowsDeclineBanner()
+    {
+        // Built-in copilot detected but the user declines gh's interactive prompt
+        // (or the download fails). The step shows the decline banner.
+        var output = new StringWriter();
+        var input = new StringReader("");
+        var runner = Scripted(args =>
+        {
+            if (args.Contains("--version") && !args.Contains("copilot")) return Ok("gh 2.89");
+            if (args.Contains("auth status")) return Ok("Logged in");
+            if (args.Contains("copilot --version")) return Fail("! Copilot CLI not installed");
+            return Ok();
+        });
+
+        var step = new CopilotCliSetupStep(output, input, runner);
+        await step.RunAsync();
+
+        var text = output.ToString();
+        Assert.Contains("gh extension install github/gh-copilot", text);
+        Assert.DoesNotContain("[y/N]", text);
+    }
+
+    [Fact]
+    public async Task BuiltInCopilot_GhMissing_InstallsGhThenBuiltInInteractively()
+    {
+        // When gh was freshly installed in the same init run and copilot is built-in.
+        // Path A: after gh install + auth, the pre-check detects built-in copilot
+        // and runs interactively for the download.
+        var output = new StringWriter();
+        var input = new StringReader("y\n"); // single "yes" for the entry prompt
+        var ghInstalled = false;
+        var authed = false;
+        var copilotCallCount = 0;
+
+        var runner = Scripted(args =>
+        {
+            if (args == "install-gh-cli") { ghInstalled = true; return Ok(); }
+            if (args.Contains("--version") && !args.Contains("copilot"))
+                return ghInstalled ? Ok("gh 2.89") : Fail();
+            if (args.Contains("auth status"))
+                return authed ? Ok("Logged in") : Fail("not authed");
+            if (args.Contains("auth login")) { authed = true; return Ok(); }
+            if (args.Contains("copilot --version"))
+            {
+                copilotCallCount++;
+                // First call is the pre-check (captured) — fails because not downloaded.
+                // Second call is the interactive install — succeeds.
+                return copilotCallCount == 1
+                    ? Fail("! Copilot CLI not installed")
+                    : Ok("copilot 1.0");
+            }
+            return Ok();
+        });
+
+        var step = new CopilotCliSetupStep(output, input, runner);
+        await step.RunAsync();
+
+        Assert.True(ghInstalled);
+        Assert.True(authed);
+        Assert.Equal(2, copilotCallCount);
+        Assert.Contains("installed successfully", output.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
 }

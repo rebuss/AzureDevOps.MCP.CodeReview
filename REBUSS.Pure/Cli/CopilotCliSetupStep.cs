@@ -118,13 +118,42 @@ internal sealed class CopilotCliSetupStep
                 }
             }
 
-            // User already consented at the entry prompt — install extension directly (Clarification Q2).
-            // FR-017 design: verification runs only when gh-CLI + extension are confirmed present.
-            // See tasks.md T031(d) — other exit paths already print WriteDeclineBannerAsync.
-            if (await InstallExtensionAsync(cancellationToken, skipPrompt: true))
-                await VerifyCopilotSessionAsync(cancellationToken);
-            return;
-        }
+                        // User already consented at the entry prompt. Check copilot state before
+                        // attempting extension install — newer gh ships copilot as a built-in.
+                        var copilotPreCheck = await RunGhCapturedAsync("copilot --version", cancellationToken);
+                        if (copilotPreCheck.ExitCode == 0)
+                        {
+                            await _output.WriteLineAsync(Resources.CopilotSetup_AlreadyInstalled);
+                            _logger?.LogInformation("copilot-setup: already-installed (post-gh-install)");
+                            await VerifyCopilotSessionAsync(cancellationToken);
+                            return;
+                        }
+
+                        if (IsCopilotBuiltInButNotDownloaded(copilotPreCheck.StdErr))
+                        {
+                            // gh ≥ 2.89 built-in copilot needs downloading via interactive prompt.
+                            var builtInExit = await RunGhInteractiveAsync("copilot --version", cancellationToken);
+                            if (builtInExit == 0)
+                            {
+                                await _output.WriteLineAsync(Resources.CopilotSetup_InstallSuccess);
+                                _logger?.LogInformation("copilot-setup: installed (built-in, post-gh-install)");
+                                await VerifyCopilotSessionAsync(cancellationToken);
+                            }
+                            else
+                            {
+                                await _output.WriteLineAsync(Resources.CopilotSetup_InstallFailed);
+                                await _output.WriteLineAsync(Resources.CopilotSetup_ManualInstallHint);
+                                _logger?.LogWarning("copilot-setup: built-in-install-failed");
+                            }
+                            return;
+                        }
+
+                        // Legacy extension install (Clarification Q2).
+                        // FR-017 design: verification runs only when gh-CLI + extension are confirmed present.
+                        if (await InstallExtensionAsync(cancellationToken, skipPrompt: true))
+                            await VerifyCopilotSessionAsync(cancellationToken);
+                        return;
+                    }
 
         // Step 2 — `gh` is installed. Check authentication.
         if (!await IsGhAuthenticatedAsync(cancellationToken))
@@ -144,7 +173,28 @@ internal sealed class CopilotCliSetupStep
             return;
         }
 
-        // Step 4 — extension missing. Prompt user.
+        // Step 3.5 — Built-in copilot (gh ≥ 2.89) needs interactive download.
+        // The binary is downloaded on first use via a TTY prompt from gh itself.
+        // We skip our own prompt and let gh ask the single question.
+        if (IsCopilotBuiltInButNotDownloaded(copilotCheck.StdErr))
+        {
+            await _output.WriteLineAsync(Resources.CopilotSetup_ExplainBenefit);
+            var installExit = await RunGhInteractiveAsync("copilot --version", cancellationToken);
+            if (installExit == 0)
+            {
+                await _output.WriteLineAsync(Resources.CopilotSetup_InstallSuccess);
+                _logger?.LogInformation("copilot-setup: installed (built-in)");
+                await VerifyCopilotSessionAsync(cancellationToken);
+            }
+            else
+            {
+                await WriteDeclineBannerAsync();
+                _logger?.LogInformation("copilot-setup: declined-builtin");
+            }
+            return;
+        }
+
+        // Step 4 — extension missing (legacy gh). Prompt user.
         // FR-017 design: verification runs only when gh-CLI + extension are confirmed present.
         if (await InstallExtensionAsync(cancellationToken, skipPrompt: false))
             await VerifyCopilotSessionAsync(cancellationToken);
@@ -265,6 +315,23 @@ internal sealed class CopilotCliSetupStep
         var install = await RunGhCapturedAsync("extension install github/gh-copilot", cancellationToken);
         if (install.ExitCode != 0)
         {
+            // Newer gh CLI versions (≥ 2.89) ship copilot as a built-in command/alias.
+            // `gh extension install` fails with "matches the name of a built-in command".
+            // Fall back to running `gh copilot --version` interactively so gh can prompt
+            // the user for the download via its own TTY prompt.
+            if (IsBuiltInConflict(install.StdErr))
+            {
+                _logger?.LogInformation("copilot-setup: extension install returned built-in conflict, falling back to interactive install");
+                await _output.WriteLineAsync("Installing GitHub Copilot CLI...");
+                var builtInExit = await RunGhInteractiveAsync("copilot --version", cancellationToken);
+                if (builtInExit == 0)
+                {
+                    await _output.WriteLineAsync(Resources.CopilotSetup_InstallSuccess);
+                    _logger?.LogInformation("copilot-setup: installed (built-in-fallback)");
+                    return true;
+                }
+            }
+
             await _output.WriteLineAsync(Resources.CopilotSetup_InstallFailed);
             await _output.WriteLineAsync(Resources.CopilotSetup_ManualInstallHint);
             _logger?.LogWarning("copilot-setup: install-failed");
@@ -284,6 +351,19 @@ internal sealed class CopilotCliSetupStep
         _logger?.LogInformation("copilot-setup: installed");
         return true;
     }
+
+    private static bool IsBuiltInConflict(string stderr) =>
+        stderr.Contains("built-in", StringComparison.OrdinalIgnoreCase) ||
+        stderr.Contains("matches the name of a", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Detects whether <c>gh copilot --version</c> failed because copilot is a built-in
+    /// command whose binary has not been downloaded yet (gh ≥ 2.89). The stderr in this
+    /// case contains "Copilot CLI not installed", distinct from older gh versions that
+    /// report "unknown command" when copilot is absent entirely.
+    /// </summary>
+    private static bool IsCopilotBuiltInButNotDownloaded(string stderr) =>
+        stderr.Contains("not installed", StringComparison.OrdinalIgnoreCase);
 
     private async Task WriteDeclineBannerAsync()
     {
