@@ -1,8 +1,10 @@
 using GitHub.Copilot.SDK;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using NSubstitute;
 using REBUSS.Pure.Core.Services.CopilotReview;
 using REBUSS.Pure.Services.CopilotReview;
+using REBUSS.Pure.Services.CopilotReview.Inspection;
 using REBUSS.Pure.Services.CopilotReview.Validation;
 
 namespace REBUSS.Pure.Tests.Services.CopilotReview.Validation;
@@ -10,7 +12,7 @@ namespace REBUSS.Pure.Tests.Services.CopilotReview.Validation;
 /// <summary>Unit tests for <see cref="FindingValidator"/>. Feature 021.</summary>
 public class FindingValidatorTests
 {
-    private static FindingValidator CreateValidator(FakeSessionFactory factory, int batchSize = 5) =>
+    private static FindingValidator CreateValidator(FakeSessionFactory factory, int batchSize = 5, ICopilotInspectionWriter? inspection = null) =>
         new(factory,
             Options.Create(new CopilotReviewOptions
             {
@@ -18,6 +20,7 @@ public class FindingValidatorTests
                 ValidateFindings = true,
                 ValidationBatchSize = batchSize,
             }),
+            inspection ?? Substitute.For<ICopilotInspectionWriter>(),
             NullLogger<FindingValidator>.Instance);
 
     private static ParsedFinding MakeFinding(int index) => new()
@@ -54,7 +57,7 @@ public class FindingValidatorTests
         var validator = CreateValidator(factory);
         var input = new[] { Unresolved(MakeFinding(0), ScopeResolutionFailure.NotCSharp) };
 
-        var result = await validator.ValidateAsync(input, CancellationToken.None);
+        var result = await validator.ValidateAsync(input, "test:1", CancellationToken.None);
 
         var v = Assert.Single(result);
         Assert.Equal(FindingVerdict.Valid, v.Verdict);
@@ -69,7 +72,7 @@ public class FindingValidatorTests
         var validator = CreateValidator(factory);
         var input = new[] { Unresolved(MakeFinding(0), ScopeResolutionFailure.SourceUnavailable) };
 
-        var result = await validator.ValidateAsync(input, CancellationToken.None);
+        var result = await validator.ValidateAsync(input, "test:1", CancellationToken.None);
 
         var v = Assert.Single(result);
         Assert.Equal(FindingVerdict.Uncertain, v.Verdict);
@@ -84,7 +87,7 @@ public class FindingValidatorTests
         var validator = CreateValidator(factory);
         var input = new[] { Unresolved(MakeFinding(0), ScopeResolutionFailure.ScopeNotFound) };
 
-        var result = await validator.ValidateAsync(input, CancellationToken.None);
+        var result = await validator.ValidateAsync(input, "test:1", CancellationToken.None);
 
         var v = Assert.Single(result);
         Assert.Equal(FindingVerdict.Uncertain, v.Verdict);
@@ -119,7 +122,7 @@ public class FindingValidatorTests
             Resolved(MakeFinding(2)),
         };
 
-        var result = await validator.ValidateAsync(input, CancellationToken.None);
+        var result = await validator.ValidateAsync(input, "test:1", CancellationToken.None);
 
         Assert.Equal(3, result.Count);
         Assert.Equal(FindingVerdict.Valid, result[0].Verdict);
@@ -144,7 +147,7 @@ public class FindingValidatorTests
         var validator = CreateValidator(factory, batchSize: 5);
         var input = Enumerable.Range(0, 12).Select(i => Resolved(MakeFinding(i))).ToArray();
 
-        var result = await validator.ValidateAsync(input, CancellationToken.None);
+        var result = await validator.ValidateAsync(input, "test:1", CancellationToken.None);
 
         Assert.Equal(12, result.Count);
         // 12 / 5 = 3 batches (5, 5, 2).
@@ -163,7 +166,7 @@ public class FindingValidatorTests
         var validator = CreateValidator(factory);
         var input = new[] { Resolved(MakeFinding(0)), Resolved(MakeFinding(1)) };
 
-        var result = await validator.ValidateAsync(input, CancellationToken.None);
+        var result = await validator.ValidateAsync(input, "test:1", CancellationToken.None);
 
         // Graceful degradation: both findings kept as Valid.
         Assert.All(result, r => Assert.Equal(FindingVerdict.Valid, r.Verdict));
@@ -175,7 +178,7 @@ public class FindingValidatorTests
         var factory = new FakeSessionFactory();
 
         var validator = CreateValidator(factory);
-        var result = await validator.ValidateAsync(Array.Empty<FindingWithScope>(), CancellationToken.None);
+        var result = await validator.ValidateAsync(Array.Empty<FindingWithScope>(), "test:1", CancellationToken.None);
 
         Assert.Empty(result);
         Assert.Equal(0, factory.CreateSessionCalls);
@@ -204,7 +207,7 @@ public class FindingValidatorTests
             Unresolved(MakeFinding(2), ScopeResolutionFailure.ScopeNotFound),
         };
 
-        _ = await validator.ValidateAsync(input, CancellationToken.None);
+        _ = await validator.ValidateAsync(input, "test:1", CancellationToken.None);
 
         Assert.Equal(1, capturedFindingsInPrompt);
     }
@@ -214,6 +217,36 @@ public class FindingValidatorTests
     {
         var options = new CopilotReviewOptions();
         Assert.True(options.ValidateFindings);
+    }
+
+    [Fact]
+    public async Task ValidateAsync_ResolvedFindings_WritesPromptAndResponseToInspection()
+    {
+        var factory = new FakeSessionFactory();
+        factory.OnSendAsync = (h, _) =>
+        {
+            h.PushEvent(new AssistantMessageEvent
+            {
+                Data = new AssistantMessageData { MessageId = "m", Content = "**Finding 1: VALID** — ok" }
+            });
+            h.PushEvent(new SessionIdleEvent { Data = new SessionIdleData() });
+        };
+
+        var inspection = Substitute.For<ICopilotInspectionWriter>();
+        inspection.WritePromptAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
+        inspection.WriteResponseAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
+
+        var validator = CreateValidator(factory, inspection: inspection);
+        var input = new[] { Resolved(MakeFinding(0)) };
+
+        await validator.ValidateAsync(input, "pr:42", CancellationToken.None);
+
+        await inspection.Received(1).WritePromptAsync(
+            "pr:42", "validation-batch-1", Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await inspection.Received(1).WriteResponseAsync(
+            "pr:42", "validation-batch-1", Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     // ─── Fakes (mirror CopilotPageReviewerTests pattern) ────────────────────────

@@ -163,6 +163,30 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
             }
             await Task.WhenAll(pageTasks);
 
+            // Feature 021: consolidated finding validation across all pages.
+            // Runs once after all pages complete (not per-page) to minimize Copilot calls.
+            if (_options.Value.ValidateFindings
+                && _findingValidator is not null
+                && _findingScopeResolver is not null)
+            {
+                try
+                {
+                    await ValidateAllFindingsAsync(job, pageResults, ct).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    // Graceful degradation (FR-012): validation failure must not break the
+                    // review — pass the original results through unfiltered.
+                    _logger.LogWarning(ex,
+                        "Consolidated validation failed for '{ReviewKey}'; returning original results",
+                        job.ReviewKey);
+                }
+            }
+
             var result = new CopilotReviewResult
             {
                 ReviewKey = job.ReviewKey,
@@ -212,78 +236,78 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
         CancellationToken ct)
     {
         var result = await ReviewPageWithRetryAsync(job, pageNumber, enrichedContent, filePathsOnPage, ct);
-
-        // Feature 021: post-review finding validation. Runs only when the review
-        // succeeded, the feature is enabled, and the validator+resolver are wired in DI.
-        if (result.Succeeded
-            && _options.Value.ValidateFindings
-            && _findingValidator is not null
-            && _findingScopeResolver is not null)
-        {
-            try
-            {
-                result = await ValidateAndFilterAsync(job, pageNumber, result, ct).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                // Graceful degradation (FR-012): validation failure must not break the
-                // review — pass the original result through unfiltered.
-                _logger.LogWarning(ex,
-                    "Validation pass failed for '{ReviewKey}' page {PageNumber}; returning original result",
-                    job.ReviewKey, pageNumber);
-            }
-        }
-
         Interlocked.Increment(ref job.CompletedPages);
         return result;
     }
 
     /// <summary>
-    /// Parses findings from the review text, resolves each finding's enclosing scope,
-    /// validates them via a second Copilot pass, and rebuilds the result with
+    /// Consolidated post-review validation across all successfully reviewed pages.
+    /// Parses findings from every succeeded page, resolves enclosing scopes, validates
+    /// them via a single Copilot pass (internally batched by <see cref="FindingValidator"/>),
+    /// and rebuilds each page's <see cref="CopilotPageReviewResult.ReviewText"/> with
     /// false-positives removed and uncertain findings tagged. Feature 021.
     /// </summary>
-    private async Task<CopilotPageReviewResult> ValidateAndFilterAsync(
+    private async Task ValidateAllFindingsAsync(
         CopilotReviewJob job,
-        int pageNumber,
-        CopilotPageReviewResult original,
+        CopilotPageReviewResult[] pageResults,
         CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(original.ReviewText))
-            return original;
+        // Phase 1: parse findings from all successful pages, tracking page origin.
+        var pageData = new List<(int PageIndex, IReadOnlyList<ParsedFinding> Findings, string Remainder)>();
+        var allFindings = new List<ParsedFinding>();
 
-        job.CurrentActivity = $"Page {pageNumber}/{job.TotalPages}: parsing findings for validation";
-        var (findings, remainder) = FindingParser.Parse(original.ReviewText!);
-
-        // Zero parseable findings → nothing to validate. Return the original review
-        // text as-is (no summary footer; SC-005 scoping excludes this case).
-        if (findings.Count == 0)
-            return original;
-
-        // Over-threshold → skip validation for this page (FR-015). Likely a systemic
-        // issue; individual validation isn't the right tool.
-        var maxValidatable = _options.Value.MaxValidatableFindings;
-        if (maxValidatable > 0 && findings.Count > maxValidatable)
+        for (var i = 0; i < pageResults.Length; i++)
         {
-            _logger.LogInformation(
-                "Skipping validation for '{ReviewKey}' page {PageNumber}: {Count} findings exceed MaxValidatableFindings={Max}",
-                job.ReviewKey, pageNumber, findings.Count, maxValidatable);
-            return original;
+            var page = pageResults[i];
+            if (!page.Succeeded || string.IsNullOrWhiteSpace(page.ReviewText))
+                continue;
+
+            var (findings, remainder) = FindingParser.Parse(page.ReviewText!);
+            if (findings.Count == 0)
+                continue;
+
+            pageData.Add((i, findings, remainder));
+            allFindings.AddRange(findings);
         }
 
-        job.CurrentActivity = $"Page {pageNumber}/{job.TotalPages}: resolving {findings.Count} scopes";
+        if (allFindings.Count == 0)
+            return;
+
+        // Over-threshold → skip validation entirely (FR-015). Likely a systemic issue;
+        // individual finding validation isn't the right tool.
+        var maxValidatable = _options.Value.MaxValidatableFindings;
+        if (maxValidatable > 0 && allFindings.Count > maxValidatable)
+        {
+            _logger.LogInformation(
+                "Skipping validation for '{ReviewKey}': {Count} total findings exceed MaxValidatableFindings={Max}",
+                job.ReviewKey, allFindings.Count, maxValidatable);
+            return;
+        }
+
+        // Phase 2: resolve enclosing scopes for all findings at once.
+        job.CurrentActivity = $"Resolving {allFindings.Count} scopes for validation";
         var withScopes = await _findingScopeResolver!.ResolveAsync(
-            findings, _options.Value.MaxScopeLines, ct).ConfigureAwait(false);
+            allFindings, _options.Value.MaxScopeLines, ct).ConfigureAwait(false);
 
-        job.CurrentActivity = $"Page {pageNumber}/{job.TotalPages}: validating {findings.Count} findings";
-        var validated = await _findingValidator!.ValidateAsync(withScopes, ct).ConfigureAwait(false);
+        // Phase 3: validate all findings in one call (internal batching handles splits).
+        job.CurrentActivity = $"Validating {allFindings.Count} findings";
+        var validated = await _findingValidator!.ValidateAsync(
+            withScopes, job.ReviewKey, ct).ConfigureAwait(false);
 
-        var filteredText = FindingFilterer.Apply(remainder, validated);
-        return CopilotPageReviewResult.Success(pageNumber, filteredText, attemptsMade: original.AttemptsMade);
+        // Phase 4: map validated findings back to their originating pages and rebuild ReviewText.
+        var offset = 0;
+        foreach (var (pageIndex, findings, remainder) in pageData)
+        {
+            var pageValidated = new List<ValidatedFinding>(findings.Count);
+            for (var j = 0; j < findings.Count; j++)
+                pageValidated.Add(validated[offset + j]);
+            offset += findings.Count;
+
+            var filteredText = FindingFilterer.Apply(remainder, pageValidated);
+            pageResults[pageIndex] = CopilotPageReviewResult.Success(
+                pageResults[pageIndex].PageNumber, filteredText,
+                attemptsMade: pageResults[pageIndex].AttemptsMade);
+        }
     }
 
     /// <summary>

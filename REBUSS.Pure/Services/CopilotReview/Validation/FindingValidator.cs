@@ -5,6 +5,7 @@ using GitHub.Copilot.SDK;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using REBUSS.Pure.Core.Services.CopilotReview;
+using REBUSS.Pure.Services.CopilotReview.Inspection;
 
 namespace REBUSS.Pure.Services.CopilotReview.Validation;
 
@@ -13,7 +14,7 @@ namespace REBUSS.Pure.Services.CopilotReview.Validation;
 /// to a second Copilot pass. Findings whose scope could not be resolved bypass the
 /// validator with a deterministic verdict per spec US3.1 / US3.2. Feature 021.
 /// </summary>
-public sealed partial class FindingValidator
+internal sealed partial class FindingValidator
 {
     private const string PromptResourceName = "REBUSS.Pure.Services.CopilotReview.Prompts.copilot-finding-validation.md";
     private static string? _cachedPromptTemplate;
@@ -25,15 +26,18 @@ public sealed partial class FindingValidator
 
     private readonly ICopilotSessionFactory _sessionFactory;
     private readonly IOptions<CopilotReviewOptions> _options;
+    private readonly ICopilotInspectionWriter _inspection;
     private readonly ILogger<FindingValidator> _logger;
 
     public FindingValidator(
         ICopilotSessionFactory sessionFactory,
         IOptions<CopilotReviewOptions> options,
+        ICopilotInspectionWriter inspection,
         ILogger<FindingValidator> logger)
     {
         _sessionFactory = sessionFactory;
         _options = options;
+        _inspection = inspection;
         _logger = logger;
     }
 
@@ -41,8 +45,12 @@ public sealed partial class FindingValidator
     /// Validates each finding. Options are read at method invocation (Principle V),
     /// not cached in the constructor, so configuration hot-reload is respected.
     /// </summary>
+    /// <param name="findings">Findings paired with their resolved scope.</param>
+    /// <param name="reviewKey">Opaque review identifier for inspection capture.</param>
+    /// <param name="ct">Cancellation token.</param>
     public async Task<IReadOnlyList<ValidatedFinding>> ValidateAsync(
         IReadOnlyList<FindingWithScope> findings,
+        string reviewKey,
         CancellationToken ct)
     {
         if (findings.Count == 0)
@@ -95,14 +103,17 @@ public sealed partial class FindingValidator
 
         // Phase 2: batch the resolvable findings and validate against Copilot.
         var batchSize = Math.Max(1, opts.ValidationBatchSize);
+        var batchNumber = 0;
         for (var start = 0; start < toValidate.Count; start += batchSize)
         {
+            batchNumber++;
             var batch = toValidate.GetRange(start, Math.Min(batchSize, toValidate.Count - start));
             ct.ThrowIfCancellationRequested();
 
+            var inspectionKind = $"validation-batch-{batchNumber}";
             try
             {
-                var batchResults = await ValidateBatchAsync(batch, opts.Model, ct).ConfigureAwait(false);
+                var batchResults = await ValidateBatchAsync(batch, opts.Model, reviewKey, inspectionKind, ct).ConfigureAwait(false);
                 for (var j = 0; j < batch.Count; j++)
                 {
                     var (item, resultIdx) = batch[j];
@@ -142,9 +153,13 @@ public sealed partial class FindingValidator
     private async Task<ValidatedFinding?[]> ValidateBatchAsync(
         IReadOnlyList<(FindingWithScope Item, int Index)> batch,
         string model,
+        string reviewKey,
+        string inspectionKind,
         CancellationToken ct)
     {
         var prompt = BuildPrompt(batch);
+
+        await _inspection.WritePromptAsync(reviewKey, inspectionKind, prompt, ct).ConfigureAwait(false);
 
         ICopilotSessionHandle? handle = null;
         try
@@ -177,6 +192,8 @@ public sealed partial class FindingValidator
 
             await handle.SendAsync(prompt, ct).ConfigureAwait(false);
             var responseText = await tcs.Task.WaitAsync(ct).ConfigureAwait(false);
+
+            await _inspection.WriteResponseAsync(reviewKey, inspectionKind, responseText, ct).ConfigureAwait(false);
 
             return ParseVerdicts(responseText, batch);
         }

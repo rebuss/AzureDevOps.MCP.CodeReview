@@ -78,8 +78,8 @@ public sealed class CopilotReviewOptions
     public int ValidationBatchSize { get; set; } = 5;
 
     /// <summary>
-    /// If a review page produces more findings than this, validation is skipped for that
-    /// page (likely a systemic issue, not individual false positives). Feature 021 (FR-015).
+    /// If the total number of findings across all pages exceeds this threshold, validation
+    /// is skipped entirely (likely a systemic issue, not individual false positives). Feature 021 (FR-015).
     /// </summary>
     public int MaxValidatableFindings { get; set; } = 40;
 
