@@ -90,6 +90,9 @@ internal sealed class FileSystemCopilotInspectionWriter : ICopilotInspectionWrit
     public Task WriteResponseAsync(string reviewKey, string kind, string content, CancellationToken ct)
         => WriteAsync(reviewKey, kind, role: "response", content, ct);
 
+    public Task WriteSummaryAsync(string reviewKey, string content, CancellationToken ct)
+        => WriteAsync(reviewKey, kind: "final", role: "summary", content, ct);
+
     private async Task WriteAsync(string reviewKey, string kind, string role, string content, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();

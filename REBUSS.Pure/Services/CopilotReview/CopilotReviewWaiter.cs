@@ -61,7 +61,6 @@ public sealed class CopilotReviewWaiter
                 if (snapshot is { TotalPages: > 0, CompletedPages: > 0 } && snapshot.CompletedPages > lastReportedCompleted)
                 {
                     lastReportedCompleted = snapshot.CompletedPages;
-                    lastReportedActivity = null;
                     await _progressReporter.ReportAsync(progress,
                         progressStep++, null,
                         $"Copilot review — {snapshot.CompletedPages}/{snapshot.TotalPages} pages complete",
@@ -69,6 +68,11 @@ public sealed class CopilotReviewWaiter
                 }
                 else if (snapshot.CurrentActivity is not null && snapshot.CurrentActivity != lastReportedActivity)
                 {
+                    // NOTE: we deliberately do not reset lastReportedActivity when a page
+                    // completion is reported. The orchestrator now only publishes
+                    // CurrentActivity for forward-moving phase transitions (allocation →
+                    // validation batches → completion), so re-emitting a stale activity
+                    // after a page-completion milestone would look like regress to the user.
                     lastReportedActivity = snapshot.CurrentActivity;
                     await _progressReporter.ReportAsync(progress,
                         progressStep++, null,
@@ -86,6 +90,18 @@ public sealed class CopilotReviewWaiter
             await _progressReporter.ReportAsync(progress,
                 progressStep++, null,
                 $"Copilot review — {finalSnapshot.CompletedPages}/{finalSnapshot.TotalPages} pages complete",
+                cancellationToken);
+        }
+
+        // Guarantee the final phase activity (set by the orchestrator at review completion —
+        // e.g. "Review complete — N/N pages succeeded") reaches the user even if the poll
+        // loop exited before observing it.
+        if (finalSnapshot?.CurrentActivity is { } finalActivity
+            && finalActivity != lastReportedActivity)
+        {
+            await _progressReporter.ReportAsync(progress,
+                progressStep++, null,
+                finalActivity,
                 cancellationToken);
         }
 

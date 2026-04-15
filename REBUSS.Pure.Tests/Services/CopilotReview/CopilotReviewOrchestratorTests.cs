@@ -9,6 +9,7 @@ using REBUSS.Pure.Core.Models.Pagination;
 using REBUSS.Pure.Core.Models.ResponsePacking;
 using REBUSS.Pure.Core.Services.CopilotReview;
 using REBUSS.Pure.Services.CopilotReview;
+using REBUSS.Pure.Services.CopilotReview.Inspection;
 using REBUSS.Pure.Services.PrEnrichment;
 
 namespace REBUSS.Pure.Tests.Services.CopilotReview;
@@ -31,7 +32,8 @@ public class CopilotReviewOrchestratorTests
             pageAllocator ?? BuildAllocator(),
             Options.Create(new CopilotReviewOptions { ReviewBudgetTokens = budget }),
             lifetime,
-            NullLogger<CopilotReviewOrchestrator>.Instance);
+            NullLogger<CopilotReviewOrchestrator>.Instance,
+            new NoOpCopilotInspectionWriter());
         // Note: FindingValidator and FindingScopeResolver are left at null — tests
         // operate in opt-out mode (feature 021 US4). The orchestrator must produce
         // unchanged review text when either dependency is null.

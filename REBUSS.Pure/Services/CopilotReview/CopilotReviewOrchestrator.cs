@@ -8,6 +8,7 @@ using REBUSS.Pure.Core.Models;
 using REBUSS.Pure.Core.Models.CopilotReview;
 using REBUSS.Pure.Core.Services.CopilotReview;
 using REBUSS.Pure.Properties;
+using REBUSS.Pure.Services.CopilotReview.Inspection;
 using REBUSS.Pure.Services.CopilotReview.Validation;
 using REBUSS.Pure.Services.PrEnrichment;
 
@@ -30,6 +31,7 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
     // (opt-out per spec US4). Also null if DI couldn't resolve it.
     private readonly FindingValidator? _findingValidator;
     private readonly FindingScopeResolver? _findingScopeResolver;
+    private readonly ICopilotInspectionWriter _inspection;
 
     private readonly ConcurrentDictionary<string, CopilotReviewJob> _jobs = new();
     private readonly object _lock = new();
@@ -40,6 +42,7 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
         IOptions<CopilotReviewOptions> options,
         IHostApplicationLifetime lifetime,
         ILogger<CopilotReviewOrchestrator> logger,
+        ICopilotInspectionWriter inspection,
         FindingValidator? findingValidator = null,
         FindingScopeResolver? findingScopeResolver = null)
     {
@@ -48,6 +51,7 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
         _options = options;
         _logger = logger;
         _shutdownToken = lifetime.ApplicationStopping;
+        _inspection = inspection;
         _findingValidator = findingValidator;
         _findingScopeResolver = findingScopeResolver;
     }
@@ -194,6 +198,31 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
                 CompletedAt = DateTimeOffset.UtcNow,
             };
 
+            // Publish a final progress activity — the waiter surfaces this as the last
+            // IDE notification so the user sees "Review complete" rather than the review
+            // flipping silent right after "N/N pages complete".
+            job.CurrentActivity = $"Review complete — {result.SucceededPages}/{result.TotalPages} pages succeeded";
+
+            // Write an aggregated human-readable summary into the copilot-inspection
+            // directory (no-op when inspection is disabled). Best-effort — the writer
+            // swallows IO errors internally, but guard here against OperationCanceledException
+            // surfacing during shutdown.
+            try
+            {
+                var summary = BuildInspectionSummary(job.ReviewKey, result);
+                await _inspection.WriteSummaryAsync(job.ReviewKey, summary, ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                // Shutdown — fall through to completion below.
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "Failed to write inspection summary for '{ReviewKey}'; review result is unaffected",
+                    job.ReviewKey);
+            }
+
             lock (_lock)
             {
                 job.Result = result;
@@ -290,9 +319,17 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
             allFindings, _options.Value.MaxScopeLines, ct).ConfigureAwait(false);
 
         // Phase 3: validate all findings in one call (internal batching handles splits).
+        // The batchProgress callback surfaces intra-validation progress so the IDE
+        // notification advances per batch rather than sitting on a single message.
         job.CurrentActivity = $"Validating {allFindings.Count} findings";
         var validated = await _findingValidator!.ValidateAsync(
-            withScopes, job.ReviewKey, ct).ConfigureAwait(false);
+            withScopes, job.ReviewKey, ct,
+            batchProgress: (batchNumber, totalBatches) =>
+            {
+                job.CurrentActivity = totalBatches > 1
+                    ? $"Validating findings: batch {batchNumber}/{totalBatches}"
+                    : $"Validating {allFindings.Count} findings";
+            }).ConfigureAwait(false);
 
         // Phase 4: map validated findings back to their originating pages and rebuild ReviewText.
         var offset = 0;
@@ -328,14 +365,14 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
         {
             ct.ThrowIfCancellationRequested();
 
-            var attemptSuffix = attempt > 1 ? $" (attempt {attempt})" : "";
-            job.CurrentActivity = $"Page {pageNumber}/{job.TotalPages}: creating session{attemptSuffix}";
-
             _logger.LogInformation(Resources.LogCopilotReviewPageStarted, job.ReviewKey, pageNumber, attempt);
             var sw = System.Diagnostics.Stopwatch.StartNew();
 
-            job.CurrentActivity = $"Page {pageNumber}/{job.TotalPages}: waiting for Copilot response{attemptSuffix}";
-
+            // Per-page activity is intentionally not published: pages run in parallel and
+            // each concurrent task would overwrite CurrentActivity with its own "waiting"
+            // message, making the progress feed flip-flop between pages. The monotonic
+            // CompletedPages counter (emitted as "X/Y pages complete" by the waiter) is the
+            // sole page-level progress signal. Per-attempt retries are visible in the log.
             CopilotPageReviewResult result;
             try
             {
@@ -373,6 +410,52 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
         // component that knows which files were on this page) and return the failure.
         return CopilotPageReviewResult.Failure(
             pageNumber, filePathsOnPage, lastError, attemptsMade: MaxAttemptsPerPage);
+    }
+
+    /// <summary>
+    /// Produces the final Markdown summary written to the copilot-inspection directory.
+    /// Aggregates every page's review text (already filtered + tagged by the validator)
+    /// and appends a block listing failed pages so the reader sees the whole review
+    /// outcome in one file.
+    /// </summary>
+    private static string BuildInspectionSummary(string reviewKey, CopilotReviewResult result)
+    {
+        var sb = new StringBuilder();
+        sb.Append("# Copilot Review Summary — ").AppendLine(reviewKey);
+        sb.Append("Completed: ").AppendLine(
+            result.CompletedAt.ToString("u", System.Globalization.CultureInfo.InvariantCulture));
+        sb.AppendFormat(
+            System.Globalization.CultureInfo.InvariantCulture,
+            "Pages: {0} total ({1} succeeded, {2} failed)",
+            result.TotalPages, result.SucceededPages, result.FailedPages)
+          .AppendLine();
+        sb.AppendLine();
+
+        foreach (var page in result.PageReviews)
+        {
+            sb.Append("## Page ").Append(page.PageNumber);
+            sb.AppendLine(page.Succeeded ? " — succeeded" : " — failed");
+            sb.AppendLine();
+
+            if (page.Succeeded && !string.IsNullOrWhiteSpace(page.ReviewText))
+            {
+                sb.AppendLine(page.ReviewText!.TrimEnd());
+            }
+            else if (!page.Succeeded)
+            {
+                sb.Append("Error: ").AppendLine(page.ErrorMessage ?? "(unknown)");
+                if (page.FailedFilePaths.Count > 0)
+                {
+                    sb.AppendLine("Files on this page:");
+                    foreach (var path in page.FailedFilePaths)
+                        sb.Append("- ").AppendLine(path);
+                }
+            }
+
+            sb.AppendLine();
+        }
+
+        return sb.ToString().TrimEnd();
     }
 
     private static (string EnrichedContent, IReadOnlyList<string> FilePaths) BuildPageInput(

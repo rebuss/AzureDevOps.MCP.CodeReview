@@ -35,4 +35,14 @@ internal interface ICopilotInspectionWriter
     /// <param name="kind">Short step descriptor — paired with the matching prompt's <paramref name="kind"/>.</param>
     /// <param name="content">Verbatim response text.</param>
     Task WriteResponseAsync(string reviewKey, string kind, string content, CancellationToken ct);
+
+    /// <summary>
+    /// Capture a single consolidated summary of the review — written once at the end of
+    /// the pipeline, aggregating all per-page findings with their validation verdicts.
+    /// Gives a one-file human-readable overview of the review inside the inspection
+    /// directory, next to the per-step prompt/response captures.
+    /// </summary>
+    /// <param name="reviewKey">Opaque review identifier from the orchestrator.</param>
+    /// <param name="content">Fully formatted Markdown summary.</param>
+    Task WriteSummaryAsync(string reviewKey, string content, CancellationToken ct);
 }

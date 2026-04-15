@@ -48,10 +48,17 @@ internal sealed partial class FindingValidator
     /// <param name="findings">Findings paired with their resolved scope.</param>
     /// <param name="reviewKey">Opaque review identifier for inspection capture.</param>
     /// <param name="ct">Cancellation token.</param>
+    /// <param name="batchProgress">
+    /// Optional callback invoked once per Copilot-bound batch with
+    /// <c>(batchNumber, totalBatches)</c> so callers can surface intra-validation
+    /// progress (e.g., update <c>CurrentActivity</c>). Not invoked for the deterministic
+    /// phase-1 verdicts that bypass Copilot. Never throws — swallowed on callback failure.
+    /// </param>
     public async Task<IReadOnlyList<ValidatedFinding>> ValidateAsync(
         IReadOnlyList<FindingWithScope> findings,
         string reviewKey,
-        CancellationToken ct)
+        CancellationToken ct,
+        Action<int, int>? batchProgress = null)
     {
         if (findings.Count == 0)
             return Array.Empty<ValidatedFinding>();
@@ -103,12 +110,22 @@ internal sealed partial class FindingValidator
 
         // Phase 2: batch the resolvable findings and validate against Copilot.
         var batchSize = Math.Max(1, opts.ValidationBatchSize);
+        var totalBatches = (toValidate.Count + batchSize - 1) / batchSize;
         var batchNumber = 0;
         for (var start = 0; start < toValidate.Count; start += batchSize)
         {
             batchNumber++;
             var batch = toValidate.GetRange(start, Math.Min(batchSize, toValidate.Count - start));
             ct.ThrowIfCancellationRequested();
+
+            if (batchProgress is not null)
+            {
+                try { batchProgress(batchNumber, totalBatches); }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "batchProgress callback threw; ignoring");
+                }
+            }
 
             var inspectionKind = $"validation-batch-{batchNumber}";
             try
