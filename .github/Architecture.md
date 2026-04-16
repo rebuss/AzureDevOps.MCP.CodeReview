@@ -423,11 +423,34 @@ When `get_pr_metadata` is called, the handler fires a background download via
 `IRepositoryDownloadOrchestrator.TriggerDownloadAsync(prNumber, commitRef)`.
 This is fire-and-forget — the metadata response returns immediately without waiting.
 
+### Commit Selection
+
+`commitRef` is always `metadata.LastMergeSourceCommitId` — the **PR HEAD** commit.
+Every consumer of the extracted archive reads post-change source:
+
+- `DiffSourceResolver` reads the file as the "after" state and reconstructs "before"
+  from the diff body (see `DiffSourceResolver.cs` — "The source file in the repository
+  represents the 'after' state (PR head commit)").
+- `CallSiteEnricher` scans for callers of changed members and must see post-change code
+  so callers added in the PR are found.
+- `FindingScopeResolver` extracts enclosing method/scope for finding validation, which
+  must match the code the Copilot reviewer saw (post-change).
+
+Downloading the merge-base commit (`LastMergeTargetCommitId`) instead would:
+- Omit files added in the PR → `ResolutionFailure.SourceUnavailable` → findings bypass
+  Copilot validation with a blanket `Uncertain` verdict.
+- Shift line numbers and hide newly-added fields/methods → Copilot validator rules
+  legitimate findings as `FalsePositive` because the claimed identifier isn't in the
+  (stale) scope it sees.
+
+If `LastMergeSourceCommitId` is empty, the download is skipped entirely — no fallback
+to the target commit, because a stale archive is worse than none for the pipeline.
+
 ### Download Flow
 
 ```
 get_pr_metadata → MetadataHandler
-  → _downloadOrchestrator.TriggerDownloadAsync(prNumber, commitRef)
+  → _downloadOrchestrator.TriggerDownloadAsync(prNumber, metadata.LastMergeSourceCommitId)
     → Background Task.Run:
       1. IRepositoryArchiveProvider.DownloadRepositoryZipAsync(commitRef, zipPath)
          (Azure DevOps: Items API ?$format=zip | GitHub: /zipball/{ref})

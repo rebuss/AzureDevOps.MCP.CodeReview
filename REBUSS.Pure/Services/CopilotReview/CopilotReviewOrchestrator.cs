@@ -308,6 +308,8 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
                     : $"Validating {allFindings.Count} findings";
             }).ConfigureAwait(false);
 
+        LogValidationSummary(job.ReviewKey, withScopes, validated);
+
         // Phase 4: map validated findings back to their originating pages and rebuild ReviewText.
         var offset = 0;
         foreach (var (pageIndex, findings, remainder) in pageData)
@@ -322,6 +324,48 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
                 pageResults[pageIndex].PageNumber, filteredText,
                 attemptsMade: pageResults[pageIndex].AttemptsMade);
         }
+    }
+
+    /// <summary>
+    /// Emits a single Information-level summary of the validation pipeline so silent
+    /// drops (e.g. archive at the wrong commit producing SourceUnavailable for every
+    /// added file) are visible in the log instead of requiring inspection-file archaeology.
+    /// </summary>
+    private void LogValidationSummary(
+        string reviewKey,
+        IReadOnlyList<Validation.FindingWithScope> withScopes,
+        IReadOnlyList<Validation.ValidatedFinding> validated)
+    {
+        int notCSharp = 0, sourceUnavailable = 0, scopeNotFound = 0, resolved = 0;
+        foreach (var w in withScopes)
+        {
+            switch (w.ResolutionFailure)
+            {
+                case Validation.ScopeResolutionFailure.NotCSharp:        notCSharp++; break;
+                case Validation.ScopeResolutionFailure.SourceUnavailable: sourceUnavailable++; break;
+                case Validation.ScopeResolutionFailure.ScopeNotFound:     scopeNotFound++; break;
+                case Validation.ScopeResolutionFailure.None:              resolved++; break;
+            }
+        }
+
+        int valid = 0, falsePositive = 0, uncertain = 0;
+        foreach (var v in validated)
+        {
+            switch (v.Verdict)
+            {
+                case Validation.FindingVerdict.Valid:         valid++; break;
+                case Validation.FindingVerdict.FalsePositive: falsePositive++; break;
+                case Validation.FindingVerdict.Uncertain:     uncertain++; break;
+            }
+        }
+
+        _logger.LogInformation(
+            "Finding validation summary for '{ReviewKey}': parsed={Parsed} " +
+            "(scope: not-csharp={NotCs}, source-unavailable={SrcUnavail}, scope-not-found={ScopeMiss}, resolved={Resolved}) " +
+            "→ verdicts: valid={Valid}, false-positive={FalsePositive}, uncertain={Uncertain}",
+            reviewKey, validated.Count,
+            notCSharp, sourceUnavailable, scopeNotFound, resolved,
+            valid, falsePositive, uncertain);
     }
 
     /// <summary>

@@ -248,52 +248,37 @@ public class GetPullRequestMetadataToolHandlerTests
             () => _handler.ExecuteAsync(prNumber: 42, modelName: "gpt-4o", cancellationToken: callerCts.Token));
     }
 
-    // ─── Repository download (base branch) ────────────────────────────────────
+    // ─── Repository download (PR head commit) ─────────────────────────────────
 
     [Fact]
-    public async Task ExecuteAsync_TriggersDownload_WithTargetCommitId()
+    public async Task ExecuteAsync_TriggersDownload_AtPrHeadCommit()
     {
         await _handler.ExecuteAsync(prNumber: 42);
 
-        _downloadOrchestrator.Received(1).TriggerDownloadAsync(42, "def456");
-    }
-
-    [Fact]
-    public async Task ExecuteAsync_FallsBackToSourceCommitId_WhenTargetIsNull()
-    {
-        var metadataWithoutTarget = new FullPullRequestMetadata
-        {
-            PullRequestId = 42,
-            Title = "Fix",
-            Description = "Desc",
-            Status = "active",
-            LastMergeSourceCommitId = "abc123",
-            LastMergeTargetCommitId = "",
-            CommitShas = new List<string> { "abc123" }
-        };
-        _dataProvider.GetMetadataAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns(metadataWithoutTarget);
-
-        await _handler.ExecuteAsync(prNumber: 42);
-
+        // LastMergeSourceCommitId is the PR HEAD; the archive must be downloaded at that
+        // commit so downstream consumers (DiffSourceResolver, CallSiteEnricher,
+        // FindingScopeResolver) see post-change source. Never the merge-base commit.
         _downloadOrchestrator.Received(1).TriggerDownloadAsync(42, "abc123");
+        _downloadOrchestrator.DidNotReceive().TriggerDownloadAsync(42, "def456");
     }
 
     [Fact]
-    public async Task ExecuteAsync_DoesNotTriggerDownload_WhenBothCommitIdsEmpty()
+    public async Task ExecuteAsync_DoesNotTriggerDownload_WhenHeadCommitEmpty()
     {
-        var metadataNoCommits = new FullPullRequestMetadata
+        var metadataNoHead = new FullPullRequestMetadata
         {
             PullRequestId = 42,
             Title = "Fix",
             Description = "Desc",
             Status = "active",
             LastMergeSourceCommitId = "",
-            LastMergeTargetCommitId = "",
+            // Even with a target commit present, the orchestrator must not fall back to it —
+            // downloading the merge base would feed stale source into the validation pipeline.
+            LastMergeTargetCommitId = "def456",
             CommitShas = new List<string>()
         };
         _dataProvider.GetMetadataAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns(metadataNoCommits);
+            .Returns(metadataNoHead);
 
         await _handler.ExecuteAsync(prNumber: 42);
 

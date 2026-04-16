@@ -101,12 +101,15 @@ namespace REBUSS.Pure.Tools
 
                 var metadata = await _metadataProvider.GetMetadataAsync(prNumber.Value, cancellationToken);
 
-                // Trigger background repository download of the base/target branch (fire-and-forget)
-                var downloadCommitRef = !string.IsNullOrEmpty(metadata.LastMergeTargetCommitId)
-                    ? metadata.LastMergeTargetCommitId
-                    : metadata.LastMergeSourceCommitId;
-                if (!string.IsNullOrEmpty(downloadCommitRef))
-                    _downloadOrchestrator.TriggerDownloadAsync(prNumber.Value, downloadCommitRef);
+                // Trigger background repository download at the PR HEAD commit (fire-and-forget).
+                // DiffSourceResolver, CallSiteEnricher and FindingScopeResolver all read from the
+                // extracted archive expecting post-change source (see DiffSourceResolver.cs —
+                // "The source file in the repository represents the 'after' state (PR head commit)").
+                // Downloading the merge-base commit instead omits files added in the PR and
+                // shifts line numbers, causing SourceUnavailable drops and false-positive verdicts
+                // during finding validation.
+                if (!string.IsNullOrEmpty(metadata.LastMergeSourceCommitId))
+                    _downloadOrchestrator.TriggerDownloadAsync(prNumber.Value, metadata.LastMergeSourceCommitId);
 
                 // Eager Copilot SDK initialization: start in background so it overlaps with enrichment.
                 // Fire-and-forget — failure is captured in CopilotClientProvider._startException
