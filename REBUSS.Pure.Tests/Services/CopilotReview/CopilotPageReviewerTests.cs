@@ -213,6 +213,24 @@ public class CopilotPageReviewerTests
             Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
+    [Fact]
+    public async Task ReviewPage_CancellationTokenAlreadyCancelled_PropagatesOCE()
+    {
+        // Regression: previously FakeSessionHandle.SendAsync ignored ct, so pre-cancelled
+        // tokens never reached the production reviewer's catch(OperationCanceledException)
+        // → throw branch. With the fake now honouring ct (like the real CopilotSession),
+        // this test exercises that path end-to-end.
+        var factory = new FakeSessionFactory();
+        factory.OnSendAsync = (_, _) => { /* no events — cancellation should preempt */ };
+        var reviewer = CreateReviewer(factory, new NoOpCopilotInspectionWriter());
+
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => reviewer.ReviewPageAsync("pr:42", 1, "diff content", cts.Token));
+    }
+
     // ─── Fakes ────────────────────────────────────────────────────────────────────
 
     private sealed class FakeSessionFactory : ICopilotSessionFactory
@@ -235,6 +253,10 @@ public class CopilotPageReviewerTests
 
         public Task<string> SendAsync(string prompt, CancellationToken ct)
         {
+            // Honor the cancellation token the way the real CopilotSession.SendAsync does —
+            // otherwise tests using a pre-cancelled ct never exercise the OCE-in-SendAsync
+            // path (the reviewer's catch(OCE) → rethrow would stay untested).
+            ct.ThrowIfCancellationRequested();
             _onSend(prompt);
             return Task.FromResult("msg-id-1");
         }

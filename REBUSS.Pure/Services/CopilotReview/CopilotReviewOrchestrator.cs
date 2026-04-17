@@ -18,7 +18,7 @@ namespace REBUSS.Pure.Services.CopilotReview;
 /// Source-agnostic — serves both PR reviews and local self-reviews via string-based
 /// review keys. Mirrors the <c>PrEnrichmentOrchestrator</c> trigger/wait/snapshot pattern.
 /// </summary>
-internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
+internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator, IAsyncDisposable
 {
     private readonly ICopilotPageReviewer _pageReviewer;
     private readonly IPageAllocator _pageAllocator;
@@ -59,6 +59,12 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
 
         lock (_lock)
         {
+            // Opportunistic TTL sweep: reclaim memory from long-completed jobs before
+            // deciding idempotency. Without this, `_jobs` grows unboundedly in a
+            // long-running MCP server (one entry per reviewed PR forever, each holding
+            // the full CopilotReviewResult text and background task references).
+            SweepStaleJobs();
+
             // Idempotent — cache key is reviewKey only.
             // If a job already exists for this key, do nothing: the caller will observe
             // the same result via WaitForReviewAsync.
@@ -74,7 +80,60 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
             _jobs[reviewKey] = job;
 
             // IMPORTANT: Task.Run with its own None token; the body honors _shutdownToken internally.
-            _ = Task.Run(() => BackgroundBodyAsync(job, enrichmentResult), CancellationToken.None);
+            // The handle is retained on the job so DisposeAsync can drain in-flight reviews on
+            // host shutdown — otherwise the process may terminate before the body's
+            // catch(OCE) branch updates Status/completes the TCS for pending waiters.
+            job.BackgroundTask = Task.Run(() => BackgroundBodyAsync(job, enrichmentResult), CancellationToken.None);
+        }
+    }
+
+    /// <summary>
+    /// Evicts terminal jobs (Ready / Failed) whose <c>CompletedAt</c> is older than
+    /// <see cref="CopilotReviewOptions.JobRetentionMinutes"/>. Called under <c>_lock</c>
+    /// from <see cref="TriggerReview"/> — opportunistic, no timer thread needed.
+    /// A retention value ≤ 0 disables the sweep.
+    /// </summary>
+    private void SweepStaleJobs()
+    {
+        var retentionMinutes = _options.Value.JobRetentionMinutes;
+        if (retentionMinutes <= 0)
+            return;
+
+        var cutoff = DateTimeOffset.UtcNow.AddMinutes(-retentionMinutes);
+        foreach (var kvp in _jobs)
+        {
+            if (kvp.Value.CompletedAt is DateTimeOffset completedAt && completedAt < cutoff)
+                _jobs.TryRemove(kvp.Key, out _);
+        }
+    }
+
+    /// <summary>
+    /// Registered by DI on host shutdown (singleton lifetime). The <c>_shutdownToken</c>
+    /// (ApplicationStopping) has already fired by the time this runs, so each background
+    /// body is either in its catch(OCE) branch or about to be. We await the in-flight tasks
+    /// with a bounded timeout so shutdown cannot hang on a misbehaving body while still
+    /// giving the graceful-cancellation path a chance to finish — update Status, publish
+    /// ErrorMessage, and signal pending waiters through <see cref="CopilotReviewJob.Completion"/>.
+    /// </summary>
+    public async ValueTask DisposeAsync()
+    {
+        var tasks = _jobs.Values
+            .Select(j => j.BackgroundTask)
+            .Where(t => t is not null)
+            .Cast<Task>()
+            .ToArray();
+
+        if (tasks.Length == 0)
+            return;
+
+        try
+        {
+            await Task.WhenAll(tasks).WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        }
+        catch
+        {
+            // Individual task failures / cancellations are already surfaced to waiters via
+            // their TaskCompletionSource. Do not propagate here — DisposeAsync must not throw.
         }
     }
 
@@ -136,6 +195,7 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
                 {
                     job.Result = emptyResult;
                     job.Status = CopilotReviewStatus.Ready;
+                    job.CompletedAt = DateTimeOffset.UtcNow;
                 }
                 job.Completion.TrySetResult(emptyResult);
                 return;
@@ -210,6 +270,7 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
             {
                 job.Result = result;
                 job.Status = CopilotReviewStatus.Ready;
+                job.CompletedAt = DateTimeOffset.UtcNow;
             }
 
             _logger.LogInformation(
@@ -221,13 +282,23 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             _logger.LogInformation("Copilot review for '{ReviewKey}' cancelled by shutdown", job.ReviewKey);
-            lock (_lock) { job.Status = CopilotReviewStatus.Failed; job.ErrorMessage = "cancelled"; }
+            lock (_lock)
+            {
+                job.Status = CopilotReviewStatus.Failed;
+                job.ErrorMessage = "cancelled";
+                job.CompletedAt = DateTimeOffset.UtcNow;
+            }
             job.Completion.TrySetCanceled(ct);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, Resources.LogCopilotReviewFailed, job.ReviewKey, ex.Message);
-            lock (_lock) { job.Status = CopilotReviewStatus.Failed; job.ErrorMessage = ex.Message; }
+            lock (_lock)
+            {
+                job.Status = CopilotReviewStatus.Failed;
+                job.ErrorMessage = ex.Message;
+                job.CompletedAt = DateTimeOffset.UtcNow;
+            }
             job.Completion.TrySetException(ex);
         }
     }
@@ -286,11 +357,13 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
             return;
 
         // Over-threshold → skip validation entirely (FR-015). Likely a systemic issue;
-        // individual finding validation isn't the right tool.
+        // individual finding validation isn't the right tool. Logged at Warning because
+        // this is graceful degradation with user-visible impact — the review bypasses
+        // false-positive filtering for the entire PR — and operators should see it.
         var maxValidatable = _options.Value.MaxValidatableFindings;
         if (maxValidatable > 0 && allFindings.Count > maxValidatable)
         {
-            _logger.LogInformation(
+            _logger.LogWarning(
                 "Skipping validation for '{ReviewKey}': {Count} total findings exceed MaxValidatableFindings={Max}",
                 job.ReviewKey, allFindings.Count, maxValidatable);
             return;
@@ -471,6 +544,13 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
         public string? ErrorMessage { get; set; }
         public required TaskCompletionSource<CopilotReviewResult> Completion { get; init; }
 
+        /// <summary>
+        /// Handle for the fire-and-forget background body. Set once inside the creation
+        /// lock; awaited on shutdown (<see cref="CopilotReviewOrchestrator.DisposeAsync"/>)
+        /// so the process does not terminate before graceful-cancellation finishes.
+        /// </summary>
+        public Task? BackgroundTask { get; set; }
+
         /// <summary>Set under <c>_lock</c> once the allocation is computed.</summary>
         public int TotalPages { get; set; }
 
@@ -479,5 +559,12 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator
 
         /// <summary>Short status message updated at key points for progress reporting.</summary>
         public volatile string? CurrentActivity;
+
+        /// <summary>
+        /// Timestamp of when the job reached a terminal state (Ready / Failed). Used by
+        /// the TTL sweep in <see cref="CopilotReviewOrchestrator.TriggerReview"/> to evict
+        /// stale entries. <c>null</c> while the job is still in progress.
+        /// </summary>
+        public DateTimeOffset? CompletedAt { get; set; }
     }
 }

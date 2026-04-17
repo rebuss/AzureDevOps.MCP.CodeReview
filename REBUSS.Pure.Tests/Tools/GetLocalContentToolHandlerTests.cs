@@ -306,7 +306,10 @@ public class GetLocalContentToolHandlerTests
     [Fact]
     public async Task ExecuteAsync_ProgressNotificationsEmitted()
     {
-        var progress = Substitute.For<IProgress<ProgressNotificationValue>>();
+        // Non-null progress sink — the handler forwards to _progressReporter, which is
+        // the substitute we assert against. A real Progress<T> expresses that intent
+        // more clearly than a Substitute.For<IProgress<T>> that nobody verifies.
+        var progress = new Progress<ProgressNotificationValue>(_ => { });
 
         await _handler.ExecuteAsync(pageNumber: 1, progress: progress);
 
@@ -345,7 +348,8 @@ public class GetLocalContentToolHandlerTests
                 Result = copilotResult,
             });
 
-        var progress = Substitute.For<IProgress<ProgressNotificationValue>>();
+        // Non-null progress sink — see note in ExecuteAsync_ProgressNotificationsEmitted.
+        var progress = new Progress<ProgressNotificationValue>(_ => { });
 
         var blocks = (await _handler.ExecuteAsync(pageNumber: 1, progress: progress)).ToList();
         var text = AllText(blocks);

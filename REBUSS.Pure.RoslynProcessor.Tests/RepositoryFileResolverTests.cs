@@ -38,23 +38,36 @@ public class RepositoryFileResolverTests : IDisposable
         Assert.Equal(_tempDir, root);
     }
 
-    [Fact]
-    public void ResolvePath_FileExists_ReturnsFullPath()
+    // Theory inputs: forward-slash matches the format diff strings actually use (SCM APIs
+    // emit POSIX paths); OS-native Path.Combine(...) pins that the resolver also tolerates
+    // the host's DirectorySeparatorChar, which matters on Windows if the production-side
+    // `.Replace('/', Path.DirectorySeparatorChar)` normalization is ever refactored away.
+    public static TheoryData<string> SeparatorVariants() => new()
+    {
+        "src/File.cs",
+        Path.Combine("src", "File.cs"), // "src\\File.cs" on Windows, "src/File.cs" on Unix
+    };
+
+    [Theory]
+    [MemberData(nameof(SeparatorVariants))]
+    public void ResolvePath_FileExists_ReturnsFullPath(string diffFilePath)
     {
         var srcDir = Path.Combine(_tempDir, "src");
         Directory.CreateDirectory(srcDir);
         var filePath = Path.Combine(srcDir, "File.cs");
         File.WriteAllText(filePath, "class C {}");
 
-        var result = RepositoryFileResolver.ResolvePath(_tempDir, "src/File.cs");
+        var result = RepositoryFileResolver.ResolvePath(_tempDir, diffFilePath);
         Assert.NotNull(result);
         Assert.True(File.Exists(result));
     }
 
-    [Fact]
-    public void ResolvePath_FileNotFound_ReturnsNull()
+    [Theory]
+    [InlineData("nonexistent/File.cs")]
+    [InlineData("nonexistent\\File.cs")]
+    public void ResolvePath_FileNotFound_ReturnsNull(string diffFilePath)
     {
-        var result = RepositoryFileResolver.ResolvePath(_tempDir, "nonexistent/File.cs");
+        var result = RepositoryFileResolver.ResolvePath(_tempDir, diffFilePath);
         Assert.Null(result);
     }
 }

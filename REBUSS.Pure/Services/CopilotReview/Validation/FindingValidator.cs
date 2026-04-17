@@ -60,6 +60,21 @@ internal sealed partial class FindingValidator
     /// <summary>
     /// Validates each finding. Options are read at method invocation (Principle V),
     /// not cached in the constructor, so configuration hot-reload is respected.
+    /// <para>
+    /// <b>Ordering contract (load-bearing — do not change silently):</b>
+    /// <list type="bullet">
+    ///   <item>The returned list has exactly <paramref name="findings"/>.Count elements.</item>
+    ///   <item>For every <c>i</c>, <c>result[i]</c> corresponds to <c>findings[i]</c> —
+    ///   same order, no reordering even when severity-ordering or token-budget pagination
+    ///   shuffles the internal work sequence.</item>
+    ///   <item>No slot is null. If parsing a Copilot response drops a verdict, the slot
+    ///   is back-filled with a conservative <see cref="FindingVerdict.Valid"/> fallback so
+    ///   callers can index without null-checks.</item>
+    /// </list>
+    /// <c>CopilotReviewOrchestrator</c> relies on this to slice the validator's flat
+    /// output per page via <c>validated[offset + j]</c> — any drift would silently
+    /// mis-attribute verdicts to the wrong finding.
+    /// </para>
     /// </summary>
     /// <param name="findings">Findings paired with their resolved scope.</param>
     /// <param name="reviewKey">Opaque review identifier for inspection capture.</param>
@@ -242,10 +257,13 @@ internal sealed partial class FindingValidator
                 {
                     case AssistantMessageEvent msg:
                         // Phased-output models (e.g. thinking + response) emit multiple
-                        // AssistantMessageEvents per session; accumulate all non-empty
-                        // Content so we resolve the TCS with the full response on idle.
+                        // AssistantMessageEvents per session; accumulate every non-null
+                        // Content fragment so we resolve the TCS with the full response
+                        // on idle. Empty strings are legitimate stream chunks and must be
+                        // appended (no-op for StringBuilder — silently dropping them would
+                        // obscure what the model actually emitted); only null is filtered.
                         var chunk = msg.Data?.Content;
-                        if (!string.IsNullOrEmpty(chunk))
+                        if (chunk is not null)
                             contentBuilder.Append(chunk);
                         break;
                     case SessionErrorEvent err:

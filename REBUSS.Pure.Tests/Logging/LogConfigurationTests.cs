@@ -6,13 +6,30 @@ namespace REBUSS.Pure.Tests.Logging;
 
 public class LogConfigurationTests
 {
+    /// <summary>
+    /// Baseline logging config asserted by these tests. Kept inline on purpose — an
+    /// <c>AddJsonFile("appsettings.json", optional: false)</c> crashes the whole suite if
+    /// the file is missing from the output dir (CopyToOutputDirectory race, publish layout
+    /// tweak, etc.); <c>optional: true</c> would hide drift by silently returning an empty
+    /// config and making the assertions pass for the wrong reason. Embedding the minimal
+    /// subset these tests actually depend on keeps them self-sufficient and stable against
+    /// changes to the production appsettings.json.
+    /// </summary>
+    private static readonly Dictionary<string, string?> BaselineLoggingConfig = new()
+    {
+        ["Logging:LogLevel:Default"] = "Information",
+        ["Logging:LogLevel:Microsoft"] = "Warning",
+        ["Logging:LogLevel:System"] = "Warning",
+        ["Logging:LogLevel:Microsoft.Extensions.Http"] = "Warning",
+        ["Logging:LogLevel:Polly"] = "Warning",
+        ["Logging:LogLevel:GitHub.Copilot.SDK"] = "Warning",
+    };
+
     private static ServiceProvider BuildServiceProviderFromConfig(
         Dictionary<string, string?>? overrides = null)
     {
         var configBuilder = new ConfigurationBuilder()
-            .AddJsonFile(
-                Path.Combine(AppContext.BaseDirectory, "appsettings.json"),
-                optional: false);
+            .AddInMemoryCollection(BaselineLoggingConfig);
 
         if (overrides is not null)
             configBuilder.AddInMemoryCollection(overrides);

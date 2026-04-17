@@ -91,4 +91,18 @@ public sealed class CopilotReviewOptions
     /// wall-clock time. Values &lt; 1 are clamped to 1. Default <c>6</c>.
     /// </summary>
     public int MaxConcurrentPages { get; set; } = 6;
+
+    /// <summary>
+    /// How long a completed / failed / cancelled review job is retained in the orchestrator's
+    /// in-memory dictionary before it is swept. Without this cap, a long-running MCP server
+    /// accumulates one job entry (plus its <c>CopilotReviewResult</c>, page texts, and task
+    /// references) per reviewed PR for the lifetime of the process. Sweep is opportunistic —
+    /// runs under the trigger lock on each <c>TriggerReview</c> call.
+    /// <para>
+    /// Values ≤ 0 disable the sweep (unbounded retention — only recommended for short-lived
+    /// processes or tests). Default <c>30</c> minutes is longer than any reasonable
+    /// review-consumption window while still reclaiming memory on quiet intervals.
+    /// </para>
+    /// </summary>
+    public int JobRetentionMinutes { get; set; } = 30;
 }

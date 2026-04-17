@@ -29,10 +29,6 @@ public static class BeforeAfterAnalyzer
         bool foundSemantic = false;
         bool foundStructural = false;
 
-        // Walk the before tree and find nodes that differ from after tree
-        var beforeMembers = beforeRoot.DescendantNodes().ToArray();
-        var afterMembers = afterRoot.DescendantNodes().ToArray();
-
         // Use a simple approach: compare top-level members
         var beforeTopLevel = beforeRoot.ChildNodes().ToArray();
         var afterTopLevel = afterRoot.ChildNodes().ToArray();

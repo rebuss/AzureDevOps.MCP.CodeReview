@@ -29,7 +29,7 @@ public class NoOpCopilotInspectionWriterTests
     }
 
     [Fact]
-    public async Task WritePromptAsync_ManyCalls_NoneThrow()
+    public async Task WritePromptAndResponseAsync_ManyCalls_NoneThrow()
     {
         var writer = new NoOpCopilotInspectionWriter();
 

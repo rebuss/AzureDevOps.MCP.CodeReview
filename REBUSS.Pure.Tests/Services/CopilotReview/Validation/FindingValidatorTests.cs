@@ -200,6 +200,57 @@ public class FindingValidatorTests
     }
 
     [Fact]
+    public async Task ValidateAsync_Result_PreservesInputOrderRegardlessOfInternalSeveritySort()
+    {
+        // Pin the load-bearing ordering contract: result[i] corresponds to input[i] even
+        // though the validator internally severity-orders findings (major < critical) for
+        // the Copilot prompt, and parses verdicts by the "Finding {n}:" index in the
+        // response. A refactor that returns results in severity order (instead of input
+        // order) would silently misalign CopilotReviewOrchestrator's per-page slicing.
+        var factory = new FakeSessionFactory();
+        factory.OnSendAsync = (h, _) =>
+        {
+            // Prompt order in severity: critical first, then major, then minor.
+            // Findings at input index 0=minor, 1=critical, 2=major → prompt order 1,2,0.
+            h.PushEvent(new AssistantMessageEvent
+            {
+                Data = new AssistantMessageData
+                {
+                    MessageId = "m",
+                    Content =
+                        "**Finding 1: VALID** — critical bug\n" +          // input[1]
+                        "**Finding 2: UNCERTAIN** — major unclear\n" +     // input[2]
+                        "**Finding 3: FALSE_POSITIVE** — minor bogus",     // input[0]
+                }
+            });
+            h.PushEvent(new SessionIdleEvent { Data = new SessionIdleData() });
+        };
+
+        var validator = CreateValidator(factory);
+        var input = new[]
+        {
+            Resolved(MakeFinding(0, severity: "minor")),
+            Resolved(MakeFinding(1, severity: "critical")),
+            Resolved(MakeFinding(2, severity: "major")),
+        };
+
+        var result = await validator.ValidateAsync(input, "test:1", CancellationToken.None);
+
+        // Size matches input length.
+        Assert.Equal(input.Length, result.Count);
+        // No null slots.
+        Assert.All(result, v => Assert.NotNull(v));
+        // result[i] is the verdict for input[i] — NOT for prompt-position i.
+        Assert.Equal(FindingVerdict.FalsePositive, result[0].Verdict); // minor
+        Assert.Equal(FindingVerdict.Valid, result[1].Verdict);          // critical
+        Assert.Equal(FindingVerdict.Uncertain, result[2].Verdict);      // major
+        // Finding identity preserved.
+        Assert.Equal(input[0].Finding.Index, result[0].Finding.Index);
+        Assert.Equal(input[1].Finding.Index, result[1].Finding.Index);
+        Assert.Equal(input[2].Finding.Index, result[2].Finding.Index);
+    }
+
+    [Fact]
     public async Task ValidateAsync_MultipleAssistantMessageEvents_AccumulatesContent()
     {
         // Phased-output models (e.g. thinking + response phases) may emit multiple
@@ -232,12 +283,24 @@ public class FindingValidatorTests
     [Fact]
     public async Task ValidateAsync_TwelveFindings_AcrossThreePages_MakesThreeCalls()
     {
+        // Each call gets a distinct per-page verdict and emits exactly as many
+        // "Finding N:" entries as that page truly contains. Previously the mock
+        // produced 10 VALID entries for every call — the over-count silently
+        // flowed through ParseVerdicts' `n > pageBatch.Count` guard, so a bug that
+        // routed page-2's response to page-3's findings (or vice versa) would not
+        // have failed the test. Verdicts are now specific per call so per-finding
+        // routing is verified.
+        var pageVerdicts = new[] { "VALID", "FALSE_POSITIVE", "UNCERTAIN" };
+        var pageSizes = new[] { 5, 5, 2 }; // 12 split 5/5/2
+        var callIndex = 0;
         var factory = new FakeSessionFactory();
         factory.OnSendAsync = (h, _) =>
         {
-            // Response template: declare every finding in the page VALID.
+            var idx = Interlocked.Increment(ref callIndex) - 1;
+            var verdict = pageVerdicts[idx];
+            var size = pageSizes[idx];
             var content = string.Join('\n',
-                Enumerable.Range(1, 10).Select(i => $"**Finding {i}: VALID** — ok"));
+                Enumerable.Range(1, size).Select(i => $"**Finding {i}: {verdict}** — page{idx + 1}"));
             h.PushEvent(new AssistantMessageEvent { Data = new AssistantMessageData { MessageId = "m", Content = content } });
             h.PushEvent(new SessionIdleEvent { Data = new SessionIdleData() });
         };
@@ -252,6 +315,16 @@ public class FindingValidatorTests
 
         Assert.Equal(12, result.Count);
         Assert.Equal(3, factory.CreateSessionCalls);
+
+        // Input indices 0..4 → page 1 (VALID), 5..9 → page 2 (FALSE_POSITIVE),
+        // 10..11 → page 3 (UNCERTAIN). Stable-by-severity ordering preserves
+        // input order because every finding has the same default "major" severity.
+        for (var i = 0; i < 5; i++)
+            Assert.Equal(FindingVerdict.Valid, result[i].Verdict);
+        for (var i = 5; i < 10; i++)
+            Assert.Equal(FindingVerdict.FalsePositive, result[i].Verdict);
+        for (var i = 10; i < 12; i++)
+            Assert.Equal(FindingVerdict.Uncertain, result[i].Verdict);
     }
 
     [Fact]

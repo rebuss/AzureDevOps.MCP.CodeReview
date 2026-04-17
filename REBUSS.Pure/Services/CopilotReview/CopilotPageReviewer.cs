@@ -88,8 +88,13 @@ internal sealed class CopilotPageReviewer : ICopilotPageReviewer
                 switch (evt)
                 {
                     case AssistantMessageEvent msg:
+                        // Guard against null only — `StringBuilder.Append(string?)` with null
+                        // is a documented no-op, but empty fragments are legitimate stream
+                        // chunks from phased-output models and must be appended (no-op is
+                        // fine; silently dropping them is not, because any filtering
+                        // obscures what the model actually emitted).
                         var chunk = msg.Data?.Content;
-                        if (!string.IsNullOrEmpty(chunk))
+                        if (chunk is not null)
                             contentBuilder.Append(chunk);
                         break;
                     case SessionErrorEvent err:

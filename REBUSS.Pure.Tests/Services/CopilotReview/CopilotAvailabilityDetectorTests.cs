@@ -93,7 +93,10 @@ public class CopilotAvailabilityDetectorTests
         var verdict = await detector.GetVerdictAsync();
 
         Assert.True(result);
-        Assert.Same(verdict.Reason.ToString(), verdict.Reason.ToString()); // smoke
+        // Smoke: enum-to-string coercion produces the canonical name — do NOT use
+        // Assert.Same here (string reference equality depends on runtime caching
+        // of Enum.ToString()); compare values.
+        Assert.Equal("Ok", verdict.Reason.ToString());
         Assert.Equal(CopilotAuthReason.Ok, verdict.Reason);
     }
 

@@ -260,10 +260,18 @@ public class FileSystemCopilotInspectionWriterTests : IDisposable
         var freshFile = Path.Combine(prDir, $"{freshTs}-001-page-1-review-prompt.md");
         await File.WriteAllTextAsync(freshFile, "fresh content");
 
+        // Sentinel old file in a sibling subdir — its deletion is the observable signal
+        // that cleanup has completed, avoiding flaky fixed Task.Delay waits (fast CI
+        // would waste the delay; slow CI might not have started cleanup yet).
+        var sentinelDir = Path.Combine(_tempDir, "pr-2-sentinel");
+        Directory.CreateDirectory(sentinelDir);
+        var sentinel = Path.Combine(sentinelDir, "20260412-000000-000-001-prompt.md");
+        await File.WriteAllTextAsync(sentinel, "sentinel");
+
         _ = CreateWriter();
 
-        // Wait briefly for cleanup to complete; assert file still exists.
-        await Task.Delay(300);
+        Assert.True(await WaitForAsync(() => !File.Exists(sentinel)),
+            "Sentinel old file should have been removed — cleanup did not run");
         Assert.True(File.Exists(freshFile), "Fresh file should be preserved");
     }
 
@@ -309,9 +317,17 @@ public class FileSystemCopilotInspectionWriterTests : IDisposable
         Directory.CreateDirectory(prDir);
         // No files inside — simulates the moment after CreateDirectory but before WriteAllText.
 
+        // Sentinel old file in a sibling subdir — its deletion signals cleanup has run,
+        // so we assert preservation on a completed cleanup rather than on a fixed wait.
+        var sentinelDir = Path.Combine(_tempDir, "pr-5-sentinel");
+        Directory.CreateDirectory(sentinelDir);
+        var sentinel = Path.Combine(sentinelDir, "20260412-000000-000-001-prompt.md");
+        await File.WriteAllTextAsync(sentinel, "sentinel");
+
         _ = CreateWriter();
 
-        await Task.Delay(300);
+        Assert.True(await WaitForAsync(() => !File.Exists(sentinel)),
+            "Sentinel old file should have been removed — cleanup did not run");
         Assert.True(Directory.Exists(prDir),
             "Brand-new empty subdir (no prior files) must not be touched by cleanup");
     }

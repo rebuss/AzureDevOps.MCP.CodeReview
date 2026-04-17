@@ -11,7 +11,23 @@ namespace REBUSS.Pure.Services.CopilotReview;
 /// with a <see cref="CopilotSessionHandle"/> adapter so <c>REBUSS.Pure.Core</c>
 /// never depends on the concrete <see cref="CopilotSession"/> type. Per research.md Decision 8.
 /// <para>
-/// Phase 2 skeleton — the real body arrives in T019a (US1 Phase 3).
+/// <b>Thread-safety:</b> <see cref="CreateSessionAsync"/> is safe to call concurrently
+/// and is in fact called that way by <c>CopilotReviewOrchestrator</c> (parallel page
+/// batches). Reasoning, in order of the call:
+/// <list type="bullet">
+///   <item><see cref="ICopilotClientProvider.TryEnsureStartedAsync"/> is already
+///   internally serialized by a <c>SemaphoreSlim</c> gate (see
+///   <c>CopilotClientProvider._startGate</c> and its double-check pattern).</item>
+///   <item><see cref="ICopilotClientProvider.Client"/> is a <c>volatile</c> field read,
+///   published once by the gate-holder — concurrent getters observe a stable reference.</item>
+///   <item>This class carries no mutable instance state — the method body builds a fresh
+///   <see cref="SessionConfig"/> on the stack; no shared fields are mutated.</item>
+///   <item><see cref="CopilotRequestThrottle.WaitAsync"/> serializes the 3-second outbound
+///   spacing but does not itself require sequential callers.</item>
+///   <item>The SDK call <see cref="CopilotClient.CreateSessionAsync(SessionConfig,CancellationToken)"/>
+///   is the only remaining boundary; we rely on it being concurrency-safe (which matches
+///   observed production behaviour under parallel page dispatch).</item>
+/// </list>
 /// </para>
 /// </summary>
 internal sealed class CopilotSessionFactory : ICopilotSessionFactory

@@ -1,9 +1,17 @@
+using System.Text.RegularExpressions;
 using REBUSS.Pure.RoslynProcessor;
 
 namespace REBUSS.Pure.RoslynProcessor.Tests;
 
 public class DiffParserTests
 {
+    // Unified-diff hunk header: `@@ -a[,b] +c[,d] @@` — the counts are optional per
+    // RFC. Omitting them implies 1. Mirrors the regex in REBUSS.Pure.GitHub's
+    // GitHubPatchHunkParser for consistency.
+    private static readonly Regex HunkHeaderRegex = new(
+        @"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@",
+        RegexOptions.Compiled);
+
     [Fact]
     public void TryParseFilePath_ValidDiff_ReturnsPath()
     {
@@ -127,13 +135,14 @@ public class DiffParserTests
         foreach (var line in diff.Split('\n'))
         {
             var trimmed = line.TrimEnd('\r');
-            if (!trimmed.StartsWith("@@ ")) continue;
-            // Format: @@ -a,b +c,d @@
-            var parts = trimmed.Split(' ');
-            // parts[0] = "@@", parts[1] = "-a,b", parts[2] = "+c,d", parts[3] = "@@"
-            var minus = parts[1].TrimStart('-').Split(',');
-            var plus = parts[2].TrimStart('+').Split(',');
-            headers.Add((int.Parse(minus[0]), int.Parse(minus[1]), int.Parse(plus[0]), int.Parse(plus[1])));
+            var m = HunkHeaderRegex.Match(trimmed);
+            if (!m.Success) continue;
+            // Counts default to 1 when omitted (e.g. `@@ -5 +5 @@`).
+            headers.Add((
+                int.Parse(m.Groups[1].Value),
+                m.Groups[2].Success ? int.Parse(m.Groups[2].Value) : 1,
+                int.Parse(m.Groups[3].Value),
+                m.Groups[4].Success ? int.Parse(m.Groups[4].Value) : 1));
         }
         return headers;
     }

@@ -160,6 +160,173 @@ public class CopilotReviewOrchestratorTests
     }
 
     [Fact]
+    public async Task TriggerReview_AfterRetentionExpired_EvictsOldJobAndRunsAgain()
+    {
+        // Regression: jobs must be pruned from `_jobs` after their TTL expires, otherwise
+        // the dictionary grows unboundedly in long-running MCP servers. The TTL is
+        // configured via CopilotReviewOptions.JobRetentionMinutes.
+        var reviewer = Substitute.For<ICopilotPageReviewer>();
+        reviewer.ReviewPageAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(ci => Task.FromResult(CopilotPageReviewResult.Success(ci.Arg<int>(), "ok", 1)));
+
+        var lifetime = Substitute.For<IHostApplicationLifetime>();
+        lifetime.ApplicationStopping.Returns(CancellationToken.None);
+        var orchestrator = new CopilotReviewOrchestrator(
+            reviewer,
+            BuildAllocator(),
+            // Very short retention — test triggers, waits, then re-triggers and expects the
+            // old job to be swept (new SDK calls on the second trigger).
+            Options.Create(new CopilotReviewOptions
+            {
+                ReviewBudgetTokens = 128_000,
+                JobRetentionMinutes = 1,
+            }),
+            lifetime,
+            NullLogger<CopilotReviewOrchestrator>.Instance);
+
+        orchestrator.TriggerReview("pr:42", BuildEnrichment());
+        _ = await orchestrator.WaitForReviewAsync("pr:42", CancellationToken.None);
+
+        // Rewind CompletedAt to force the sweep to consider the job stale.
+        var jobsField = typeof(CopilotReviewOrchestrator)
+            .GetField("_jobs", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+        var jobs = (System.Collections.IDictionary)jobsField.GetValue(orchestrator)!;
+        var job = jobs["pr:42"]!;
+        var completedAtProp = job.GetType().GetProperty("CompletedAt")!;
+        completedAtProp.SetValue(job, DateTimeOffset.UtcNow.AddMinutes(-10));
+
+        orchestrator.TriggerReview("pr:42", BuildEnrichment()); // should trigger sweep + new job
+        _ = await orchestrator.WaitForReviewAsync("pr:42", CancellationToken.None);
+
+        // 2 pages per trigger × 2 triggers = 4 SDK calls (sweep evicted the old job, so
+        // the second TriggerReview was NOT idempotent-skipped).
+        await reviewer.Received(4).ReviewPageAsync(
+            Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task TriggerReview_RetentionDisabled_NeverEvicts()
+    {
+        // JobRetentionMinutes = 0 disables the sweep (opt-in retention for tests /
+        // short-lived processes). Even with an "old" CompletedAt, the job survives.
+        var reviewer = Substitute.For<ICopilotPageReviewer>();
+        reviewer.ReviewPageAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(ci => Task.FromResult(CopilotPageReviewResult.Success(ci.Arg<int>(), "ok", 1)));
+
+        var lifetime = Substitute.For<IHostApplicationLifetime>();
+        lifetime.ApplicationStopping.Returns(CancellationToken.None);
+        var orchestrator = new CopilotReviewOrchestrator(
+            reviewer,
+            BuildAllocator(),
+            Options.Create(new CopilotReviewOptions
+            {
+                ReviewBudgetTokens = 128_000,
+                JobRetentionMinutes = 0, // disabled
+            }),
+            lifetime,
+            NullLogger<CopilotReviewOrchestrator>.Instance);
+
+        orchestrator.TriggerReview("pr:42", BuildEnrichment());
+        _ = await orchestrator.WaitForReviewAsync("pr:42", CancellationToken.None);
+
+        // Rewind CompletedAt — should still NOT evict because retention is disabled.
+        var jobsField = typeof(CopilotReviewOrchestrator)
+            .GetField("_jobs", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+        var jobs = (System.Collections.IDictionary)jobsField.GetValue(orchestrator)!;
+        var job = jobs["pr:42"]!;
+        var completedAtProp = job.GetType().GetProperty("CompletedAt")!;
+        completedAtProp.SetValue(job, DateTimeOffset.UtcNow.AddDays(-30));
+
+        orchestrator.TriggerReview("pr:42", BuildEnrichment()); // idempotent — nothing happens
+        _ = await orchestrator.WaitForReviewAsync("pr:42", CancellationToken.None);
+
+        // Only one set of SDK calls (2 pages) — second trigger was a no-op.
+        await reviewer.Received(2).ReviewPageAsync(
+            Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task DisposeAsync_NoJobsInFlight_CompletesImmediately()
+    {
+        // Empty job dictionary path — nothing to await, should return instantly.
+        var reviewer = Substitute.For<ICopilotPageReviewer>();
+        var orchestrator = Create(reviewer);
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        await orchestrator.DisposeAsync();
+        sw.Stop();
+
+        Assert.True(sw.ElapsedMilliseconds < 500,
+            $"DisposeAsync with no jobs should return quickly, took {sw.ElapsedMilliseconds}ms");
+    }
+
+    [Fact]
+    public async Task DisposeAsync_CompletedJob_AwaitsTaskHandleAndReturns()
+    {
+        // Completed job — BackgroundTask is already finished, DisposeAsync awaits a
+        // completed Task and returns.
+        var reviewer = Substitute.For<ICopilotPageReviewer>();
+        reviewer.ReviewPageAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(ci => Task.FromResult(CopilotPageReviewResult.Success(ci.Arg<int>(), "ok", 1)));
+
+        var orchestrator = Create(reviewer);
+        orchestrator.TriggerReview("pr:42", BuildEnrichment());
+        _ = await orchestrator.WaitForReviewAsync("pr:42", CancellationToken.None);
+
+        await orchestrator.DisposeAsync(); // should not hang / throw
+    }
+
+    [Fact]
+    public async Task DisposeAsync_InFlightJobCancelledByShutdown_DrainsWithinTimeout()
+    {
+        // Regression: before adding IAsyncDisposable + BackgroundTask handle, the host
+        // could terminate before the body's catch(OCE) branch ran, dropping in-flight
+        // reviews silently. Now shutdown awaits the drain (capped) so graceful cancellation
+        // actually finishes.
+        var shutdownCts = new CancellationTokenSource();
+        var lifetime = Substitute.For<IHostApplicationLifetime>();
+        lifetime.ApplicationStopping.Returns(shutdownCts.Token);
+
+        var gate = new TaskCompletionSource<CopilotPageReviewResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var reviewer = Substitute.For<ICopilotPageReviewer>();
+        reviewer.ReviewPageAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(ci =>
+            {
+                // Honor cancellation: unblock with OCE when shutdownCts fires.
+                var token = ci.Arg<CancellationToken>();
+                return Task.Run(async () =>
+                {
+                    using var reg = token.Register(() => gate.TrySetCanceled(token));
+                    return await gate.Task;
+                });
+            });
+
+        var orchestrator = new CopilotReviewOrchestrator(
+            reviewer,
+            BuildAllocator(),
+            Options.Create(new CopilotReviewOptions { ReviewBudgetTokens = 128_000 }),
+            lifetime,
+            NullLogger<CopilotReviewOrchestrator>.Instance);
+
+        orchestrator.TriggerReview("pr:42", BuildEnrichment());
+
+        // Simulate host shutdown: ApplicationStopping fires → body observes cancellation.
+        shutdownCts.Cancel();
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        await orchestrator.DisposeAsync();
+        sw.Stop();
+
+        // Drain completes well within the 5s cap because cancellation propagates immediately.
+        Assert.True(sw.ElapsedMilliseconds < 4000,
+            $"DisposeAsync should drain promptly after shutdown, took {sw.ElapsedMilliseconds}ms");
+
+        // Pending waiter sees cancellation surfaced (not a hang).
+        var waitTask = orchestrator.WaitForReviewAsync("pr:42", CancellationToken.None);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => waitTask);
+    }
+
+    [Fact]
     public async Task TriggerReview_EmptyAllocation_ReturnsEmptyResult()
     {
         var reviewer = Substitute.For<ICopilotPageReviewer>();
@@ -313,35 +480,52 @@ public class CopilotReviewOrchestratorTests
     [Fact]
     public async Task TriggerReview_MultiplePages_ExecutesConcurrently()
     {
-        // Each page review takes ~200ms. With 3 pages sequential that would be ≥600ms.
-        // Parallel dispatch should complete in roughly ~200ms (+scheduling overhead).
-        const int pageDelayMs = 200;
+        // Structural parallelism assertion — observes peak concurrent-call count,
+        // NOT wall-clock duration. Timing-based variants ("parallel < sequentialMs")
+        // flake on loaded CI where scheduling jitter or a single slow Task.Delay can
+        // push the total past the threshold even though dispatch was parallel.
         const int pageCount = 3;
+
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var allPagesInFlight = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var countLock = new object();
+        var concurrentCalls = 0;
+        var peakConcurrency = 0;
 
         var reviewer = Substitute.For<ICopilotPageReviewer>();
         reviewer.ReviewPageAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(async ci =>
             {
-                await Task.Delay(pageDelayMs);
+                lock (countLock)
+                {
+                    concurrentCalls++;
+                    if (concurrentCalls > peakConcurrency)
+                        peakConcurrency = concurrentCalls;
+                    if (concurrentCalls == pageCount)
+                        allPagesInFlight.TrySetResult();
+                }
+
+                // Block every call here until the test releases the gate — guarantees
+                // that only genuinely concurrent dispatch can reach the pageCount peak.
+                await gate.Task;
+
+                lock (countLock) { concurrentCalls--; }
                 return CopilotPageReviewResult.Success(ci.Arg<int>(), "ok", 1);
             });
 
         var orchestrator = Create(reviewer, BuildAllocator(numberOfPages: pageCount));
-        var sw = System.Diagnostics.Stopwatch.StartNew();
-
         orchestrator.TriggerReview("pr:42", BuildEnrichment(fileCount: 6));
-        var result = await orchestrator.WaitForReviewAsync("pr:42", CancellationToken.None);
 
-        sw.Stop();
+        // THE assertion — with a generous timeout, this either fires because all pages
+        // reached the reviewer simultaneously or times out because dispatch was serial.
+        await allPagesInFlight.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        gate.SetResult();
+        var result = await orchestrator.WaitForReviewAsync("pr:42", CancellationToken.None);
 
         Assert.Equal(pageCount, result.TotalPages);
         Assert.Equal(pageCount, result.SucceededPages);
-
-        // Sequential would take ≥ pageCount × pageDelayMs = 600ms.
-        // Parallel should be well under that threshold.
-        var sequentialMinMs = pageCount * pageDelayMs;
-        Assert.True(sw.ElapsedMilliseconds < sequentialMinMs,
-            $"Expected parallel execution under {sequentialMinMs}ms, but took {sw.ElapsedMilliseconds}ms");
+        Assert.Equal(pageCount, peakConcurrency);
     }
 
     [Fact]
