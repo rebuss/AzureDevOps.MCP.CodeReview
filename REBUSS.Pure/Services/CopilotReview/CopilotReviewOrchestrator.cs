@@ -202,7 +202,8 @@ internal sealed class CopilotReviewOrchestrator : ICopilotReviewOrchestrator, IA
             }
 
             // Dispatch pages in batches of MaxConcurrentPages. Within a batch,
-            // CopilotRequestThrottle (3-second SemaphoreSlim gate) serializes the outgoing
+            // CopilotRequestThrottle (SemaphoreSlim gate, spacing configured via
+            // CopilotReviewOptions.MinRequestIntervalSeconds) serializes the outgoing
             // SDK calls; we then await every batch before starting the next one. This caps
             // the number of simultaneously in-flight Copilot requests — the GitHub backend
             // rate-limits larger fan-outs and silently re-queues the overflow, which

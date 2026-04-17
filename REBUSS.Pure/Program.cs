@@ -189,6 +189,7 @@ namespace REBUSS.Pure
             services.AddSingleton<CopilotClientProvider>();
             services.AddSingleton<ICopilotClientProvider>(sp => sp.GetRequiredService<CopilotClientProvider>());
             services.AddHostedService(sp => sp.GetRequiredService<CopilotClientProvider>());
+            services.AddSingleton<CopilotRequestThrottle>();
             services.AddSingleton<ICopilotSessionFactory, CopilotSessionFactory>();
             services.AddSingleton<ICopilotAvailabilityDetector, CopilotAvailabilityDetector>();
             services.AddSingleton<ICopilotPageReviewer, CopilotPageReviewer>();

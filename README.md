@@ -174,6 +174,33 @@ This will:
 
 When `gh copilot` is available and the `CopilotReview.Enabled` switch is on, the MCP server performs large-PR reviews server-side via the Copilot SDK: each page of enriched diff is reviewed in parallel by Copilot, and the IDE agent receives compact review summaries to organize by severity — instead of walking raw diff content page by page through the conversation window.
 
+**Throttling & parallelism** — two knobs control how the MCP server drains a multi-page review against the Copilot rate limit:
+
+- `MaxConcurrentPages` — how many review pages run in parallel per batch (default `6`).
+- `MinRequestIntervalSeconds` — minimum spacing between outbound Copilot SDK calls, in seconds (default `3`). Set to `0` to disable (tests only).
+
+Set them in the `env` block of your **`mcp.json`** — the same file `rebuss-pure init` generated (typically `.vscode/mcp.json`, `.vs/mcp.json`, or `~/.copilot/mcp-config.json`). The MCP client passes `env` to the server process on launch, and REBUSS.Pure reads `CopilotReview:*` keys from environment variables using the standard `__` (double-underscore) separator:
+
+```json
+{
+  "servers": {
+    "REBUSS.Pure": {
+      "type": "stdio",
+      "command": "rebuss-pure",
+      "args": ["--repo", "C:\\path\\to\\repo"],
+      "env": {
+        "CopilotReview__MaxConcurrentPages": "4",
+        "CopilotReview__MinRequestIntervalSeconds": "2"
+      }
+    }
+  }
+}
+```
+
+Restart the MCP server (reload the IDE, or re-open the chat session) so the new `env` values are picked up.
+
+See [DeveloperGuide.md — Copilot Review Layer](DeveloperGuide.md#copilot-review-layer-feature-013) for the full config table, the alternative `appsettings.json` location, and tuning guidance.
+
 ### Global mode (`-g`)
 
 If Visual Studio does not detect the local `.vs/mcp.json` file in your repository, use the global flag:

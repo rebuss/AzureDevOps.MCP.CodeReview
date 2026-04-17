@@ -56,21 +56,71 @@ summarization drops earlier findings" problem on large PRs.
   organizes findings by severity and does NOT prompt the user page-by-page.
 - `[review-mode: content-only]` — the existing enriched-diff flow. Unchanged behavior.
 
-**Configuration** (`appsettings.json`):
-
-```json
-"CopilotReview": {
-  "Enabled": true,
-  "ReviewBudgetTokens": 128000,
-  "Model": "claude-sonnet-4.6"
-}
-```
+**Configuration keys** — every key below lives under the `CopilotReview` section:
 
 | Key | Default | Meaning |
 |---|---|---|
 | `Enabled` | `true` | Master switch. `false` forces content-only mode regardless of Copilot availability. |
 | `ReviewBudgetTokens` | `128000` | Per-call Copilot context budget. Used to re-paginate the enrichment result into Copilot-sized pages. |
 | `Model` | `"claude-sonnet-4.6"` | Copilot model passed to `SessionConfig.Model`. If the SDK rejects this string, check `client.ListModelsAsync()` output. |
+| `MaxConcurrentPages` | `6` | Upper bound on how many pages the orchestrator dispatches to Copilot in parallel per batch. Values `< 1` are clamped to `1`. Raise cautiously — the Copilot backend silently re-queues fan-outs above its per-client limit, which can double wall-clock time. |
+| `MinRequestIntervalSeconds` | `3` | Minimum spacing between successive outbound Copilot SDK calls (`CreateSessionAsync` / `SendAsync`), enforced by a process-wide gate. Combines with `MaxConcurrentPages` to shape throughput: the batch size controls fan-out width, this interval controls request rate. Set to `0` to disable (tests only). |
+
+**How to set them — `mcp.json` (recommended)**
+
+When installed as a `dotnet tool`, REBUSS.Pure runs from the tool shim directory and the AI-chat host launches it from `mcp.json`. The cleanest way to pass config is the `env` block of the same `mcp.json` that `rebuss-pure init` wrote — typically one of:
+
+- `.vscode/mcp.json` (VS Code, repo-local)
+- `.vs/mcp.json` (Visual Studio, repo-local)
+- `~/.copilot/mcp-config.json` (Copilot CLI)
+- `~/.mcp.json` or `%APPDATA%\Code\User\mcp.json` (global mode — `rebuss-pure init -g`)
+
+REBUSS.Pure reads environment variables using .NET's standard `__` (double-underscore) → `:` mapping, so `CopilotReview__MaxConcurrentPages` binds to `CopilotReview:MaxConcurrentPages`:
+
+```json
+{
+  "servers": {
+    "REBUSS.Pure": {
+      "type": "stdio",
+      "command": "rebuss-pure",
+      "args": ["--repo", "C:\\path\\to\\repo"],
+      "env": {
+        "CopilotReview__MaxConcurrentPages": "4",
+        "CopilotReview__MinRequestIntervalSeconds": "2"
+      }
+    }
+  }
+}
+```
+
+Reload the IDE (or restart the chat session) after editing `mcp.json` — the MCP client spawns a fresh server process and the new `env` takes effect.
+
+**Alternative — `appsettings.json` (advanced)**
+
+`appsettings.json` is loaded from the tool's install directory (`AppContext.BaseDirectory`), not from the repo. For a `dotnet tool install -g CodeReview.MCP` the file lives at:
+
+- **Windows:** `%USERPROFILE%\.dotnet\tools\.store\codereview.mcp\<VERSION>\codereview.mcp\<VERSION>\tools\net10.0\any\appsettings.json`
+- **Linux/macOS:** `~/.dotnet/tools/.store/codereview.mcp/<VERSION>/codereview.mcp/<VERSION>/tools/net10.0/any/appsettings.json`
+
+This path is **version-scoped** — every `dotnet tool update -g CodeReview.MCP` installs a new version alongside the old one and your edits do not carry forward. Prefer `mcp.json` `env` unless you are running a repo-local dev build where `appsettings.json` sits next to the binary. Either way the schema is the same:
+
+```json
+"CopilotReview": {
+  "Enabled": true,
+  "ReviewBudgetTokens": 128000,
+  "Model": "claude-sonnet-4.6",
+  "MaxConcurrentPages": 6,
+  "MinRequestIntervalSeconds": 3
+}
+```
+
+**Tuning throughput**: `MaxConcurrentPages` and `MinRequestIntervalSeconds` are the two knobs
+that shape how fast the orchestrator drains a multi-page review against the Copilot rate
+limit. Values are re-read from config on every SDK call (hot-reload from `appsettings.json`
+works without a server restart; changes to `mcp.json` `env` require reloading the IDE so the
+child process is respawned). Lowering the interval (e.g. `1.5`) speeds up small PRs but
+risks transient 429s on larger ones; raising concurrency past the default `6` rarely helps
+and often hurts, because the backend re-queues the excess silently.
 
 **Retry**: each page review is attempted up to **3 times** before giving up. Retries fire
 immediately (no backoff). On exhaustion, the response still succeeds and carries a

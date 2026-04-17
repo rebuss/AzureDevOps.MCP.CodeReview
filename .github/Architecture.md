@@ -574,17 +574,20 @@ restart.
 of enriched content. Pages are dispatched **in batches** (`CopilotReviewOptions.MaxConcurrentPages`,
 default 6): for each batch the orchestrator launches one `Task.Run` per page,
 awaits `Task.WhenAll` on the batch, then starts the next batch. Within a batch
-the `CopilotRequestThrottle` (a static `SemaphoreSlim(1,1)` with a 3-second
-minimum spacing) still serializes the actual SDK calls so model response wait
-times overlap across the 6 pages.
+the `CopilotRequestThrottle` (a DI singleton `SemaphoreSlim(1,1)` with minimum
+spacing controlled by `CopilotReviewOptions.MinRequestIntervalSeconds`, default
+3 s) still serializes the actual SDK calls so model response wait times overlap
+across the 6 pages. The interval is read from `IOptions<CopilotReviewOptions>`
+on each call, so `appsettings.json` hot-reload takes effect without a restart
+(Principle V); setting it to `0` disables the throttle (tests only).
 
 The batch gate exists because the GitHub Copilot backend rate-limits larger
 fan-outs and silently re-queues the overflow — without the cap a 12-page review
 does not finish twice as fast as a 6-page one; the second 6 pages sit in a
 backend queue until the first 6 drain, roughly doubling wall-clock time. With
 the cap the orchestrator pays that drain explicitly and predictably between
-batches. Wall-time is roughly `⌈N / MaxConcurrentPages⌉ × (3s × (B-1) + max(response_time))`
-where `B = min(MaxConcurrentPages, remaining pages)`.
+batches. Wall-time is roughly `⌈N / MaxConcurrentPages⌉ × (S × (B-1) + max(response_time))`
+where `B = min(MaxConcurrentPages, remaining pages)` and `S = MinRequestIntervalSeconds`.
 
 ### Thread safety
 

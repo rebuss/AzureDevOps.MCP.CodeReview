@@ -93,6 +93,16 @@ public sealed class CopilotReviewOptions
     public int MaxConcurrentPages { get; set; } = 6;
 
     /// <summary>
+    /// Minimum spacing, in seconds, between successive outbound Copilot SDK requests
+    /// (<c>CreateSessionAsync</c> and <c>SendAsync</c>). Enforced by
+    /// <c>CopilotRequestThrottle</c> via a process-wide semaphore + timestamp gate so
+    /// that a parallel page batch (see <see cref="MaxConcurrentPages"/>) does not burst
+    /// the GitHub Copilot backend's per-client rate limit. Values &lt; 0 are clamped to
+    /// <c>0</c> (no throttling — use only in tests). Default <c>3</c>.
+    /// </summary>
+    public double MinRequestIntervalSeconds { get; set; } = 3.0;
+
+    /// <summary>
     /// How long a completed / failed / cancelled review job is retained in the orchestrator's
     /// in-memory dictionary before it is swept. Without this cap, a long-running MCP server
     /// accumulates one job entry (plus its <c>CopilotReviewResult</c>, page texts, and task

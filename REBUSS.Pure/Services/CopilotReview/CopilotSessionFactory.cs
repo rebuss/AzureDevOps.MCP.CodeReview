@@ -22,8 +22,9 @@ namespace REBUSS.Pure.Services.CopilotReview;
 ///   published once by the gate-holder — concurrent getters observe a stable reference.</item>
 ///   <item>This class carries no mutable instance state — the method body builds a fresh
 ///   <see cref="SessionConfig"/> on the stack; no shared fields are mutated.</item>
-///   <item><see cref="CopilotRequestThrottle.WaitAsync"/> serializes the 3-second outbound
-///   spacing but does not itself require sequential callers.</item>
+///   <item><see cref="CopilotRequestThrottle.WaitAsync"/> serializes the outbound spacing
+///   (configurable via <see cref="CopilotReviewOptions.MinRequestIntervalSeconds"/>)
+///   but does not itself require sequential callers.</item>
 ///   <item>The SDK call <see cref="CopilotClient.CreateSessionAsync(SessionConfig,CancellationToken)"/>
 ///   is the only remaining boundary; we rely on it being concurrency-safe (which matches
 ///   observed production behaviour under parallel page dispatch).</item>
@@ -34,15 +35,18 @@ internal sealed class CopilotSessionFactory : ICopilotSessionFactory
 {
     private readonly ICopilotClientProvider _provider;
     private readonly IOptions<CopilotReviewOptions> _options;
+    private readonly CopilotRequestThrottle _throttle;
     private readonly ILogger<CopilotSessionFactory> _logger;
 
     public CopilotSessionFactory(
         ICopilotClientProvider provider,
         IOptions<CopilotReviewOptions> options,
+        CopilotRequestThrottle throttle,
         ILogger<CopilotSessionFactory> logger)
     {
         _provider = provider;
         _options = options;
+        _throttle = throttle;
         _logger = logger;
     }
 
@@ -77,9 +81,9 @@ internal sealed class CopilotSessionFactory : ICopilotSessionFactory
             Streaming = false,
         };
 
-        await CopilotRequestThrottle.WaitAsync(ct).ConfigureAwait(false);
+        await _throttle.WaitAsync(ct).ConfigureAwait(false);
         var session = await client.CreateSessionAsync(config, ct).ConfigureAwait(false);
-        return new CopilotSessionHandle(session, client, _logger);
+        return new CopilotSessionHandle(session, client, _throttle, _logger);
     }
 }
 
@@ -95,18 +99,20 @@ internal sealed class CopilotSessionHandle : ICopilotSessionHandle
 {
     private readonly CopilotSession _session;
     private readonly CopilotClient _client;
+    private readonly CopilotRequestThrottle _throttle;
     private readonly ILogger _logger;
 
-    public CopilotSessionHandle(CopilotSession session, CopilotClient client, ILogger logger)
+    public CopilotSessionHandle(CopilotSession session, CopilotClient client, CopilotRequestThrottle throttle, ILogger logger)
     {
         _session = session;
         _client = client;
+        _throttle = throttle;
         _logger = logger;
     }
 
     public async Task<string> SendAsync(string prompt, CancellationToken ct)
     {
-        await CopilotRequestThrottle.WaitAsync(ct).ConfigureAwait(false);
+        await _throttle.WaitAsync(ct).ConfigureAwait(false);
         return await _session.SendAsync(new MessageOptions { Prompt = prompt }, ct).ConfigureAwait(false);
     }
 
