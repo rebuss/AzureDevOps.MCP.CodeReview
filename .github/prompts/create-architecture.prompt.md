@@ -73,7 +73,7 @@ Read these files **in full** to understand internal mechanics — don't summariz
 
 While reading the code above, pay special attention to and document:
 
-1. **Why interface forwarding?** — `IScmClient` extends `IPullRequestDataProvider` + `IFileContentDataProvider`; tool handlers depend on narrow interfaces; why this decomposition?
+1. **Why interface forwarding?** — `IScmClient` extends `IPullRequestDataProvider` + `IRepositoryArchiveProvider`; tool handlers depend on narrow interfaces; why this decomposition?
 2. **Why one provider per process?** — `DetectProvider` selects once; no runtime switching. What's the design rationale?
 3. **Why `IPostConfigureOptions` for config resolution?** — why not resolve in constructor? What does the lazy pattern buy?
 4. **Why fine-grained providers instead of one big class?** — SRP, testability, but also: how do they share data (e.g. diff provider data reused by files provider)?
@@ -126,7 +126,7 @@ WHY this layering: testability, SRP, data sharing between providers.
 Concrete example: how FilesProvider reuses DiffProvider's output.]
 
 ### Interface Forwarding & Narrow Dependencies
-[IScmClient extends IPullRequestDataProvider + IFileContentDataProvider.
+[IScmClient extends IPullRequestDataProvider + IRepositoryArchiveProvider.
 Tool handlers depend on narrow interfaces. ServiceCollectionExtensions registers 
 facade + forwards. WHY: tool handlers don't need to know which provider is active.]
 

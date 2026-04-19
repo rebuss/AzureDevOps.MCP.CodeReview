@@ -118,10 +118,22 @@ public partial class GitRemoteDetector : IGitRemoteDetector
         process.Start();
         process.StandardInput.Close();
 
-        var output = process.StandardOutput.ReadToEnd();
-        process.WaitForExit(TimeSpan.FromSeconds(5));
+        // Drain BOTH pipes asynchronously before waiting for exit. If the child writes
+        // more than the pipe buffer (~4 KB on Windows) to a stream nobody is reading,
+        // it blocks forever and WaitForExit has to kill it by timeout. `git remote
+        // get-url origin` is small enough today, but the shape of this code is load-
+        // bearing for any copy-paste that swaps the command.
+        var stdoutTask = Task.Run(() => process.StandardOutput.ReadToEnd());
+        var stderrTask = Task.Run(() => process.StandardError.ReadToEnd());
 
-        return process.ExitCode == 0 ? output.Trim() : null;
+        if (!process.WaitForExit(TimeSpan.FromSeconds(5)))
+        {
+            try { process.Kill(entireProcessTree: true); } catch { }
+            return null;
+        }
+
+        Task.WaitAll(stdoutTask, stderrTask);
+        return process.ExitCode == 0 ? stdoutTask.Result.Trim() : null;
     }
 
     /// <summary>
@@ -163,7 +175,8 @@ public partial class GitRemoteDetector : IGitRemoteDetector
 
         while (dir is not null)
         {
-            if (Directory.Exists(Path.Combine(dir.FullName, ".git")))
+            var gitPath = Path.Combine(dir.FullName, ".git");
+            if (Directory.Exists(gitPath) || File.Exists(gitPath))
                 return dir.FullName;
 
             dir = dir.Parent;

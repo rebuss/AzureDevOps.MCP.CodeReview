@@ -60,12 +60,10 @@ public class GitHubScmClientTests
             _apiClient, changesParser, fileClassifier,
             NullLogger<GitHubFilesProvider>.Instance);
 
-        var contentProvider = new GitHubFileContentProvider(
-            _apiClient,
-            NullLogger<GitHubFileContentProvider>.Instance);
+        var archiveProvider = new GitHubRepositoryArchiveProvider(_apiClient);
 
         _client = new GitHubScmClient(
-            diffProvider, metadataProvider, filesProvider, contentProvider, options);
+            diffProvider, metadataProvider, filesProvider, archiveProvider, options);
     }
 
     [Fact]
@@ -150,14 +148,4 @@ public class GitHubScmClientTests
         Assert.True(files.Files.Count > 0);
     }
 
-    [Fact]
-    public async Task GetFileContentAsync_DelegatesToContentProvider()
-    {
-        _apiClient.GetFileContentAtRefAsync("main", "README.md").Returns("# Project");
-
-        var content = await _client.GetFileContentAsync("README.md", "main");
-
-        Assert.Equal("# Project", content.Content);
-        Assert.Equal("README.md", content.Path);
-    }
 }

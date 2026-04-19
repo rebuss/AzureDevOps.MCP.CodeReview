@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using REBUSS.Pure.Core.Models;
@@ -175,7 +176,7 @@ public class GitHubPullRequestParser : IGitHubPullRequestParser
         if (element.TryGetProperty(property, out var p) && p.ValueKind == JsonValueKind.String)
         {
             var str = p.GetString();
-            if (DateTime.TryParse(str, out var dt))
+            if (DateTime.TryParse(str, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dt))
                 return dt;
         }
         return fallback;
@@ -189,7 +190,7 @@ public class GitHubPullRequestParser : IGitHubPullRequestParser
         if (p.ValueKind == JsonValueKind.String)
         {
             var str = p.GetString();
-            if (DateTime.TryParse(str, out var dt))
+            if (DateTime.TryParse(str, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dt))
                 return dt;
         }
         return null;

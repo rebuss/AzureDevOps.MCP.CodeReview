@@ -65,6 +65,10 @@ public class AzureCliTokenProviderTests
 
         Assert.NotNull(result);
         Assert.Equal("test-token", result.AccessToken);
+        // Verify parsed date is within 1 second of the expected value
+        Assert.True(
+            Math.Abs((result.ExpiresOn - expiresOn).TotalSeconds) < 1,
+            $"ExpiresOn should be close to {expiresOn:O} but was {result.ExpiresOn:O}");
     }
 
     [Fact]

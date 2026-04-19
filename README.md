@@ -2,105 +2,134 @@
   <img src="REBUSS.Pure.png" alt="REBUSS.Pure" />
 </p>
 
-# 🚀 REBUSS.Pure – AI Code Review That Focuses Only on What Matters
+# CodeReview.MCP
 
-**Stop sending irrelevant code to AI.**  
-Send only the *right context* — and understand Pull Requests faster.
+Context-aware code review engine designed to support Github Copilot on large, real-world pull requests.
 
----
-
-## 💡 What is this?
-
-`REBUSS.Pure` is a lightweight MCP server that enables AI agents (GitHub Copilot, ChatGPT, Claude) to perform **high-signal code reviews** by providing only the context that actually matters.
-
-Instead of overwhelming the model with your entire repository, REBUSS.Pure:
-
-- 🔍 analyzes **Azure DevOps and GitHub Pull Requests**
-- 📄 provides **only relevant code changes**
-- 🧠 enables **focused code review & self-review**
-- ⚡ delivers **minimal, high-signal context**
+> AI is not the bottleneck. Context is.
 
 ---
 
-## 🎯 Why this exists
+## What this is
 
-Most AI workflows today:
+CodeReview.MCP is a server that helps AI agents perform code review on large and messy repositories.
 
-- ❌ send too much code
-- ❌ drown the model in noise
-- ❌ produce generic, low-quality feedback
-
-REBUSS.Pure changes the approach:
-
-- ✅ sends **only relevant context**
-- ✅ reduces noise, not just tokens
-- ✅ helps AI focus on **what actually matters**
-
-👉 built for **real-world code review**, not demos
+It does not compete with AI tools like Github Copilot or Copilot CLI.  
+It acts as a support layer that prepares the problem for them.
 
 ---
 
-## 🧠 Core idea
+## The problem
 
-AI doesn’t need more code.  
-It needs the *right* code.
+AI-assisted code review works well for small, clean diffs.
 
-Instead of:
+It breaks down when:
 
-```
-❌ full repo → LLM
-```
+- pull requests are large
+- repositories are complex or messy
+- context does not fit into the model window
+- too much input creates noise instead of signal
+- important dependencies are missing
 
-You get:
-
-```
-LLM → MCP → high-signal context only
-```
+In real-world systems, this is the default case.
 
 ---
 
-## ✨ Key Features
+## What this project does differently
 
-- 🔹 Azure DevOps and GitHub Pull Request integration
-- 🔹 High-signal, diff-based AI context
-- 🔹 Local self-review (no network required)
-- 🔹 No repo cloning needed
-- 🔹 Incremental, on-demand data access
-- 🔹 Ready-to-use review prompts
-- 🔹 Works with any MCP-compatible agent
-- 🔹 Authentication via Azure CLI, GitHub CLI (`gh auth`), or PAT
-- 🔹 Auto-detects VS Code and Visual Studio
-- 🔹 Auto-detects provider from Git remote URL
+### 1. Designed for LARGE pull requests (and messy repositories)
 
----
+Primary focus.
 
-## 🔒 Security & Privacy
+- handles pull requests that exceed context window limits
+- works with multi-project and legacy-heavy repositories
+- tolerates inconsistent structure
+- does not assume clean architecture
 
-**Your source code never leaves your machine.**
-
-REBUSS.Pure runs as a **local process** on your workstation. It does not upload, store, or relay your code to any external service. The MCP server acts as a controlled gateway between your AI agent and the data it actually needs:
-
-- **Local processing only** — the server runs on `localhost`; no outbound code transmission occurs.
-- **Minimal data exposure** — the AI model receives only **relevant context**, not the full repository.
-- **Azure DevOps stays yours** — when fetching PR data, requests go directly to **your organization's** Azure DevOps APIs using **your credentials**. No intermediary services are involved.
-- **GitHub stays yours** — GitHub API requests go directly to `api.github.com` using **your personal access token**. No intermediary services are involved.
-- **Offline self-review** — local review (`#self-review`) operates entirely without network access. Git operations run against your local repository; nothing is sent anywhere.
-- **No telemetry, no tracking** — the server collects zero usage data and phones home to nobody.
-
-> **In short:** REBUSS.Pure gives AI agents *precise, scoped access* to exactly the context they need — and nothing more.
+Large and messy codebases are not edge cases — they are the baseline.
 
 ---
 
-## 🆚 Compared to typical AI workflows
+### 2. Offloads the hardest part from AI
 
-| Feature | REBUSS.Pure | Typical approach |
-|---------|-------------|------------------|
-| Context quality | High-signal | Noisy |
-| Context size | Minimal | Huge |
-| Token usage | Efficient | Wasteful |
-| Setup | 1 command | Complex |
-| Review quality | Focused | Generic |
-| Data privacy | Code stays local | Full repo sent to AI |
+This tool does the work AI is worst at:
+
+- selecting relevant context
+- structuring input
+- reducing noise
+- organizing review flow
+
+Instead of forcing the model to "figure things out",  
+CodeReview.MCP prepares the problem for it.
+
+---
+
+### 3. Context selection (not full dump)
+
+- sends only relevant fragments
+- expands context when needed
+- avoids redundancy
+
+---
+
+### 4. Token-aware processing
+
+- respects context limits
+- splits and paginates intelligently
+- keeps usage predictable
+
+---
+
+### 5. Deterministic review flow
+
+- metadata → file list → targeted analysis
+- avoids random exploration
+- enables repeatable results
+
+---
+
+## What this is NOT
+
+- not an AI model
+- not a replacement for Copilot
+- not a one-click review tool
+
+This is a control layer for AI agents.
+
+---
+
+## Core idea
+
+Better context → better reasoning → better review
+
+---
+
+## 🌐 Language Support
+
+High-signal context enrichment (scope detection, surrounding usings, call sites, language-aware classification) is currently implemented for **C#** only. Pull requests and local changes in other languages are still fully supported, but the AI agent receives them as **plain unified diffs** without language-specific enrichment.
+
+Planned (near-term):
+
+- C / C++
+- TypeScript / JavaScript
+- F#
+
+Contributions adding analyzers for additional languages are welcome — see `.github/ExtensionRecipes.md`.
+
+---
+
+## 🔒 Security
+
+CodeReview.MCP acts as a local orchestrator for GitHub Copilot. It runs as a local process on your workstation. 
+
+It does not introduce any external services or additional data flows.  
+All AI interactions are handled exclusively through GitHub Copilot, under the license and policies already approved by your organization.
+
+The MCP server runs locally and communicates only with:
+- your Git provider (Azure DevOps or GitHub)
+- GitHub Copilot (via your existing setup)
+
+No code or data is sent to any third-party services beyond what is already used by Copilot.
 
 ---
 
@@ -140,8 +169,37 @@ This will:
 - ✔ detect your IDE (VS Code → `.vscode/mcp.json`, Visual Studio → `.vs/mcp.json`)
 - ✔ generate MCP server configuration
 - ✔ copy review prompts to `.github/prompts/`
-- ✔ copy instruction files to `.github/instructions/` (for GitHub Copilot custom instructions)
 - ✔ authenticate via Azure CLI (opens browser for login) or accept a GitHub PAT
+- ✔ **optionally** set up GitHub Copilot CLI (`gh copilot` extension) for the enhanced, summarization-resilient review flow (declining is safe — existing tools still work)
+
+When `gh copilot` is available and the `CopilotReview.Enabled` switch is on, the MCP server performs large-PR reviews server-side via the Copilot SDK: each page of enriched diff is reviewed in parallel by Copilot, and the IDE agent receives compact review summaries to organize by severity — instead of walking raw diff content page by page through the conversation window.
+
+**Throttling & parallelism** — two knobs control how the MCP server drains a multi-page review against the Copilot rate limit:
+
+- `MaxConcurrentPages` — how many review pages run in parallel per batch (default `6`).
+- `MinRequestIntervalSeconds` — minimum spacing between outbound Copilot SDK calls, in seconds (default `3`). Set to `0` to disable (tests only).
+
+Set them in the `env` block of your **`mcp.json`** — the same file `rebuss-pure init` generated (typically `.vscode/mcp.json`, `.vs/mcp.json`, or `~/.copilot/mcp-config.json`). The MCP client passes `env` to the server process on launch, and REBUSS.Pure reads `CopilotReview:*` keys from environment variables using the standard `__` (double-underscore) separator:
+
+```json
+{
+  "servers": {
+    "REBUSS.Pure": {
+      "type": "stdio",
+      "command": "rebuss-pure",
+      "args": ["--repo", "C:\\path\\to\\repo"],
+      "env": {
+        "CopilotReview__MaxConcurrentPages": "4",
+        "CopilotReview__MinRequestIntervalSeconds": "2"
+      }
+    }
+  }
+}
+```
+
+Restart the MCP server (reload the IDE, or re-open the chat session) so the new `env` values are picked up.
+
+See [DeveloperGuide.md — Copilot Review Layer](DeveloperGuide.md#copilot-review-layer-feature-013) for the full config table, the alternative `appsettings.json` location, and tuning guidance.
 
 ### Global mode (`-g`)
 
@@ -167,7 +225,7 @@ In Copilot / AI chat:
 ```
 123 #review-pr
 ```
-or use `execute` to force tool invocation (recommended for smaller models that may not call tools autonomously):
+or use `execute` to force tool invocation:
 
 ```
 execute 123 #review-pr
@@ -189,24 +247,16 @@ Works **offline** — no Azure DevOps connection required.
 
 ## ⚙️ Gateway Token Limit
 
-By default, REBUSS.Pure ships with `GatewayMaxTokens` set to **128 000** in `appsettings.json`. This hard cap matches the context window limit imposed by **GitHub Copilot's proxy** and prevents `model_max_prompt_tokens_exceeded` errors — even when the model's native context window is larger (e.g. Claude's 200K).
-
-**If you use Claude Code, Anthropic API directly, or any other client without a gateway limit**, remove or disable this cap so you can use the model's full context window:
-
-In `appsettings.Local.json` (next to the server executable):
+**Override (only if you need a different value):** set `ContextWindow:GatewayMaxTokens` in `appsettings.Local.json` next to the server executable:
 
 ```json
 {
   "ContextWindow": {
-    "GatewayMaxTokens": null
+    "GatewayMaxTokens": 50000
   }
 }
 ```
 
-Or via environment variable:
+Or via environment variable: `ContextWindow__GatewayMaxTokens=50000`.
 
-```
-ContextWindow__GatewayMaxTokens=0
-```
-
-When `GatewayMaxTokens` is `null` or `0`, the limit is disabled and the full model-native context window from the `ModelRegistry` is used.
+When you set this value explicitly, autodetection is skipped — your value wins. Set it to `0` or `null` to disable the cap entirely (use only if your host has no per-response token limit). Per-call `maxTokens` arguments to the MCP tools also bypass the cap.

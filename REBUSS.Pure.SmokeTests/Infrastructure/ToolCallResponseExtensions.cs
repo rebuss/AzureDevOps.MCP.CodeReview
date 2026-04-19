@@ -41,12 +41,13 @@ public static class ToolCallResponseExtensions
 
         var text = TryGetFirstText(result)
             ?? throw new InvalidOperationException("Tool response has no text content to parse as JSON.");
-        return JsonDocument.Parse(text).RootElement;
+        using var doc = JsonDocument.Parse(text);
+        return doc.RootElement.Clone();
     }
 
     /// <summary>
     /// Concatenates all <c>content[*].text</c> blocks into a single string.
-    /// Use for multi-block tool responses (e.g. <c>get_pr_diff</c>) where
+    /// Use for multi-block tool responses (e.g. <c>get_pr_content</c>) where
     /// each file diff is a separate content block.
     /// Throws if the response indicates an error.
     /// </summary>

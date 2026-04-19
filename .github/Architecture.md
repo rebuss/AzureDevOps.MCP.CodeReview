@@ -113,12 +113,11 @@ Each SCM provider follows a layered architecture:
 IScmClient (facade)
   ├── DiffProvider      → API client → Parser → StructuredDiffBuilder → FileChange[]
   ├── MetadataProvider  → API client → Parser → FullPullRequestMetadata
-  ├── FilesProvider     → API client → Parser → FileClassifier → PullRequestFiles  (no diff fetching)
-  └── FileContentProvider → API client → FileContent
+  └── FilesProvider     → API client → Parser → FileClassifier → PullRequestFiles  (no diff fetching)
 ```
 
 **WHY this decomposition:**
-- **SRP** — each provider handles one concern (diff, metadata, files, content).
+- **SRP** — each provider handles one concern (diff, metadata, files).
 - **Testability** — providers can be tested with real parsers and mocked API client,
   without instantiating the full facade.
 - **Performance** — `FilesProvider` calls lightweight file-list APIs directly (e.g.,
@@ -131,18 +130,18 @@ provider-agnostic fields (`WebUrl`, `RepositoryFullName`) derived from options.
 
 ### Interface Forwarding & Narrow Dependencies
 
-`IScmClient` extends `IPullRequestDataProvider` + `IFileContentDataProvider`.
+`IScmClient` extends `IPullRequestDataProvider` + `IRepositoryArchiveProvider`.
 `ServiceCollectionExtensions` registers the concrete facade as three interfaces:
 
 ```csharp
 services.AddSingleton<AzureDevOpsScmClient>();
 services.AddSingleton<IScmClient>(sp => sp.GetRequiredService<AzureDevOpsScmClient>());
 services.AddSingleton<IPullRequestDataProvider>(sp => sp.GetRequiredService<AzureDevOpsScmClient>());
-services.AddSingleton<IFileContentDataProvider>(sp => sp.GetRequiredService<AzureDevOpsScmClient>());
+services.AddSingleton<IRepositoryArchiveProvider>(sp => sp.GetRequiredService<AzureDevOpsScmClient>());
 ```
 
 **WHY:** tool handlers depend on narrow interfaces (`IPullRequestDataProvider` or
-`IFileContentDataProvider`), not the full `IScmClient`. This means:
+`IRepositoryArchiveProvider`), not the full `IScmClient`. This means:
 - Tool handlers don't know which SCM provider is active
 - They can be tested by mocking only the narrow interface
 - Adding a new provider doesn't affect tool handler code at all
@@ -168,12 +167,74 @@ validation, and auth chains — with no real use case.
 | Aspect | Azure DevOps | GitHub |
 |---|---|---|
 | **Base/head commit resolution** | Iterations API: `GetPullRequestIterationsAsync` → `ParseLast` → `BaseCommit` / `TargetCommit` | PR details JSON: `ParseWithCommits` extracts `base.sha` / `head.sha` directly |
-| **File content fetch** | `GetFileContentAtCommitAsync(commitId, path)` — by commit SHA | `GetFileContentAtRefAsync(ref, path)` — by any git ref (SHA, branch) |
-| **File content parallelism** | Sequential: `await base`, then `await target` | Parallel: `Task.WhenAll(baseTask, headTask)` per file |
+| **Primary diff strategy** | Per-file `items` API (default) or full repo ZIP archive (above threshold) — see "Diff Fetch Strategies" below | Pre-built unified `patch` field from `/pulls/{n}/files` (default), per-file content fetch as fallback |
+| **API requests per N-file PR** | 2N (per-file path) or 2 (ZIP path, when N > `ZipFallbackThreshold`) | 1 (paginated `/pulls/files`) when patches present; 2N only for files where GitHub omitted the patch |
 | **Auth failure detection** | `AuthenticationDelegatingHandler` checks `Content-Type` for HTML on 2xx | `GitHubAuthenticationHandler` checks HTTP 401 or 403 status codes |
 | **Parser count** | 3 parsers (metadata, iteration, file changes) | 2 parsers (PR details with commits, file changes) |
 | **Auth token format** | PAT → Basic (`base64(:pat)`), CLI token → Bearer | All tokens → Bearer |
 | **GitHub-specific headers** | N/A | `Accept: application/vnd.github+json`, `X-GitHub-Api-Version: 2022-11-28`, `User-Agent: REBUSS-Pure/1.0` |
+
+### Diff Fetch Strategies
+
+Both providers must produce a `List<DiffHunk>` per changed file, but the way they obtain
+that data is dictated by what each platform's REST API offers.
+
+#### GitHub — `patch` field fast path (default)
+
+`/pulls/{n}/files` returns each changed file with a unified-diff `patch` field already
+computed by GitHub:
+
+```
+GET /pulls/42/files
+[
+  { "filename": "src/F.cs", "status": "modified", "additions": 1, "deletions": 1,
+    "patch": "@@ -1,1 +1,1 @@\n-old\n+new" },
+  ...
+]
+```
+
+`GitHubFileChangesParser.ParseWithPatches` extracts the patch alongside metadata, and
+`GitHubPatchHunkParser.Parse` converts the unified diff to `List<DiffHunk>` in-process.
+**Total API requests: 1 (paginated) regardless of file count.**
+
+GitHub omits the `patch` field for binary files and for diffs exceeding ~3000 lines.
+For these, `GitHubDiffProvider.BuildFileDiffsAsync` falls back to the legacy path:
+`Parallel.ForEachAsync` (max 5) over the missing files, fetching base + head content via
+`IGitHubApiClient.GetFileContentAtRefAsync` and rebuilding hunks via `IStructuredDiffBuilder`.
+The `IsFullFileRewrite` check applies only on this fallback path (the patch-based path
+trusts GitHub's diff).
+
+#### Azure DevOps — heuristic per-file vs ZIP fallback
+
+Azure DevOps' REST API has **no unified-patch endpoint**. The diff must be rebuilt locally
+from base + target file contents. Two paths are chosen at runtime based on the changed-file
+count and the configured `AzureDevOpsDiffOptions.ZipFallbackThreshold` (default 30):
+
+- **Per-file path** (count ≤ threshold): `Parallel.ForEachAsync` (max 15) per file, with
+  `Task.WhenAll(baseTask, targetTask)` of `IAzureDevOpsApiClient.GetFileContentAtCommitAsync`.
+  Cost: **2N items API requests**. Cheap for small PRs, fast over the wire.
+
+- **ZIP fallback path** (count > threshold): downloads base + target repository archives in
+  parallel via `AzureDevOpsRepositoryArchiveProvider.DownloadRepositoryZipAsync`, extracts
+  both into a temp directory under `rebuss-repo-{pid}/diff-{guid}/`, then reads file contents
+  from disk via `Parallel.ForEach`. Cost: **2 ZIP requests + bandwidth for full repo
+  contents twice**. Bounded request count protects against Azure DevOps' TSTU rate limits
+  on large refactor PRs.
+
+The threshold default of 30 is calibrated against ADO's documented 200 TSTU / 5 min throttle
+limit (each `items` call is ~1–2 TSTU; 30 files × 2 = 60 calls leaves headroom for
+the other PR-data requests in the same window). Setting `ZipFallbackThreshold = 0` disables
+the ZIP path entirely (always per-file).
+
+**DI cycle avoidance:** `AzureDevOpsDiffProvider` injects `AzureDevOpsRepositoryArchiveProvider`
+as the **concrete type**, not `IRepositoryArchiveProvider`. The interface alias resolves to
+`AzureDevOpsScmClient`, which already depends on the diff provider — taking the interface
+would create a cycle.
+
+**Temp directory cleanup:** the ZIP path uses `try/finally` to delete its instance
+directory on completion (success or failure). The parent `rebuss-repo-{pid}/` is also
+cleaned up by `RepositoryDownloadOrchestrator.OnShutdown` and by `RepositoryCleanupService`
+on next startup if the process crashes — both already key off the same PID prefix.
 
 ## 3. Authentication & Token Management
 
@@ -354,7 +415,258 @@ Register `IReviewAnalyzer` in DI. `ReviewContextOrchestrator` discovers all
 implementations via `IEnumerable<IReviewAnalyzer>` — no changes to the orchestrator
 needed. See recipe 5.4 in `ProjectConventions.md`.
 
-## 6. Local Review Pipeline
+## 6. Repository Download Pipeline
+
+### Trigger
+
+When `get_pr_metadata` is called, the handler fires a background download via
+`IRepositoryDownloadOrchestrator.TriggerDownload(prNumber, commitRef)`.
+This is fire-and-forget — the metadata response returns immediately without waiting.
+
+### Commit Selection
+
+`commitRef` is always `metadata.LastMergeSourceCommitId` — the **PR HEAD** commit.
+Every consumer of the extracted archive reads post-change source:
+
+- `DiffSourceResolver` reads the file as the "after" state and reconstructs "before"
+  from the diff body (see `DiffSourceResolver.cs` — "The source file in the repository
+  represents the 'after' state (PR head commit)").
+- `CallSiteEnricher` scans for callers of changed members and must see post-change code
+  so callers added in the PR are found.
+- `FindingScopeResolver` extracts enclosing method/scope for finding validation, which
+  must match the code the Copilot reviewer saw (post-change).
+
+Downloading the merge-base commit (`LastMergeTargetCommitId`) instead would:
+- Omit files added in the PR → `ResolutionFailure.SourceUnavailable` → findings bypass
+  Copilot validation with a blanket `Uncertain` verdict.
+- Shift line numbers and hide newly-added fields/methods → Copilot validator rules
+  legitimate findings as `FalsePositive` because the claimed identifier isn't in the
+  (stale) scope it sees.
+
+If `LastMergeSourceCommitId` is empty, the download is skipped entirely — no fallback
+to the target commit, because a stale archive is worse than none for the pipeline.
+
+### Download Flow
+
+```
+get_pr_metadata → MetadataHandler
+  → _downloadOrchestrator.TriggerDownload(prNumber, metadata.LastMergeSourceCommitId)
+    → Background Task.Run:
+      1. IRepositoryArchiveProvider.DownloadRepositoryZipAsync(commitRef, zipPath)
+         (Azure DevOps: Items API ?$format=zip | GitHub: /zipball/{ref})
+      2. ZipFile.ExtractToDirectory(zipPath, extractDir)
+      3. Delete ZIP immediately
+      4. State = Ready, ExtractedPath = extractDir
+```
+
+### Lifecycle
+
+- **Deduplication**: Same PR + same commit = no-op. Different PR = cancel old, start new.
+- **Shutdown**: `IHostApplicationLifetime.ApplicationStopping` triggers cleanup of
+  `rebuss-repo-{pid}/` directory.
+- **Startup**: `RepositoryCleanupService` (`IHostedService`) scans for orphaned
+  `rebuss-repo-*` directories, extracts PID from name, deletes if process not running.
+- **Temporary storage**: `{Path.GetTempPath()}/rebuss-repo-{Environment.ProcessId}/`
+
+## 6a. Progressive PR Metadata (PrEnrichmentOrchestrator)
+
+### Why this exists
+
+The MCP host enforces a hard ~30 s tool-call timeout. For large PRs, computing
+content paging requires fetching the diff *and* running the enrichment pipeline
+(`CompositeCodeProcessor` → Roslyn-backed enrichers → per-file before/after
+windows + structural change blocks), which on big repos can exceed that ceiling.
+
+> **Note (feature 011)**: `CompositeCodeProcessor.AddBeforeAfterContext` short-circuits
+> at the top via `DiffLanguageDetector.IsAlreadyEnriched`, returning the input
+> unchanged if it already carries any of the enricher-emitted markers (`[scope:`,
+> `[structural-changes]`, `[dependency-changes]`, `[call-sites]`). This makes the
+> chain idempotent and is the single point of policy that covers all five enrichers.
+> The hunk-rebuild logic in `DiffParser.RebuildDiffWithContext` is now a three-phase
+> pipeline (cluster adjacent hunks → expand each cluster with shared per-axis-clamped
+> context → render) that guarantees one merged hunk per non-overlapping range, valid
+> unified-diff syntax, and no duplicated source lines across adjacent hunks.
+
+Without the orchestrator, `get_pr_metadata` for an oversized PR would return a
+raw timeout error and the review could not start.
+
+### Flow
+
+```
+get_pr_metadata(prNumber, modelName)
+  ├─> _metadataProvider.GetMetadataAsync (fast)
+  ├─> _orchestrator.TriggerEnrichment(prNumber, headSha, safeBudget)   ── fire-and-forget
+  │     └─> Task.Run(BackgroundBodyAsync) under _shutdownToken         ── runs to completion
+  │           ├─> _diffCache.GetOrFetchDiffAsync
+  │           ├─> FileTokenMeasurement.BuildEnrichedCandidatesAsync
+  │           ├─> PackingPriorityComparer.Instance.Sort
+  │           └─> _pageAllocator.Allocate → PrEnrichmentResult cached
+  └─> WaitForEnrichmentAsync(prNumber, linkedCts.Token)                ── linkedCts.CancelAfter(28 000 ms)
+        ├─> Ready in time:  emit "Content paging:" block
+        ├─> OperationCanceledException (internal timeout, !callerCt):
+        │     return basic summary + "Content paging: not yet available" (FR-004)
+        └─> Failed snapshot or wait threw:
+              return basic summary + FormatFriendlyStatus failure block (FR-017)
+
+(later)
+
+get_pr_content(prNumber, pageNumber)
+  ├─> snapshot = _orchestrator.TryGetSnapshot(prNumber)
+  ├─> Failed?            return FormatFriendlyStatus failure block (no retrigger)
+  ├─> null?              cold-start: GetMetadataAsync → TriggerEnrichment
+  ├─> Ready w/ stale     supersede: TriggerEnrichment with new safeBudget
+  │   safeBudget?
+  ├─> WaitForEnrichmentAsync(linkedCts.Token, 28 000 ms)
+  ├─> success:           BuildPageBlocks from result.Allocation + result.EnrichedByPath
+  └─> internal timeout:  return FormatFriendlyStatus "still preparing" (FR-014/FR-016)
+```
+
+### Load-bearing semantic: caller cancellation never cancels background body
+
+The orchestrator captures `IHostApplicationLifetime.ApplicationStopping` once at
+construction and uses *only* that token (or a CTS linked to it) for the
+background body. The caller's `CancellationToken` is passed exclusively to
+`Task.WaitAsync(ct)` inside `WaitForEnrichmentAsync`, which governs the *wait*
+but **never** the work itself. This is what enables a metadata call to return
+a basic summary at second 28, leave the background body running, and a
+follow-up content call ten seconds later to find the result in cache.
+
+This semantic is asserted by `PrEnrichmentOrchestratorTests
+.CallerCancellation_DoesNotCancelBackgroundBody` — do not regress it.
+
+### Job lifecycle
+
+| Status | Transition |
+|---|---|
+| `FetchingDiff` | Set when `BackgroundBodyAsync` enters; about to await `_diffCache.GetOrFetchDiffAsync` |
+| `Enriching` | Set after diff fetch returns; about to call `BuildEnrichedCandidatesAsync` |
+| `Ready` | Set after `_pageAllocator.Allocate` succeeds; `Result` populated |
+| `Failed` | Set on any exception other than shutdown-derived `OperationCanceledException`; `Failure` populated via `PrEnrichmentFailure.From(ex)` (sanitized; no stack trace; `%LOCALAPPDATA%` redacted per Principle VIII) |
+
+Idempotency:
+- Same `(prNumber, headSha)` re-trigger → no-op (existing job reused)
+- Different `headSha` for same `prNumber` → old job's CTS cancelled, new job started
+- `Failed` state for same SHA → next `TriggerEnrichment` starts a fresh job (FR-018)
+
+### Configuration
+
+`appsettings.json` `Workflow` section:
+- `MetadataInternalTimeoutMs` (default `28000`)
+- `ContentInternalTimeoutMs` (default `28000`)
+
+Both must be strictly less than the host's hard tool-call ceiling (typically
+30 000 ms) to leave a serialization margin. Tunable per environment.
+
+### Constitution deviation
+
+Mutable per-PR state on a singleton instance (Principle VI says services must
+be stateless). This deviation mirrors `RepositoryDownloadOrchestrator` exactly
+and is documented in `specs/net-specific/plan.md` *Complexity Tracking*. Both
+orchestrators exist because `IOptions<T>` cannot express in-flight `Task`
+lifecycles, and a static class would make tests impossible without process
+restart.
+
+## 6b. Copilot Review Pipeline (CopilotReviewOrchestrator)
+
+### Why batched parallel dispatch
+
+`CopilotReviewOrchestrator` coordinates server-side Copilot review of every page
+of enriched content. Pages are dispatched **in batches** (`CopilotReviewOptions.MaxConcurrentPages`,
+default 6): for each batch the orchestrator launches one `Task.Run` per page,
+awaits `Task.WhenAll` on the batch, then starts the next batch. Within a batch
+the `CopilotRequestThrottle` (a DI singleton `SemaphoreSlim(1,1)` with minimum
+spacing controlled by `CopilotReviewOptions.MinRequestIntervalSeconds`, default
+3 s) still serializes the actual SDK calls so model response wait times overlap
+across the 6 pages. The interval is read from `IOptions<CopilotReviewOptions>`
+on each call, so `appsettings.json` hot-reload takes effect without a restart
+(Principle V); setting it to `0` disables the throttle (tests only).
+
+The batch gate exists because the GitHub Copilot backend rate-limits larger
+fan-outs and silently re-queues the overflow — without the cap a 12-page review
+does not finish twice as fast as a 6-page one; the second 6 pages sit in a
+backend queue until the first 6 drain, roughly doubling wall-clock time. With
+the cap the orchestrator pays that drain explicitly and predictably between
+batches. Wall-time is roughly `⌈N / MaxConcurrentPages⌉ × (S × (B-1) + max(response_time))`
+where `B = min(MaxConcurrentPages, remaining pages)` and `S = MinRequestIntervalSeconds`.
+
+### Thread safety
+
+| Concern | Mechanism |
+|---|---|
+| `pageResults[idx]` array | Each task writes to a unique index — no contention |
+| `CompletedPages` counter | `Interlocked.Increment` — lock-free atomic |
+| `CurrentActivity` | `volatile string?` — last writer wins (cosmetic) |
+| `Status`, `Result`, `ErrorMessage` | Guarded by `_lock` |
+| Job dictionary | `ConcurrentDictionary<string, CopilotReviewJob>` |
+
+### Progress observation
+
+`CopilotReviewWaiter` polls `TryGetSnapshot()` at a configurable interval
+(`CopilotReviewProgressPollingIntervalMs`, default 2000ms) and emits two kinds of
+IDE notifications:
+
+1. **`"Copilot review — X/N pages complete"`** whenever `CompletedPages` increases.
+   This message is inherently order-agnostic — pages may complete out of order
+   (e.g. page 3 before page 2), but the notification only shows the aggregate count.
+2. **Phase activities** read from `CurrentActivity` whenever it changes —
+   `"Allocated N pages — reviewing in parallel"`, `"Resolving N scopes for validation"`,
+   `"Validating findings: page X/Y"`, and `"Review complete — X/N pages succeeded"`.
+
+**Per-page `CurrentActivity` is intentionally not published.** Pages run in parallel
+and each concurrent task would overwrite `CurrentActivity` with its own "waiting"
+message, causing the IDE feed to flip-flop between pages. The monotonic
+`CompletedPages` counter is the sole page-level progress signal; per-attempt retries
+are visible in the log only. The waiter also intentionally does **not** reset its
+"last reported activity" tracker on page-completion milestones so a stale phase
+message can never be re-emitted after a counter tick.
+
+### Retry loop
+
+Each page gets up to 3 attempts (`MaxAttemptsPerPage = 3`) inside
+`ReviewPageWithRetryAsync`. No backoff — retries fire immediately. On exhaustion,
+the orchestrator fills in `FailedFilePaths` (only it knows which files were on
+the page) and returns a `CopilotPageReviewResult.Failure`.
+
+### Finding validation pipeline (Feature 021)
+
+After all page reviews complete (and provided `CopilotReviewOptions.ValidateFindings`
+is `true` and both `FindingValidator` + `FindingScopeResolver` resolved through DI),
+`ValidateAllFindingsAsync` runs as a fifth phase before the orchestrator surfaces
+the result. Its job is to filter false positives produced by the page-review pass:
+
+```
+parse → resolve scopes → severity-order → token-budget pages → SDK call(s) → map back → filter
+```
+
+| Phase | Component | Detail |
+|---|---|---|
+| Parse | `FindingParser.Parse` | Per-page Markdown → `ParsedFinding[]` + the unparseable remainder (free-form prose preserved verbatim, FR-012). The regex is a tolerant safety net over what `copilot-page-review.md` demands: swallows leading list markers (`- `, `* `, `1. `), and for the line expression accepts `42`, `~42`, `≈42`, `42-50`, `approx 42`, `(line unknown)` — the first integer is extracted; "unknown" yields `LineNumber == null` |
+| Threshold | orchestrator | If total findings > `MaxValidatableFindings` (default 40) → skip validation entirely (likely a systemic issue) |
+| Resolve scopes | `FindingScopeResolver` | **Non-`.cs`** ⇒ `NotCSharp` (passthrough, no Copilot call). **Missing source** ⇒ `SourceUnavailable`. **`.cs` with source** — smart-line + fallback chain: (1) if `LineNumber == null`, ask `FindingLineResolver` (in `RoslynProcessor`) to locate a line from identifiers cited in backticks in the description; (2) run `FindingScopeExtractor` at that line — when the method body exceeds `MaxScopeLines` (default 150), truncate with a window ±`MaxScopeLines/2` plus `// ... (X lines omitted) ...` markers; (3) if (2) fails (line on a `using`/top-level/malformed syntax), retry `FindingLineResolver` with the original line as a hint and re-run (2); (4) still failing ⇒ whole-file fallback: truncate source to `MaxScopeLines × 2` centred on the middle with a `// ... (X lines omitted from middle) ...` marker, scope name tagged `<entire file: {path}>`, **ResolutionFailure.None** so it still reaches Copilot. This chain was added after observing that Copilot frequently omits line numbers or writes approximations for file-level findings — previously those would silently short-circuit to `ScopeNotFound → Uncertain` and skip validation |
+| Phase 1 verdicts | `FindingValidator` | Deterministic, no Copilot call: `NotCSharp` → `Valid` (passthrough), `SourceUnavailable` → `Uncertain`. `ScopeNotFound` → `Uncertain` is retained as a **defensive mapping** (pinned by `ValidateAsync_ScopeNotFound_MapsToUncertainWithoutCopilotCall`) — the whole-file fallback in `FindingScopeResolver` means no current code path produces `ScopeNotFound` for `.cs` findings, but the validator must stay resilient if a future producer reintroduces this state |
+| Severity order | `FindingSeverityOrderer.Order` | Stable sort by severity rank: `critical=0`, `major=1`, `minor=2`, unknown last. Ensures the most important issues land in the first SDK call's prompt |
+| Token budgeting | `IPageAllocator` + `ITokenEstimator` | Build one synthetic `PackingCandidate` per finding+scope pair, with `EstimatedTokens` from `EstimateTokenCount` over the per-finding prompt section. Allocate against `ReviewBudgetTokens − templateOverhead` so the wrapping prompt template (loaded once and measured) is accounted for. **Token budget — not a fixed batch size — controls how many findings fit per Copilot SDK call.** This is the same mechanism used to paginate the original review pass |
+| SDK calls | `FindingValidator.ValidatePageAsync` | One `ICopilotSessionFactory.CreateSessionAsync` call per allocator page. Inspection writer kind = `validation-{pageNumber}`. Response parsed via index-based regex (`**Finding {N}: VALID\|FALSE_POSITIVE\|UNCERTAIN**`) so verdict mapping is order-independent |
+| Order check | `FindingValidator.VerifyResponseOrder` | Re-runs `IsOrderedBySeverity` on the response sequence; if Copilot scrambled severities, log a warning. Verdicts remain correctly mapped via the index regex — the warning is informational |
+| Map back | orchestrator | Walk per-page findings in original order, slice the validator's flat result array per page, hand to `FindingFilterer.Apply(remainder, pageValidated)` |
+| Rebuild | `FindingFilterer.Apply` | Emit `Valid` verbatim, `Uncertain` prefixed with `[uncertain]`, omit `FalsePositive`. Append `_Validation: V confirmed, F filtered, U uncertain_` footer; collapse to `No issues found.` when everything was filtered and no remainder existed |
+
+Graceful-degradation policy (FR-012) is preserved at every step: validator failure
+keeps original findings as `Valid` so a flaky validation pass never breaks the
+review output.
+
+#### What gets logged where
+
+- `_inspection.WritePromptAsync` / `WriteResponseAsync` capture each Copilot SDK
+  exchange. Kinds in use: `page-{N}-review` from `CopilotPageReviewer`,
+  `validation-{N}` from `FindingValidator`. There is no separate "summary" file —
+  the validation prompt is itself the consolidated dump of every finding (with
+  scope source) and the response carries every verdict, so they double as the
+  end-of-review summary.
+- `ILogger` carries phase transitions, retries, and validation warnings (skipped
+  due to threshold, page failure with graceful degradation, scrambled response order).
+
+## 7. Local Review Pipeline
 
 ### Scope Model
 
@@ -400,7 +712,7 @@ deleted file), the `GitCommandException` is caught and `null` is returned.
 The resolved content strings are fed to `IStructuredDiffBuilder.Build` which
 produces `DiffHunk[]` using `LcsDiffAlgorithm` (LCS-based line diff).
 
-## 7. Design Decisions & Rationale
+## 8. Design Decisions & Rationale
 
 - **Singletons everywhere:** services are stateless (state lives in options and
   config stores). `HttpClient` instances are expensive to create and should be

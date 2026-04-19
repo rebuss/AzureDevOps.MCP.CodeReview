@@ -42,11 +42,11 @@ public class GitHubInitSmokeTests
         Assert.False(repo.FileExists(Path.Combine(".github", "prompts", "create-pr.md")),
             "Expected create-pr.md prompt to be not copied.");
 
-        // Instruction files should be copied
-        Assert.True(repo.FileExists(Path.Combine(".github", "instructions", "review-pr.instructions.md")),
-            "Expected review-pr.instructions.md instruction file to be copied.");
-        Assert.True(repo.FileExists(Path.Combine(".github", "instructions", "self-review.instructions.md")),
-            "Expected self-review.instructions.md instruction file to be copied.");
+        // init must not create instruction files
+        Assert.False(repo.FileExists(Path.Combine(".github", "instructions", "review-pr.instructions.md")),
+            "init must not create review-pr.instructions.md.");
+        Assert.False(repo.FileExists(Path.Combine(".github", "instructions", "self-review.instructions.md")),
+            "init must not create self-review.instructions.md.");
     }
 
     [Fact]
@@ -56,11 +56,12 @@ public class GitHubInitSmokeTests
 
         // Restricted PATH hides gh CLI → triggers "CLI not installed" prompt.
         // "n" declines the install prompt.
+        using var restrictedPath = CliProcessHelper.BuildRestrictedPathEnv();
         var result = await CliProcessHelper.RunAsync(
             repo.RootPath,
             "init",
             stdin: "n\n",
-            environmentOverrides: CliProcessHelper.BuildRestrictedPathEnv());
+            environmentOverrides: restrictedPath.Env);
 
         // Init should succeed (exit 0) even when auth fails
         Assert.Equal(0, result.ExitCode);
@@ -68,7 +69,7 @@ public class GitHubInitSmokeTests
         // Config and prompts should still be created (they're written before auth)
         Assert.True(repo.FileExists(Path.Combine(".vscode", "mcp.json")));
         Assert.True(repo.FileExists(Path.Combine(".github", "prompts", "review-pr.prompt.md")));
-        Assert.True(repo.FileExists(Path.Combine(".github", "instructions", "review-pr.instructions.md")));
+        Assert.False(repo.FileExists(Path.Combine(".github", "instructions", "review-pr.instructions.md")));
 
         // Config should NOT contain --pat when none was provided
         var config = repo.ReadFile(Path.Combine(".vscode", "mcp.json"));

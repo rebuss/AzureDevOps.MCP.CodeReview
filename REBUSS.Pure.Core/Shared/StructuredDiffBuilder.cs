@@ -11,8 +11,6 @@ namespace REBUSS.Pure.Core.Shared;
 /// </summary>
 public class StructuredDiffBuilder : IStructuredDiffBuilder
 {
-    private const int DefaultContextLines = 3;
-
     private readonly IDiffAlgorithm _diffAlgorithm;
     private readonly ILogger<StructuredDiffBuilder> _logger;
 
@@ -33,7 +31,7 @@ public class StructuredDiffBuilder : IStructuredDiffBuilder
         var baseLines = SplitLines(baseContent);
         var targetLines = SplitLines(targetContent);
 
-        var hunks = ComputeHunks(baseLines, targetLines, DefaultContextLines);
+        var hunks = ComputeHunks(baseLines, targetLines);
 
         sw.Stop();
 
@@ -60,66 +58,30 @@ public class StructuredDiffBuilder : IStructuredDiffBuilder
 
     // --- Hunk computation --------------------------------------------------------
 
-    private List<DiffHunk> ComputeHunks(string[] oldLines, string[] newLines, int contextLines)
+    private List<DiffHunk> ComputeHunks(string[] oldLines, string[] newLines)
     {
         var edits = _diffAlgorithm.ComputeEdits(oldLines, newLines);
         var hunks = new List<DiffHunk>();
-        int i = 0;
+        var currentHunkEdits = new List<DiffEdit>();
 
-        while (i < edits.Count)
+        foreach (var edit in edits)
         {
-            if (edits[i].Kind == ' ') { i++; continue; }
-
-            int hunkStart = Math.Max(0, i - contextLines);
-            var (hunkEdits, nextI) = CollectHunkEdits(edits, hunkStart, contextLines);
-            i = nextI;
-
-            if (hunkEdits.Count > 0)
-                hunks.Add(FormatHunk(hunkEdits, oldLines, newLines));
+            if (edit.Kind == ' ')
+            {
+                if (currentHunkEdits.Count > 0)
+                {
+                    hunks.Add(FormatHunk(currentHunkEdits, oldLines, newLines));
+                    currentHunkEdits = new List<DiffEdit>();
+                }
+                continue;
+            }
+            currentHunkEdits.Add(edit);
         }
+
+        if (currentHunkEdits.Count > 0)
+            hunks.Add(FormatHunk(currentHunkEdits, oldLines, newLines));
 
         return hunks;
-    }
-
-    private static (List<DiffEdit> HunkEdits, int NextI) CollectHunkEdits(
-        IReadOnlyList<DiffEdit> edits, int hunkStart, int contextLines)
-    {
-        var hunkEdits = new List<DiffEdit>();
-        int j = hunkStart;
-        int nextI = hunkStart;
-
-        while (j < edits.Count)
-        {
-            hunkEdits.Add(edits[j]);
-
-            if (edits[j].Kind == ' ')
-            {
-                var (trailingLen, moreChanges) = CountTrailingContext(edits, j);
-
-                if (!moreChanges || trailingLen > contextLines)
-                {
-                    int keep = Math.Min(contextLines, trailingLen);
-                    for (int x = 1; x < keep && j + x < edits.Count; x++)
-                        hunkEdits.Add(edits[j + x]);
-                    return (hunkEdits, j + keep);
-                }
-            }
-
-            j++;
-            nextI = j;
-        }
-
-        return (hunkEdits, nextI);
-    }
-
-    private static (int TrailingLen, bool MoreChanges) CountTrailingContext(
-        IReadOnlyList<DiffEdit> edits, int j)
-    {
-        int trailingEnd = j;
-        while (trailingEnd + 1 < edits.Count && edits[trailingEnd + 1].Kind == ' ')
-            trailingEnd++;
-
-        return (trailingEnd - j + 1, trailingEnd + 1 < edits.Count);
     }
 
     // --- Hunk formatting ---------------------------------------------------------

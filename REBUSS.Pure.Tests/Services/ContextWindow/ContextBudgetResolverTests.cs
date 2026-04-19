@@ -428,7 +428,7 @@ public class ContextBudgetResolverTests
     [Fact]
     public void ContextBudgetResolver_Resolve_GatewayCap_Null_DoesNotClamp()
     {
-        // Null gateway cap = disabled (e.g. Claude Code or direct API)
+        // Null gateway cap = disabled (e.g. direct API access)
         var resolver = CreateResolver(gatewayMaxTokens: null, modelRegistry: DefaultRegistry());
 
         var result = resolver.Resolve(explicitTokens: null, modelIdentifier: "claude-sonnet-4");
@@ -460,4 +460,48 @@ public class ContextBudgetResolverTests
         Assert.Equal(128_000, result.TotalBudgetTokens);
         Assert.Contains(result.Warnings, w => w.Contains("gateway cap"));
     }
-}
+
+    [Theory]
+    [InlineData("Claude Sonnet")]
+    [InlineData("claude sonnet")]
+    [InlineData("Claude Haiku")]
+    [InlineData("Claude Opus")]
+    public void ContextBudgetResolver_Resolve_VersionlessModelName_MatchesVersionlessRegistryKey(string modelIdentifier)
+    {
+        // Registry with versionless keys matches free-form model names without a version suffix.
+        var registry = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["claude-sonnet"] = 200_000,
+            ["claude-sonnet-4"] = 200_000,
+            ["claude-haiku"] = 200_000,
+            ["claude-opus"] = 200_000
+        };
+        var resolver = CreateResolver(modelRegistry: registry);
+
+        var result = resolver.Resolve(explicitTokens: null, modelIdentifier: modelIdentifier);
+
+        Assert.Equal(200_000, result.TotalBudgetTokens);
+        Assert.Equal(BudgetSource.Registry, result.Source);
+        Assert.Empty(result.Warnings);
+    }
+
+    [Fact]
+    public void ContextBudgetResolver_Resolve_VersionlessKey_ActsAsPrefixForVersionedInput()
+    {
+        // "Claude Sonnet 4.6" normalizes to "claude-sonnet-4-6".
+        // Both "claude-sonnet" (len 13) and "claude-sonnet-4" (len 15) are prefix candidates;
+        // longest key wins → "claude-sonnet-4".
+        var registry = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["claude-sonnet"] = 100_000,   // shorter prefix candidate
+            ["claude-sonnet-4"] = 200_000  // longer prefix candidate — should win
+        };
+        var resolver = CreateResolver(modelRegistry: registry);
+
+        var result = resolver.Resolve(explicitTokens: null, modelIdentifier: "Claude Sonnet 4.6");
+
+        Assert.Equal(200_000, result.TotalBudgetTokens);
+        Assert.Equal(BudgetSource.Registry, result.Source);
+    }
+
+    }

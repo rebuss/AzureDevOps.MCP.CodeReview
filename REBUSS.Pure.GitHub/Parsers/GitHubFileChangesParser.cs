@@ -15,22 +15,25 @@ public class GitHubFileChangesParser : IGitHubFileChangesParser
     public GitHubFileChangesParser(ILogger<GitHubFileChangesParser> logger)
         => _logger = logger;
 
-    public List<FileChange> Parse(string json)
+    public List<FileChange> Parse(string json) =>
+        ParseWithPatches(json).Select(p => p.File).ToList();
+
+    public List<GitHubChangedFile> ParseWithPatches(string json)
     {
-        var files = new List<FileChange>();
+        var entries = new List<GitHubChangedFile>();
         try
         {
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
 
             if (root.ValueKind != JsonValueKind.Array)
-                return files;
+                return entries;
 
             foreach (var item in root.EnumerateArray())
             {
-                var file = TryParseEntry(item);
-                if (file is not null)
-                    files.Add(file);
+                var entry = TryParseEntry(item);
+                if (entry is not null)
+                    entries.Add(entry);
             }
         }
         catch (Exception ex)
@@ -38,23 +41,29 @@ public class GitHubFileChangesParser : IGitHubFileChangesParser
             _logger.LogError(ex, "Error parsing GitHub file changes JSON");
         }
 
-        return files;
+        return entries;
     }
 
-    private static FileChange? TryParseEntry(JsonElement item)
+    private static GitHubChangedFile? TryParseEntry(JsonElement item)
     {
         var filename = GetString(item, "filename", string.Empty);
         if (string.IsNullOrEmpty(filename))
             return null;
 
         var status = GetString(item, "status", "modified");
-        return new FileChange
+        var file = new FileChange
         {
             Path = filename,
             ChangeType = MapStatus(status),
             Additions = GetInt(item, "additions"),
             Deletions = GetInt(item, "deletions")
         };
+
+        var patch = item.TryGetProperty("patch", out var p) && p.ValueKind == JsonValueKind.String
+            ? p.GetString()
+            : null;
+
+        return new GitHubChangedFile(file, patch);
     }
 
     private static string GetString(JsonElement element, string property, string fallback) =>

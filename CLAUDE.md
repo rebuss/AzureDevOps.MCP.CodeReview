@@ -1,139 +1,121 @@
-# CLAUDE.md — Starting Point for Claude
+# REBUSS.Pure — Project Guide for Claude Code
 
-This file is the entry point for Claude. Read it before every task.
+This file mirrors `.github/copilot-instructions.md`. Both point Claude/Copilot at the
+same set of reference docs maintained under `.github/`. Keep this file in sync if the
+navigation rules change.
 
----
+## Project reference docs — when to read which file
 
-## What this project is
+Before exploring the codebase from scratch, consult the reference files below.
+Each file answers a specific class of questions. **Read only what the task requires** — do not read all files for every task.
 
-**REBUSS.Pure** is an MCP (Model Context Protocol) server for AI-assisted code review.
-It exposes tools that let AI agents fetch PR diffs, metadata, file contents, and local git changes from Azure DevOps and GitHub. It runs as a .NET 10 console app (`rebuss-pure`) using the official `ModelContextProtocol` SDK v1.2.0.
-
----
-
-## Reference docs — read only what the task requires
-
-| File | Read when you need to… |
-|---|---|
-| `.github/CodebaseUnderstanding.md` | Locate a file, find which class owns a responsibility, check DI registrations |
-| `.github/ProjectConventions.md` | Follow a naming/coding/testing convention, understand data flow |
-| `.github/Architecture.md` | Understand MCP protocol layer, provider internals, auth chain, analysis pipeline |
-| `.github/Contracts.md` | Work with tool input/output format, add fields, fix contract tests |
-| `.github/ExtensionRecipes.md` | Add a new MCP tool, analyzer, CLI command, SCM provider, or config option |
-
-**Rules:**
-- Always check `CodebaseUnderstanding.md` (file locations) and `ProjectConventions.md` (conventions) before writing code.
-- Read `Architecture.md` only for internals bugs. Read `ExtensionRecipes.md` only for new feature types.
-- Trust the reference docs over assumptions; do not guess file paths or patterns.
-
----
-
-## Solution structure
-
-| Project | Purpose |
-|---|---|
-| `REBUSS.Pure.Core` | Domain models, interfaces, shared diff/classification logic, analysis pipeline |
-| `REBUSS.Pure.AzureDevOps` | Azure DevOps provider: API client → parsers → providers → `AzureDevOpsScmClient` facade |
-| `REBUSS.Pure.GitHub` | GitHub provider: API client → parsers → providers → `GitHubScmClient` facade |
-| `REBUSS.Pure` | MCP server app: tool handlers, local review, CLI, DI root (`Program.cs`) |
-| `REBUSS.Pure.Core.Tests` | Unit tests for Core |
-| `REBUSS.Pure.AzureDevOps.Tests` | Unit tests for Azure DevOps provider |
-| `REBUSS.Pure.GitHub.Tests` | Unit tests for GitHub provider |
-| `REBUSS.Pure.Tests` | Unit + integration tests for MCP server |
-| `REBUSS.Pure.SmokeTests` | Smoke + live contract tests (runs compiled binary as child process) |
-
----
-
-## Architecture at a glance
-
-```
-REBUSS.Pure.Core              (domain models, interfaces, analysis pipeline)
-    ↑                                    ↑
-REBUSS.Pure.AzureDevOps    REBUSS.Pure.GitHub   (SCM providers)
-    ↑                                    ↑
-REBUSS.Pure                                      (MCP server app)
-```
-
-**Provider pattern:** `IScmClient` facade → fine-grained providers (`DiffProvider`, `MetadataProvider`, `FilesProvider`, `FileContentProvider`) → parsers → API client. Exactly **one provider per process**, selected at startup by `Program.DetectProvider()`.
-
-**MCP tool pattern:** plain C# classes with `[McpServerToolType]`/`[McpServerTool]` attributes. Discovered automatically by `WithToolsFromAssembly()` — no manual registration. Return `Task<IEnumerable<ContentBlock>>` (plain text via `PlainTextFormatter`). Throw `McpException` for errors.
-
-**Analysis pipeline:** `ReviewContextOrchestrator` runs all `IReviewAnalyzer` implementations in `Order` sequence, producing `AnalysisSection`s aggregated into `ReviewContext`.
-
----
-
-## Key conventions (summary)
-
-| Aspect | Rule |
-|---|---|
-| Framework | .NET 10, C# 14, nullable `enable`, implicit usings `enable` |
-| Tool output | Plain text `IEnumerable<ContentBlock>` (`TextContentBlock` per file/section); formatted by `PlainTextFormatter`; no JSON serialization in handler output |
-| Naming | `*Provider`, `*Parser`, `*ToolHandler`, `*ScmClient`; `I*` interfaces; `_field` privates |
-| Async | `async` all the way; propagate `CancellationToken` to every I/O call |
-| DI | Constructor injection; all singletons; interface forwarding for `IScmClient`/`IPullRequestDataProvider`/`IFileContentDataProvider` |
-| Errors | Custom exceptions caught in tool handlers → rethrown as `McpException` |
-| Logging | `Microsoft.Extensions.Logging`; stderr only — **stdout is reserved for MCP JSON-RPC** |
-| Child processes | Must set `RedirectStandardInput = true` + `process.StandardInput.Close()` after `Start()` |
-| Testing | xUnit + NSubstitute; mock only API clients; use real parsers/value objects; `MethodName_Scenario_ExpectedResult` naming |
-
----
-
-## MCP tools (9 total)
-
-| Tool name | Handler | What it does |
+| File | Read when you need to… | What you will find |
 |---|---|---|
-| `get_pr_diff` | `GetPullRequestDiffToolHandler` | Returns plain text per-file hunks for a PR; supports pagination (F004) |
-| `get_file_diff` | `GetFileDiffToolHandler` | Returns plain text diff for one file in a PR |
-| `get_pr_metadata` | `GetPullRequestMetadataToolHandler` | Returns PR metadata as plain text; optionally computes content paging info |
-| `get_pr_content` | `GetPullRequestContentToolHandler` | Returns one paginated page of PR diff content as plain text |
-| `get_pr_files` | `GetPullRequestFilesToolHandler` | Returns classified file list for a PR as plain text; supports pagination (F004) |
-| `get_file_content_at_ref` | `GetFileContentAtRefToolHandler` | Returns file content at a specific Git ref as plain text |
-| `get_local_files` | `GetLocalChangesFilesToolHandler` | Lists locally changed files with classification as plain text |
-| `get_local_file_diff` | `GetLocalFileDiffToolHandler` | Returns plain text diff for one local file |
-| `get_local_content` | `GetLocalContentToolHandler` | Returns one paginated page of local diff content as plain text |
+| `.github/CodebaseUnderstanding.md` | **Locate a file**, understand project structure, find which class owns a responsibility, check DI registrations, see what tests exist | Complete file-role inventory, model dependency graph, DI registration table, test-file map. This is the **index** — start here to find where things are. |
+| `.github/ProjectConventions.md` | **Follow a convention**, check naming rules, verify the correct pattern for JSON serialization, testing, DI, or error handling | Architecture overview, data-flow diagrams, coding conventions table, testing conventions table, quick-reference extension checklists (§5). This is the **cheat sheet**. |
+| `.github/Architecture.md` | **Understand how a subsystem works internally** — MCP protocol loop, provider architecture, auth chain, config resolution, analysis pipeline, Copilot review orchestration | Deep-dive mechanics: request lifecycle, serialization pipeline, provider selection, token caching, `IPostConfigureOptions` lazy resolution, orchestrator sequencing, finding validation pipeline. Read this when debugging or modifying internals, **not** for routine feature work. |
+| `.github/Contracts.md` | **Work with tool input/output JSON** — add a field to a DTO, add a new tool, fix a contract test, understand what the consuming AI agent sees | Exact JSON examples for all MCP tools, input parameter tables, output field tables with types and nullability, error format, serialization pipeline, shared DTO reference, enum/constant value catalog. |
+| `.github/ExtensionRecipes.md` | **Implement a new feature type** — new MCP tool, new domain model, new analyzer, new CLI command, new SCM provider, new config option | Step-by-step recipes with C# code templates (`{Name}` placeholders), validation checklists, and common pitfalls. |
 
----
+### Decision guide
 
-## Provider detection order
-
-1. Explicit `--provider` CLI flag
-2. `GitHub.Owner` present in config
-3. `AzureDevOps.OrganizationName` present in config
-4. Git remote URL from `--repo` path or CWD
-5. Default: Azure DevOps
-
-## Auth chain (per provider)
-
-PAT → cached token → CLI tool (`az account get-access-token` / `gh auth token`) → error with actionable instructions
-
-## Config priority
-
-CLI args > environment variables > `appsettings.Local.json` > `appsettings.json` > auto-detect from git remote > cached config
-
----
-
-## After making code changes — always update docs
-
-| Changed | Update |
-|---|---|
-| Added/removed/modified files | `.github/CodebaseUnderstanding.md` (file-role map, DI registrations) |
-| New architectural pattern or convention | `.github/ProjectConventions.md` |
-| MCP protocol/provider/auth/pipeline internals | `.github/Architecture.md` |
-| Tool input schema, output DTO, error format | `.github/Contracts.md` |
-| New extension pattern or recipe step | `.github/ExtensionRecipes.md` |
-| New MCP tool, CLI flag, auth change, new provider | `DeveloperGuide.md` |
-
----
-
-## Build & test
-
-```powershell
-# Build
-dotnet build REBUSS.Pure.sln
-
-# Run unit tests
-dotnet test --filter "FullyQualifiedName!~SmokeTests"
-
-# Run smoke tests (requires compiled binary)
-dotnet test REBUSS.Pure.SmokeTests
 ```
+Task: "Add a new MCP tool"
+  1. ExtensionRecipes.md §1  → step-by-step recipe with code templates
+  2. Contracts.md §3         → study an existing tool's contract as reference
+  3. CodebaseUnderstanding.md → find exact file paths for DI registration, test location
+  4. ProjectConventions.md §3-4 → verify serialization and testing conventions
+
+Task: "Fix a bug in the diff provider"
+  1. CodebaseUnderstanding.md → locate the provider file, its tests, its dependencies
+  2. ProjectConventions.md §2 → understand data flow through the provider
+  3. Architecture.md §2       → if the bug involves provider internals/facade pattern
+
+Task: "Change JSON output of an existing tool"
+  1. Contracts.md §3+§4       → current contract (fields, types, nullability)
+  2. ExtensionRecipes.md §3   → recipe for modifying JSON output (which test layers to update)
+  3. CodebaseUnderstanding.md → find DTO file, handler file, all 3 test layers
+
+Task: "Understand how authentication works"
+  1. Architecture.md §3       → auth chain, token caching, DelegatingHandler retry
+  2. ProjectConventions.md §6 → config priority table, auth quick reference
+
+Task: "Modify the Copilot review or finding validation pipeline"
+  1. CodebaseUnderstanding.md → locate orchestrator, validator, scope resolver, inspection writer
+  2. Architecture.md          → orchestrator sequencing (parallel page review, severity-ordered validation pagination)
+  3. ProjectConventions.md    → DI conventions for optional services (FindingValidator/Resolver are nullable)
+
+Task: "General code change / bug fix"
+  1. CodebaseUnderstanding.md → locate files involved
+  2. ProjectConventions.md    → verify conventions
+  (Architecture.md, Contracts.md, ExtensionRecipes.md usually not needed)
+```
+
+### Rules
+- **Do not skip the reference docs.** If a task involves creating or modifying code, check at least `CodebaseUnderstanding.md` (for file locations) and `ProjectConventions.md` (for conventions) before writing code.
+- **Do not read files you don't need.** `Architecture.md` is for internals — skip it for routine feature work. `ExtensionRecipes.md` is for new feature types — skip it for bug fixes.
+- **Trust the reference docs over assumptions.** If a file path, convention, or contract is documented in these files, use it. Do not guess.
+
+---
+
+## Reference docs maintenance
+
+### Codebase Understanding Updates
+After applying all code changes and before finishing your response, update
+`.github/CodebaseUnderstanding.md` to reflect every modification you made:
+add or remove files in the file-role map, update the model dependency graph,
+adjust DI registrations, and replace the current file contents for every
+modified in-scope file.
+
+### Project Conventions Updates
+Update `.github/ProjectConventions.md` **only if** the change introduces a new
+architectural pattern, convention, or extension point not yet documented.
+
+### Architecture Updates
+Update `.github/Architecture.md` **only if** the change modifies internal mechanics
+of the MCP protocol layer (server loop, JSON-RPC dispatch, transport), provider
+architecture (facade pattern, interface forwarding, provider selection),
+authentication/configuration resolution (auth chain, token caching,
+`IPostConfigureOptions` pattern, workspace root resolution), the analysis
+pipeline (orchestrator, inter-analyzer data sharing), or the Copilot review
+pipeline (parallel page review, finding parsing/scoping/validation, severity
+ordering, page allocation for SDK calls). Do **not** update for routine
+feature additions, new tools, new analyzers, or prompt changes.
+
+### Contract Updates
+Update `.github/Contracts.md` whenever a tool's input schema, output JSON shape,
+error format, or serialization behavior changes. This includes: adding, removing,
+or renaming fields in tool output DTOs (`Tools/Models/`); adding a new MCP tool;
+changing parameter types or required/optional status in `GetToolDefinition()`;
+and modifying enum/constant values (state, changeType, op, reviewPriority, scope).
+Do **not** update for internal refactoring that preserves the wire format.
+
+### Extension Recipes Updates
+Update `.github/ExtensionRecipes.md` **only if** an extension pattern itself changes —
+e.g. a new required step is added to the "add MCP tool" recipe, the DI registration
+pattern changes, a new type of extensible component is introduced, or test
+scaffolding conventions change. Do **not** update when merely implementing a feature
+using an existing recipe.
+
+### Update README and DeveloperGuide
+After applying changes to the project, update `README.md` and `DeveloperGuide.md` **only if** the modifications provide meaningful value to the documentation.
+Skip the update if the changes are too minor, overly detailed, or not relevant for end-users.
+
+**`DeveloperGuide.md` must be updated when any of the following change:**
+
+- A new MCP tool is added or an existing tool's parameters change (update the MCP Tools Reference tables, including primary vs. legacy classification)
+- The recommended review workflow changes (update the Review Workflows section)
+- A new CLI flag or server argument is added to `CliArgumentParser` (update the CLI Commands section)
+- Authentication or configuration handling changes for any provider — Azure DevOps or GitHub (update Authentication and Configuration sections)
+- A new SCM provider is introduced (add corresponding auth, config, and troubleshooting sub-sections)
+- A new troubleshooting scenario is identified (add to the Troubleshooting section)
+
+Do **not** update `DeveloperGuide.md` for internal refactoring, test changes, or implementation details that have no end-user impact.
+
+### Code Quality and Testing Requirements
+After modifying or generating code:
+
+- Ensure that existing unit tests still pass and correctly cover the updated behavior.
+- If tests fail due to legitimate logic changes, update or extend them accordingly.
+- Add new unit tests when new functionality requires coverage.
+- Follow Clean Code principles and strictly adhere to SOLID design guidelines in all code you produce or modify.

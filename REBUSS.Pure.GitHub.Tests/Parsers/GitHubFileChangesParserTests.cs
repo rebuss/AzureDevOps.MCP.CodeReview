@@ -103,4 +103,41 @@ public class GitHubFileChangesParserTests
 
         Assert.Equal(expected, mapped);
     }
+
+    [Fact]
+    public void ParseWithPatches_ExtractsPatchField_WhenPresent()
+    {
+        const string json = """
+            [
+                {
+                    "filename": "src/A.cs",
+                    "status": "modified",
+                    "additions": 1,
+                    "deletions": 1,
+                    "patch": "@@ -1,1 +1,1 @@\n-old\n+new"
+                }
+            ]
+            """;
+
+        var result = _parser.ParseWithPatches(json);
+
+        Assert.Single(result);
+        Assert.Equal("src/A.cs", result[0].File.Path);
+        Assert.Equal("@@ -1,1 +1,1 @@\n-old\n+new", result[0].Patch);
+    }
+
+    [Fact]
+    public void ParseWithPatches_ReturnsNullPatch_WhenAbsent()
+    {
+        const string json = """
+            [
+                { "filename": "lib/blob.bin", "status": "modified", "additions": 0, "deletions": 0 }
+            ]
+            """;
+
+        var result = _parser.ParseWithPatches(json);
+
+        Assert.Single(result);
+        Assert.Null(result[0].Patch);
+    }
 }

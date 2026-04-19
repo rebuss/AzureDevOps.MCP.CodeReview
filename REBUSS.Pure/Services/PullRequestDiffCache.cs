@@ -48,18 +48,25 @@ public sealed class PullRequestDiffCache : IPullRequestDiffCache
 
         _logger.LogInformation("PR diff cache miss for PR #{PrNumber}, fetching from provider", prNumber);
 
+        // Use CancellationToken.None in the factory so that a single caller's
+        // cancellation does not kill the shared fetch for all waiters.
+        // Each caller cancels around their own await via ct.
         var lazy = _inflight.GetOrAdd(prNumber,
-            _ => new Lazy<Task<PullRequestDiff>>(() => _inner.GetDiffAsync(prNumber, ct)));
+            _ => new Lazy<Task<PullRequestDiff>>(() => _inner.GetDiffAsync(prNumber, CancellationToken.None)));
 
         try
         {
-            var diff = await lazy.Value;
+            var diff = await lazy.Value.WaitAsync(ct);
             _cache.TryAdd(prNumber, diff);
             _inflight.TryRemove(KeyValuePair.Create(prNumber, lazy));
             return diff;
         }
         catch
         {
+            // Evict this entry so the next caller gets a fresh attempt.
+            // For caller-only cancellation (WaitAsync threw but the inner task is
+            // still running), TryRemove uses the exact KeyValuePair — if another
+            // caller already swapped in a new Lazy, this is a harmless no-op.
             _inflight.TryRemove(KeyValuePair.Create(prNumber, lazy));
             throw;
         }

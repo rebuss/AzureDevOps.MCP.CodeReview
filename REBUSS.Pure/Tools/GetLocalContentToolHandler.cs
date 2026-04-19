@@ -1,131 +1,151 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using REBUSS.Pure.Core;
-using REBUSS.Pure.Core.Models;
-using REBUSS.Pure.Core.Models.ResponsePacking;
+using REBUSS.Pure.Core.Services.CopilotReview;
 using REBUSS.Pure.Core.Shared;
 using REBUSS.Pure.Properties;
+using REBUSS.Pure.Services.CopilotReview;
 using REBUSS.Pure.Services.LocalReview;
-using REBUSS.Pure.Services.Pagination;
-using REBUSS.Pure.Services.ResponsePacking;
-using REBUSS.Pure.Tools.Models;
+using REBUSS.Pure.Services.PrEnrichment;
 using REBUSS.Pure.Tools.Shared;
 
 namespace REBUSS.Pure.Tools
 {
+    /// <summary>
+    /// Handles the execution of the get_local_content MCP tool. Triggers Copilot
+    /// review of enriched local changes and returns page review summaries.
+    /// Copilot SDK is required — there is no content-only fallback.
+    /// </summary>
     [McpServerToolType]
     public class GetLocalContentToolHandler
     {
-        private readonly ILocalReviewProvider _localProvider;
         private readonly IContextBudgetResolver _budgetResolver;
-        private readonly ITokenEstimator _tokenEstimator;
-        private readonly IFileClassifier _fileClassifier;
-        private readonly IPageAllocator _pageAllocator;
+        private readonly ILocalEnrichmentOrchestrator _enrichmentOrchestrator;
+        private readonly IOptions<WorkflowOptions> _workflowOptions;
+        private readonly ICopilotAvailabilityDetector _copilotAvailability;
+        private readonly ICopilotReviewOrchestrator _copilotReviewOrchestrator;
+        private readonly CopilotReviewWaiter _copilotReviewWaiter;
+        private readonly IProgressReporter _progressReporter;
         private readonly ILogger<GetLocalContentToolHandler> _logger;
 
         public GetLocalContentToolHandler(
-            ILocalReviewProvider localProvider,
             IContextBudgetResolver budgetResolver,
-            ITokenEstimator tokenEstimator,
-            IFileClassifier fileClassifier,
-            IPageAllocator pageAllocator,
+            ILocalEnrichmentOrchestrator enrichmentOrchestrator,
+            IOptions<WorkflowOptions> workflowOptions,
+            ICopilotAvailabilityDetector copilotAvailability,
+            ICopilotReviewOrchestrator copilotReviewOrchestrator,
+            CopilotReviewWaiter copilotReviewWaiter,
+            IProgressReporter progressReporter,
             ILogger<GetLocalContentToolHandler> logger)
         {
-            _localProvider = localProvider;
             _budgetResolver = budgetResolver;
-            _tokenEstimator = tokenEstimator;
-            _fileClassifier = fileClassifier;
-            _pageAllocator = pageAllocator;
+            _enrichmentOrchestrator = enrichmentOrchestrator;
+            _workflowOptions = workflowOptions;
+            _copilotAvailability = copilotAvailability;
+            _copilotReviewOrchestrator = copilotReviewOrchestrator;
+            _copilotReviewWaiter = copilotReviewWaiter;
+            _progressReporter = progressReporter;
             _logger = logger;
         }
 
         [McpServerTool(Name = "get_local_content"), Description(
-            "Returns plain-text diff content for a specific page of local uncommitted changes. " +
-            "One content block per file with -/+/space prefixed lines, plus a pagination footer. " +
-            "The tool computes page allocation internally.")]
+            "Returns Copilot-assisted review summaries for local uncommitted changes. " +
+            "Reuses background enrichment when available. If enrichment is still running " +
+            "and cannot complete within the internal timeout, returns a friendly 'still " +
+            "preparing' status block — never a raw timeout error.")]
         public async Task<IEnumerable<ContentBlock>> ExecuteAsync(
-            [Description("Page number to retrieve (1-based)")] int? pageNumber = null,
+            [Description("Page number (accepted for compatibility, ignored — all pages returned)")] int? pageNumber = null,
             [Description("Review scope: 'working-tree' (default), 'staged', or a branch/ref name")] string? scope = null,
             [Description("Model name for context budget resolution")] string? modelName = null,
             [Description("Explicit token budget override")] int? maxTokens = null,
+            IProgress<ProgressNotificationValue>? progress = null,
             CancellationToken cancellationToken = default)
         {
-            if (pageNumber == null)
-                throw new McpException(Resources.ErrorMissingRequiredPageNumber);
-            if (pageNumber < 1)
-                throw new McpException(Resources.ErrorPageNumberMustBePositive);
-
             try
             {
                 var parsedScope = LocalReviewScope.Parse(scope);
-                _logger.LogInformation(Resources.LogGetLocalContentEntry, pageNumber, parsedScope);
+                var scopeString = parsedScope.ToString();
+                _logger.LogInformation(Resources.LogGetLocalContentEntry, pageNumber, scopeString);
                 var sw = Stopwatch.StartNew();
+
+                await _progressReporter.ReportAsync(progress, 0, 4,
+                    $"Starting content retrieval for local changes (scope: {scopeString})", cancellationToken);
 
                 var budget = _budgetResolver.Resolve(maxTokens, modelName);
                 var safeBudget = budget.SafeBudgetTokens;
 
-                var localFiles = await _localProvider.GetFilesAsync(parsedScope, cancellationToken);
-                var candidates = BuildStatBasedCandidates(localFiles.Files);
-                candidates.Sort(PackingPriorityComparer.Instance);
-
-                var allocation = _pageAllocator.Allocate(candidates, safeBudget);
-
-                if (pageNumber > allocation.TotalPages)
-                    throw new McpException(
-                        string.Format(Resources.ErrorPageNumberExceedsTotalPages, pageNumber, allocation.TotalPages));
-
-                var pageSlice = allocation.Pages[pageNumber.Value - 1];
-
-                var diffTasks = pageSlice.Items
-                    .Select(item => (
-                        Index: item.OriginalIndex,
-                        Task: _localProvider.GetFileDiffAsync(
-                            candidates[item.OriginalIndex].Path, parsedScope, cancellationToken)))
-                    .ToList();
-
-                await Task.WhenAll(diffTasks.Select(d => d.Task));
-
-                var pageFiles = new List<StructuredFileChange>(diffTasks.Count);
-                var pageCandidateIndices = new List<int>(diffTasks.Count);
-                foreach (var (index, task) in diffTasks)
+                // Fast-path: a Failed snapshot means the prior background body raised.
+                var snapshot = _enrichmentOrchestrator.TryGetSnapshot(scopeString);
+                if (snapshot is { Status: LocalEnrichmentStatus.Failed, Failure: not null })
                 {
-                    pageCandidateIndices.Add(index);
-                    var fileChange = task.Result.Files.FirstOrDefault();
-                    if (fileChange != null)
-                        pageFiles.Add(FileTokenMeasurement.MapToStructured(fileChange));
+                    _logger.LogInformation("Local content request hit Failed snapshot (scope '{Scope}'); returning friendly status", scopeString);
+                    return BuildFriendlyFailureBlocks(scopeString, snapshot.Failure!);
                 }
 
-                var categories = BuildCategoryBreakdown(pageCandidateIndices, candidates);
+                _enrichmentOrchestrator.TriggerEnrichment(scopeString, safeBudget);
 
-                var blocks = new List<ContentBlock>(pageFiles.Count + 2);
-                blocks.Add(new TextContentBlock
-                {
-                    Text = PlainTextFormatter.FormatLocalContentHeader(
-                        localFiles.RepositoryRoot,
-                        localFiles.CurrentBranch,
-                        parsedScope.ToString())
-                });
-                foreach (var f in pageFiles)
-                    blocks.Add(new TextContentBlock { Text = PlainTextFormatter.FormatFileDiff(f) });
+                using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                linkedCts.CancelAfter(_workflowOptions.Value.ContentInternalTimeoutMs);
 
-                blocks.Add(new TextContentBlock
+                await _progressReporter.ReportAsync(progress, 1, 4,
+                    $"Waiting for enrichment — local changes ({scopeString})", cancellationToken);
+
+                LocalEnrichmentResult result;
+                try
                 {
-                    Text = PlainTextFormatter.FormatSimplePaginationBlock(
-                        pageNumber.Value, allocation.TotalPages,
-                        pageFiles.Count, allocation.TotalItems,
-                        pageSlice.BudgetUsed,
-                        categories)
-                });
+                    result = await _enrichmentOrchestrator.WaitForEnrichmentAsync(scopeString, linkedCts.Token);
+                }
+                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                {
+                    _logger.LogInformation(
+                        "Local content wait expired after {TimeoutMs}ms (scope '{Scope}'); returning friendly status",
+                        _workflowOptions.Value.ContentInternalTimeoutMs, scopeString);
+                    return BuildFriendlyStillPreparingBlocks(scopeString);
+                }
+
+                await _progressReporter.ReportAsync(progress, 2, null,
+                    "Enrichment complete — checking review mode", cancellationToken);
+
+                bool copilotAvailable;
+                try
+                {
+                    copilotAvailable = await _copilotAvailability.IsAvailableAsync(cancellationToken);
+                }
+                catch (CopilotUnavailableException ex)
+                {
+                    sw.Stop();
+                    _logger.LogWarning(
+                        "Local review Copilot layer unavailable (strict mode): {Reason}. Remediation: {Remediation}",
+                        ex.Verdict.Reason, ex.Verdict.Remediation);
+                    throw;
+                }
+
+                if (!copilotAvailable)
+                    throw new McpException(Resources.ErrorCopilotRequired);
+
+                await _progressReporter.ReportAsync(progress, 3, null,
+                    $"Copilot review started for local changes ({scopeString})", cancellationToken);
+
+                var reviewKey = $"local:{scopeString}:{result.RepositoryRoot}";
+                _copilotReviewOrchestrator.TriggerReview(reviewKey, result);
+
+                var copilotResult = await _copilotReviewWaiter.WaitWithProgressAsync(
+                    reviewKey, progress, 4, cancellationToken);
+
+                var copilotBlocks = BuildCopilotAssistedBlocks(scopeString, copilotResult);
 
                 sw.Stop();
-                _logger.LogInformation(Resources.LogGetLocalContentCompleted,
-                    pageNumber, allocation.TotalPages, pageFiles.Count, sw.ElapsedMilliseconds);
+                _logger.LogInformation(
+                    "Local copilot-assisted content returned in {Ms}ms (scope '{Scope}', {Pages} pages, {Succeeded} ok, {Failed} failed)",
+                    sw.ElapsedMilliseconds, scopeString,
+                    copilotResult.TotalPages, copilotResult.SucceededPages, copilotResult.FailedPages);
 
-                return blocks;
+                return copilotBlocks;
             }
             catch (McpException) { throw; }
             catch (Exception ex)
@@ -135,34 +155,57 @@ namespace REBUSS.Pure.Tools
             }
         }
 
-        private List<PackingCandidate> BuildStatBasedCandidates(List<PullRequestFileInfo> files)
+        private static List<ContentBlock> BuildCopilotAssistedBlocks(
+            string scopeString, Core.Models.CopilotReview.CopilotReviewResult copilotResult)
         {
-            var candidates = new List<PackingCandidate>(files.Count);
-            foreach (var file in files)
+            var blocks = new List<ContentBlock>(copilotResult.PageReviews.Count + 1);
+
+            blocks.Add(new TextContentBlock
             {
-                var estimatedTokens = file.Changes > 0
-                    ? _tokenEstimator.EstimateFromStats(file.Additions, file.Deletions)
-                    : PaginationConstants.FallbackEstimateWhenLinecountsUnknown;
-                var classification = _fileClassifier.Classify(file.Path);
-                candidates.Add(new PackingCandidate(
-                    file.Path,
-                    estimatedTokens,
-                    classification.Category,
-                    file.Additions + file.Deletions));
+                Text = PlainTextFormatter.FormatCopilotReviewHeader(
+                    $"Local changes ({scopeString})",
+                    copilotResult.TotalPages,
+                    copilotResult.SucceededPages,
+                    copilotResult.FailedPages)
+            });
+
+            foreach (var pageReview in copilotResult.PageReviews)
+            {
+                blocks.Add(new TextContentBlock
+                {
+                    Text = PlainTextFormatter.FormatCopilotPageReviewBlock(pageReview)
+                });
             }
-            return candidates;
+
+            return blocks;
         }
 
-        private static Dictionary<string, int> BuildCategoryBreakdown(
-            List<int> pageCandidateIndices, List<PackingCandidate> candidates)
+        private static List<ContentBlock> BuildFriendlyStillPreparingBlocks(string scopeString)
         {
-            var categories = new Dictionary<string, int>();
-            foreach (var idx in pageCandidateIndices)
-            {
-                var key = candidates[idx].Category.ToString().ToLowerInvariant();
-                categories[key] = categories.GetValueOrDefault(key) + 1;
-            }
-            return categories;
+            return
+            [
+                new TextContentBlock
+                {
+                    Text = PlainTextFormatter.FormatFriendlyStatus(
+                        headline: "Response is still being prepared",
+                        explanation: $"Background enrichment for local changes ({scopeString}) is still running.",
+                        suggestedNextAction: "Retry get_local_content in a moment")
+                }
+            ];
+        }
+
+        private static List<ContentBlock> BuildFriendlyFailureBlocks(string scopeString, LocalEnrichmentFailure failure)
+        {
+            return
+            [
+                new TextContentBlock
+                {
+                    Text = PlainTextFormatter.FormatFriendlyStatus(
+                        headline: $"Background enrichment failed for local changes ({scopeString})",
+                        explanation: $"{failure.ExceptionTypeName}: {failure.SanitizedMessage}",
+                        suggestedNextAction: "Retry get_local_content")
+                }
+            ];
         }
     }
 }

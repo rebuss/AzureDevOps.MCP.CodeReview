@@ -2,7 +2,6 @@ using REBUSS.Pure.Core;
 using REBUSS.Pure.Core.Models.Pagination;
 using REBUSS.Pure.Core.Models.ResponsePacking;
 using REBUSS.Pure.Core.Shared;
-using REBUSS.Pure.Properties;
 using REBUSS.Pure.Services.Pagination;
 using REBUSS.Pure.Services.ResponsePacking;
 using REBUSS.Pure.Tools.Models;
@@ -13,7 +12,7 @@ namespace REBUSS.Pure.Tools.Shared;
 /// Shared helpers for pagination, candidate building, page extraction, and manifest
 /// construction used across multiple tool handlers. Eliminates duplication of
 /// <c>SortCandidates</c>, <c>BuildCandidates</c>, <c>ExtractPageFiles</c>,
-/// <c>BuildPageManifest</c>, and <c>TruncateHunks</c>.
+/// and <c>BuildPageManifest</c>.
 /// </summary>
 internal static class ToolHandlerHelpers
 {
@@ -138,44 +137,4 @@ internal static class ToolHandlerHelpers
         };
     }
 
-    /// <summary>
-    /// Truncates a <see cref="StructuredFileChange"/> to fit within the given partial
-    /// budget by including hunks greedily until the budget is exhausted.
-    /// </summary>
-    public static StructuredFileChange TruncateHunks(
-        StructuredFileChange file,
-        int budgetForPartial,
-        int safeBudgetTokens,
-        ITokenEstimator tokenEstimator)
-    {
-        var truncated = new StructuredFileChange
-        {
-            Path = file.Path,
-            ChangeType = file.ChangeType,
-            SkipReason = file.SkipReason,
-            Additions = file.Additions,
-            Deletions = file.Deletions,
-            Hunks = new List<StructuredHunk>()
-        };
-
-        var usedTokens = 0;
-        foreach (var hunk in file.Hunks)
-        {
-            var plainText = PlainTextFormatter.FormatHunk(hunk);
-            var estimation = tokenEstimator.Estimate(plainText, safeBudgetTokens);
-
-            if (usedTokens + estimation.EstimatedTokens > budgetForPartial)
-                break;
-
-            truncated.Hunks.Add(hunk);
-            usedTokens += estimation.EstimatedTokens;
-        }
-
-        if (truncated.Hunks.Count < file.Hunks.Count)
-        {
-            truncated.SkipReason = string.Format(Resources.ErrorPartiallyIncludedHunks, truncated.Hunks.Count, file.Hunks.Count);
-        }
-
-        return truncated;
-    }
 }

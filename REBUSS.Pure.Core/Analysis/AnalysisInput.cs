@@ -24,11 +24,6 @@ public sealed record AnalysisInput
     public string? LocalRepositoryRoot { get; init; }
 
     /// <summary>
-    /// Provider used for this review — allows analyzers to fetch additional file content.
-    /// </summary>
-    public required IFileContentDataProvider ContentProvider { get; init; }
-
-    /// <summary>
     /// Sections already produced by earlier analyzers (for chaining).
     /// Keyed by <see cref="IReviewAnalyzer.SectionKey"/>.
     /// </summary>

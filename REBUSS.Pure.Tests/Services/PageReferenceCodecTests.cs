@@ -15,7 +15,7 @@ public class PageReferenceCodecTests
     public void Encode_ThenDecode_RoundTrip_IdenticalData()
     {
         var requestParams = JsonDocument.Parse("{\"prNumber\":42}").RootElement;
-        var data = new PageReferenceData("get_pr_diff", requestParams, 89600, 2, "abc123def456");
+        var data = new PageReferenceData("get_pr_files", requestParams, 89600, 2, "abc123def456");
 
         var encoded = _codec.Encode(data);
         var decoded = _codec.TryDecode(encoded);
@@ -71,7 +71,7 @@ public class PageReferenceCodecTests
     public void Encode_ActualRequestParamsPreserved_NotHashed()
     {
         var requestParams = JsonDocument.Parse("{\"prNumber\":42}").RootElement;
-        var data = new PageReferenceData("get_pr_diff", requestParams, 89600, 1, "abc");
+        var data = new PageReferenceData("get_pr_files", requestParams, 89600, 1, "abc");
 
         var encoded = _codec.Encode(data);
         var decoded = _codec.TryDecode(encoded);
@@ -142,7 +142,7 @@ public class PageReferenceCodecTests
     public void Encode_ProducesNonEmptyString()
     {
         var requestParams = JsonDocument.Parse("{\"prNumber\":1}").RootElement;
-        var data = new PageReferenceData("get_pr_diff", requestParams, 1000, 1, null);
+        var data = new PageReferenceData("get_pr_files", requestParams, 1000, 1, null);
 
         var encoded = _codec.Encode(data);
 
@@ -158,8 +158,8 @@ public class PageReferenceCodecTests
     public void Encode_DifferentPageNumbers_DifferentTokens()
     {
         var requestParams = JsonDocument.Parse("{\"prNumber\":42}").RootElement;
-        var data1 = new PageReferenceData("get_pr_diff", requestParams, 89600, 1, "abc");
-        var data2 = new PageReferenceData("get_pr_diff", requestParams, 89600, 2, "abc");
+        var data1 = new PageReferenceData("get_pr_files", requestParams, 89600, 1, "abc");
+        var data2 = new PageReferenceData("get_pr_files", requestParams, 89600, 2, "abc");
 
         Assert.NotEqual(_codec.Encode(data1), _codec.Encode(data2));
     }

@@ -47,13 +47,13 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<GitHubDiffProvider>();
         services.AddSingleton<GitHubMetadataProvider>();
         services.AddSingleton<GitHubFilesProvider>();
-        services.AddSingleton<GitHubFileContentProvider>();
+        services.AddSingleton<GitHubRepositoryArchiveProvider>();
 
         // Unified SCM client facade + interface forwarding
         services.AddSingleton<GitHubScmClient>();
         services.AddSingleton<IScmClient>(sp => sp.GetRequiredService<GitHubScmClient>());
         services.AddSingleton<IPullRequestDataProvider>(sp => sp.GetRequiredService<GitHubScmClient>());
-        services.AddSingleton<IFileContentDataProvider>(sp => sp.GetRequiredService<GitHubScmClient>());
+        services.AddSingleton<IRepositoryArchiveProvider>(sp => sp.GetRequiredService<GitHubScmClient>());
 
         return services;
     }

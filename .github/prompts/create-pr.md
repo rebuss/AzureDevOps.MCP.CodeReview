@@ -108,11 +108,11 @@ Apply the following logic:
 
 # Step 4 — Gather local changes
 
-Call MCP tool: `get_local_files` with `scope` set to `baseBranch`.
+Call MCP tool: `get_local_content` with `scope` set to `baseBranch` and `pageNumber` set to `1`.
 
-This returns the list of changed files with classifications, statistics, and the current branch.
+This returns diffs for local changes with Copilot-assisted review summaries.
 
-For a representative diff, call `get_local_file_diff(path, baseBranch)` for the highest-priority source files (up to 3–5 files). Skip binary, generated, and trivially changed files.
+Review the highest-priority source files (up to 3–5 files). Skip binary, generated, and trivially changed files.
 
 ---
 

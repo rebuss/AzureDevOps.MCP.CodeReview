@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net.Http.Headers;
 using System.Text.Json;
@@ -18,6 +19,12 @@ public class GitHubApiClient : IGitHubApiClient
     private const int MaxPagesPerEndpoint = 10;
     private const int DefaultPerPage = 100;
 
+    // Instance caches: scoped to a single DI resolution (transient client from IHttpClientFactory).
+    // Deduplicates calls within one tool handler invocation; fresh data on every new resolution
+    // so force-pushes are never masked by stale entries.
+    private readonly ConcurrentDictionary<int, string> _prDetailsCache = new();
+    private readonly ConcurrentDictionary<int, string> _prFilesCache = new();
+
     private readonly HttpClient _httpClient;
     private readonly GitHubOptions _options;
     private readonly ILogger<GitHubApiClient> _logger;
@@ -37,18 +44,34 @@ public class GitHubApiClient : IGitHubApiClient
 
     public async Task<string> GetPullRequestDetailsAsync(int pullRequestNumber, CancellationToken cancellationToken = default)
     {
+        if (_prDetailsCache.TryGetValue(pullRequestNumber, out var cached))
+        {
+            _logger.LogDebug("GetPullRequestDetails cache hit for PR #{PullRequestNumber}", pullRequestNumber);
+            return cached;
+        }
+
         _logger.LogDebug("API call: GetPullRequestDetails for PR #{PullRequestNumber}", pullRequestNumber);
 
         var url = $"repos/{_options.Owner}/{_options.RepositoryName}/pulls/{pullRequestNumber}";
-        return await GetStringAsync(url, "GetPullRequestDetails", cancellationToken);
+        var result = await GetStringAsync(url, "GetPullRequestDetails", cancellationToken);
+        _prDetailsCache.TryAdd(pullRequestNumber, result);
+        return result;
     }
 
     public async Task<string> GetPullRequestFilesAsync(int pullRequestNumber, CancellationToken cancellationToken = default)
     {
+        if (_prFilesCache.TryGetValue(pullRequestNumber, out var cached))
+        {
+            _logger.LogDebug("GetPullRequestFiles cache hit for PR #{PullRequestNumber}", pullRequestNumber);
+            return cached;
+        }
+
         _logger.LogDebug("API call: GetPullRequestFiles for PR #{PullRequestNumber}", pullRequestNumber);
 
         var url = $"repos/{_options.Owner}/{_options.RepositoryName}/pulls/{pullRequestNumber}/files";
-        return await GetPaginatedArrayAsync(url, "GetPullRequestFiles", cancellationToken);
+        var result = await GetPaginatedArrayAsync(url, "GetPullRequestFiles", cancellationToken);
+        _prFilesCache.TryAdd(pullRequestNumber, result);
+        return result;
     }
 
     public async Task<string> GetPullRequestCommitsAsync(int pullRequestNumber, CancellationToken cancellationToken = default)
@@ -101,6 +124,29 @@ public class GitHubApiClient : IGitHubApiClient
             filePath, gitRef, (int)response.StatusCode, content.Length, sw.ElapsedMilliseconds);
 
         return content;
+    }
+
+    public async Task DownloadRepositoryZipToFileAsync(string commitRef, string destinationPath, CancellationToken cancellationToken = default)
+    {
+        var url = $"repos/{_options.Owner}/{_options.RepositoryName}/zipball/{Uri.EscapeDataString(commitRef)}";
+
+        _logger.LogDebug("Downloading repository ZIP at ref {CommitRef}", commitRef);
+
+        var sw = Stopwatch.StartNew();
+        using var response = await _httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+
+        LogRateLimitHeaders(response, "DownloadRepositoryZip");
+        response.EnsureSuccessStatusCode();
+
+        await using var httpStream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        await using var fileStream = new FileStream(destinationPath, FileMode.Create, FileAccess.Write, FileShare.None);
+        await httpStream.CopyToAsync(fileStream, cancellationToken);
+
+        sw.Stop();
+        var fileSize = new FileInfo(destinationPath).Length;
+        _logger.LogDebug(
+            "Repository ZIP downloaded: {FileSize} bytes, {ElapsedMs}ms",
+            fileSize, sw.ElapsedMilliseconds);
     }
 
     private void LogRateLimitHeaders(HttpResponseMessage response, string context)

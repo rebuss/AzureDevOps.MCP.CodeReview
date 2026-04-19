@@ -9,7 +9,7 @@ namespace REBUSS.Pure.Core;
 /// Composed of fine-grained capability interfaces so that providers can indicate
 /// which capabilities they support and tool handlers can depend on narrow contracts.
 /// </summary>
-public interface IScmClient : IPullRequestDataProvider, IFileContentDataProvider
+public interface IScmClient : IPullRequestDataProvider, IRepositoryArchiveProvider
 {
     /// <summary>
     /// Human-readable provider name (e.g. "Azure DevOps", "GitHub", "Local Git").
@@ -42,15 +42,4 @@ public interface IPullRequestDataProvider
     /// as "unavailable" rather than "no lines changed".
     /// </remarks>
     Task<PullRequestFiles> GetFilesAsync(int prNumber, CancellationToken ct = default);
-}
-
-/// <summary>
-/// Provides raw file content at a specific Git ref.
-/// </summary>
-public interface IFileContentDataProvider
-{
-    /// <exception cref="Exceptions.FileContentNotFoundException">
-    /// Thrown when the file does not exist at the given ref, or the ref is invalid.
-    /// </exception>
-    Task<FileContent> GetFileContentAsync(string path, string gitRef, CancellationToken ct = default);
 }

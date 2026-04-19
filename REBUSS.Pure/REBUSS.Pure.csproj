@@ -29,6 +29,8 @@
     <EmbeddedResource Include="Cli\Prompts\review-pr.prompt.md" />
     <EmbeddedResource Include="Cli\Prompts\self-review.prompt.md" />
     <EmbeddedResource Include="Cli\Prompts\create-pr.md" />
+    <EmbeddedResource Include="Services\CopilotReview\Prompts\copilot-page-review.md" />
+    <EmbeddedResource Include="Services\CopilotReview\Prompts\copilot-finding-validation.md" />
     <EmbeddedResource Update="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
@@ -45,9 +47,12 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="REBUSS.Pure.Tests" />
+    <InternalsVisibleTo Include="DynamicProxyGenAssembly2" />
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="GitHub.Copilot.SDK" Version="0.2.2" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.3.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.5" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.5" />
     <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.5" />
@@ -69,6 +74,7 @@
     <ProjectReference Include="..\REBUSS.Pure.Core\REBUSS.Pure.Core.csproj" />
     <ProjectReference Include="..\REBUSS.Pure.AzureDevOps\REBUSS.Pure.AzureDevOps.csproj" />
     <ProjectReference Include="..\REBUSS.Pure.GitHub\REBUSS.Pure.GitHub.csproj" />
+    <ProjectReference Include="..\REBUSS.Pure.RoslynProcessor\REBUSS.Pure.RoslynProcessor.csproj" />
   </ItemGroup>
 
 </Project>

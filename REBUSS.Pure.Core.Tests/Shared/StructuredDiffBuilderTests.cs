@@ -58,7 +58,7 @@ public class StructuredDiffBuilderTests
         var hunk = result[0];
         Assert.Contains(hunk.Lines, l => l.Op == '-' && l.Text == "bbb");
         Assert.Contains(hunk.Lines, l => l.Op == '+' && l.Text == "BBB");
-        Assert.Contains(hunk.Lines, l => l.Op == ' ');
+        Assert.DoesNotContain(hunk.Lines, l => l.Op == ' ');
     }
 
     [Fact]

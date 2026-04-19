@@ -80,9 +80,6 @@
   <data name="ErrorFatalMessage" xml:space="preserve">
     <value>[{0}] FATAL: {1}: {2}</value>
   </data>
-  <data name="ErrorFileNotFound" xml:space="preserve">
-    <value>File not found: {0}</value>
-  </data>
   <data name="ErrorFileNotFoundAmongLocalChanges" xml:space="preserve">
     <value>File '{0}' not found among local changes (scope: {1})</value>
   </data>
@@ -104,14 +101,8 @@
   <data name="ErrorMissingRequiredPageNumber" xml:space="preserve">
     <value>Missing required parameter: pageNumber</value>
   </data>
-  <data name="ErrorMissingRequiredPath" xml:space="preserve">
-    <value>Missing required parameter: path</value>
-  </data>
   <data name="ErrorMissingRequiredPrNumber" xml:space="preserve">
     <value>Missing required parameter: prNumber</value>
-  </data>
-  <data name="ErrorMissingRequiredRef" xml:space="preserve">
-    <value>Missing required parameter: ref</value>
   </data>
   <data name="ErrorNoGitRepositoryRoot" xml:space="preserve">
     <value>No git repository root could be resolved. Set a repository path via --repo, MCP roots, or the localRepoPath configuration.</value>
@@ -128,9 +119,6 @@
   <data name="ErrorPageNumberOutOfRange" xml:space="preserve">
     <value>Page number {0} is out of range. Valid range: 1 to {1}.</value>
   </data>
-  <data name="ErrorPartiallyIncludedHunks" xml:space="preserve">
-    <value>Partially included: {0}/{1} hunks fit within budget</value>
-  </data>
   <data name="ErrorPrNumberMustBePositive" xml:space="preserve">
     <value>prNumber must be greater than 0</value>
   </data>
@@ -143,26 +131,17 @@
   <data name="ErrorRetrievingFileDiff" xml:space="preserve">
     <value>Error retrieving file diff: {0}</value>
   </data>
-  <data name="ErrorRetrievingFileContent" xml:space="preserve">
-    <value>Error retrieving file content: {0}</value>
-  </data>
   <data name="ErrorRetrievingLocalContent" xml:space="preserve">
     <value>Error retrieving local content: {0}</value>
   </data>
   <data name="ErrorRetrievingLocalFileDiff" xml:space="preserve">
     <value>Error retrieving local file diff: {0}</value>
   </data>
-  <data name="ErrorRetrievingLocalFiles" xml:space="preserve">
-    <value>Error retrieving local files: {0}</value>
-  </data>
   <data name="ErrorRetrievingPrContent" xml:space="preserve">
     <value>Error retrieving PR content: {0}</value>
   </data>
   <data name="ErrorRetrievingPrDiff" xml:space="preserve">
     <value>Error retrieving PR diff: {0}</value>
-  </data>
-  <data name="ErrorRetrievingPrFiles" xml:space="preserve">
-    <value>Error retrieving PR files: {0}</value>
   </data>
   <data name="ErrorRetrievingPrMetadata" xml:space="preserve">
     <value>Error retrieving PR metadata: {0}</value>
@@ -182,33 +161,6 @@
   <data name="GitRevParseVerifyHead" xml:space="preserve">
     <value>rev-parse --verify HEAD</value>
   </data>
-  <data name="LogGetFileContentAtRefCompleted" xml:space="preserve">
-    <value>[get_file_content_at_ref] Completed: path='{Path}', ref='{Ref}', {Size} bytes, binary={IsBinary}, {ResponseLength} chars, {ElapsedMs}ms</value>
-  </data>
-  <data name="LogGetFileContentAtRefEntry" xml:space="preserve">
-    <value>[get_file_content_at_ref] Entry: path='{Path}', ref='{Ref}'</value>
-  </data>
-  <data name="LogGetFileContentAtRefError" xml:space="preserve">
-    <value>[get_file_content_at_ref] Error (path='{Path}', ref='{Ref}')</value>
-  </data>
-  <data name="LogGetFileContentAtRefNotFound" xml:space="preserve">
-    <value>[get_file_content_at_ref] File content not found (path='{Path}', ref='{Ref}')</value>
-  </data>
-  <data name="LogGetFileDiffCompleted" xml:space="preserve">
-    <value>[get_file_diff] Completed: PR #{PrNumber}, path='{Path}', {ResponseLength} chars, {ElapsedMs}ms</value>
-  </data>
-  <data name="LogGetFileDiffEntry" xml:space="preserve">
-    <value>[get_file_diff] Entry: PR #{PrNumber}, path='{Path}'</value>
-  </data>
-  <data name="LogGetFileDiffError" xml:space="preserve">
-    <value>[get_file_diff] Error (prNumber={PrNumber}, path='{Path}')</value>
-  </data>
-  <data name="LogGetFileDiffFileNotFound" xml:space="preserve">
-    <value>[get_file_diff] File not found in pull request (prNumber={PrNumber}, path='{Path}')</value>
-  </data>
-  <data name="LogGetFileDiffPrNotFound" xml:space="preserve">
-    <value>[get_file_diff] Pull request not found (prNumber={PrNumber}, path='{Path}')</value>
-  </data>
   <data name="LogGetLocalContentCompleted" xml:space="preserve">
     <value>[get_local_content] Completed: page {Page}/{TotalPages}, {FileCount} files, {Ms}ms</value>
   </data>
@@ -217,42 +169,6 @@
   </data>
   <data name="LogGetLocalContentError" xml:space="preserve">
     <value>[get_local_content] Error (pageNumber={PageNumber}, scope={Scope})</value>
-  </data>
-  <data name="LogGetLocalFileDiffCompleted" xml:space="preserve">
-    <value>[get_local_file_diff] Completed: path='{Path}', scope={Scope}, {ResponseLength} chars, {ElapsedMs}ms</value>
-  </data>
-  <data name="LogGetLocalFileDiffEntry" xml:space="preserve">
-    <value>[get_local_file_diff] Entry: path='{Path}', scope={Scope}</value>
-  </data>
-  <data name="LogGetLocalFileDiffError" xml:space="preserve">
-    <value>[get_local_file_diff] Error (path='{Path}')</value>
-  </data>
-  <data name="LogGetLocalFileDiffFileNotFound" xml:space="preserve">
-    <value>[get_local_file_diff] File not found in local changes (path='{Path}')</value>
-  </data>
-  <data name="LogGetLocalFileDiffGitCommandFailed" xml:space="preserve">
-    <value>[get_local_file_diff] Git command failed (path='{Path}')</value>
-  </data>
-  <data name="LogGetLocalFileDiffRepositoryNotFound" xml:space="preserve">
-    <value>[get_local_file_diff] Repository not found</value>
-  </data>
-  <data name="LogGetLocalFilesCompletedF003" xml:space="preserve">
-    <value>[get_local_files] Completed (F003): scope={Scope}, {FileCount} files, {ElapsedMs}ms</value>
-  </data>
-  <data name="LogGetLocalFilesCompletedF004" xml:space="preserve">
-    <value>[get_local_files] Completed (F004): scope={Scope}, page {Page}/{TotalPages}, {ElapsedMs}ms</value>
-  </data>
-  <data name="LogGetLocalFilesEntry" xml:space="preserve">
-    <value>[get_local_files] Entry: scope={Scope}</value>
-  </data>
-  <data name="LogGetLocalFilesError" xml:space="preserve">
-    <value>[get_local_files] Error</value>
-  </data>
-  <data name="LogGetLocalFilesGitCommandFailed" xml:space="preserve">
-    <value>[get_local_files] Git command failed</value>
-  </data>
-  <data name="LogGetLocalFilesRepositoryNotFound" xml:space="preserve">
-    <value>[get_local_files] Repository not found</value>
   </data>
   <data name="LogGetPrContentCompleted" xml:space="preserve">
     <value>[get_pr_content] Completed: PR #{PrNumber}, page {Page}/{TotalPages}, {FileCount} files, {Ms}ms</value>
@@ -265,42 +181,6 @@
   </data>
   <data name="LogGetPrContentPrNotFound" xml:space="preserve">
     <value>[get_pr_content] PR not found (prNumber={PrNumber})</value>
-  </data>
-  <data name="LogGetPrDiffCompletedF003" xml:space="preserve">
-    <value>[get_pr_diff] Completed (F003): PR #{PrNumber}, {FileCount} files, {ElapsedMs}ms</value>
-  </data>
-  <data name="LogGetPrDiffCompletedF004" xml:space="preserve">
-    <value>[get_pr_diff] Completed (F004): PR #{PrNumber}, page {Page}/{TotalPages}, {FileCount} files on page, {ElapsedMs}ms</value>
-  </data>
-  <data name="LogGetPrDiffEntry" xml:space="preserve">
-    <value>[get_pr_diff] Entry: PR #{PrNumber}, pageRef={HasRef}, pageNum={PageNum}</value>
-  </data>
-  <data name="LogGetPrDiffError" xml:space="preserve">
-    <value>[get_pr_diff] Error</value>
-  </data>
-  <data name="LogGetPrDiffMetadataFingerprintFailed" xml:space="preserve">
-    <value>[get_pr_diff] Could not fetch metadata for fingerprint</value>
-  </data>
-  <data name="LogGetPrDiffPrNotFound" xml:space="preserve">
-    <value>[get_pr_diff] Pull request not found</value>
-  </data>
-  <data name="LogGetPrFilesCompletedF003" xml:space="preserve">
-    <value>[get_pr_files] Completed (F003): PR #{PrNumber}, {FileCount} files, {ElapsedMs}ms</value>
-  </data>
-  <data name="LogGetPrFilesCompletedF004" xml:space="preserve">
-    <value>[get_pr_files] Completed (F004): PR #{PrNumber}, page {Page}/{TotalPages}, {ElapsedMs}ms</value>
-  </data>
-  <data name="LogGetPrFilesEntry" xml:space="preserve">
-    <value>[get_pr_files] Entry: PR #{PrNumber}</value>
-  </data>
-  <data name="LogGetPrFilesError" xml:space="preserve">
-    <value>[get_pr_files] Error</value>
-  </data>
-  <data name="LogGetPrFilesMetadataFingerprintFailed" xml:space="preserve">
-    <value>[get_pr_files] Could not fetch metadata for fingerprint</value>
-  </data>
-  <data name="LogGetPrFilesPrNotFound" xml:space="preserve">
-    <value>[get_pr_files] Pull request not found</value>
   </data>
   <data name="LogGetPrMetadataCompleted" xml:space="preserve">
     <value>[get_pr_metadata] Completed: PR #{PrNumber}, {ResponseLength} chars, {ElapsedMs}ms</value>
@@ -353,9 +233,6 @@
   <data name="LogPageAllocatorEmptyCandidates" xml:space="preserve">
     <value>Empty candidates, returning single empty page</value>
   </data>
-  <data name="MsgCopiedInstructions" xml:space="preserve">
-    <value>Copied {0} instruction file(s) to {1}</value>
-  </data>
   <data name="MsgDeletedLegacyPromptFile" xml:space="preserve">
     <value>Deleted legacy prompt file: {0}</value>
   </data>
@@ -380,5 +257,134 @@
   <data name="WarnEmbeddedPromptResourceNotFound" xml:space="preserve">
     <value>Warning: Embedded prompt resource not found: {0}</value>
   </data>
+  <data name="CopilotSetup_ExplainBenefit" xml:space="preserve">
+    <value>REBUSS.Pure can cooperate with GitHub Copilot CLI to provide a review flow that is resilient to IDE conversation summarization. This is optional — existing review tools work without it.</value>
+  </data>
+  <data name="CopilotSetup_PromptInstallGhAndContinue" xml:space="preserve">
+    <value>Install GitHub CLI (prerequisite) and set up GitHub Copilot CLI? [y/N]: </value>
+  </data>
+  <data name="CopilotSetup_PromptInstallExtension" xml:space="preserve">
+    <value>Install the GitHub Copilot CLI extension now? [y/N]: </value>
+  </data>
+  <data name="CopilotSetup_AlreadyInstalled" xml:space="preserve">
+    <value>GitHub Copilot CLI: already installed.</value>
+  </data>
+  <data name="CopilotSetup_InstallSuccess" xml:space="preserve">
+    <value>GitHub Copilot CLI installed successfully.</value>
+  </data>
+  <data name="CopilotSetup_InstallFailed" xml:space="preserve">
+    <value>GitHub Copilot CLI installation failed.</value>
+  </data>
+  <data name="CopilotSetup_DeclineBannerTitle" xml:space="preserve">
+    <value>  GITHUB COPILOT CLI NOT CONFIGURED</value>
+  </data>
+  <data name="CopilotSetup_DeclineBannerBody" xml:space="preserve">
+    <value>Existing REBUSS.Pure review tools are unaffected and will continue to work.
+The optional GitHub Copilot-powered review flow (resilient to IDE conversation
+summarization) will not be available until the Copilot CLI is installed.</value>
+  </data>
+  <data name="CopilotSetup_ManualInstallHint" xml:space="preserve">
+    <value>To enable it later, run:
 
+  gh extension install github/gh-copilot
+</value>
+  </data>
+  <data name="LogCopilotClientStarting" xml:space="preserve">
+    <value>Copilot SDK client starting (model={Model})</value>
+  </data>
+  <data name="LogCopilotClientStarted" xml:space="preserve">
+    <value>Copilot SDK client started in {ElapsedMs}ms</value>
+  </data>
+  <data name="LogCopilotClientStartFailed" xml:space="preserve">
+    <value>Copilot SDK client failed to start: {Reason}</value>
+  </data>
+  <data name="LogCopilotClientStopping" xml:space="preserve">
+    <value>Copilot SDK client stopping</value>
+  </data>
+  <data name="LogCopilotAvailable" xml:space="preserve">
+    <value>Copilot review layer available</value>
+  </data>
+  <data name="LogCopilotNotAvailable" xml:space="preserve">
+    <value>Copilot review layer not available: {Reason}</value>
+  </data>
+  <data name="LogCopilotReviewTriggered" xml:space="preserve">
+    <value>PR {PrNumber} Copilot review triggered ({PageCount} pages)</value>
+  </data>
+  <data name="LogCopilotReviewPageStarted" xml:space="preserve">
+    <value>PR {PrNumber} page {PageNumber} Copilot review started (attempt {Attempt}/3)</value>
+  </data>
+  <data name="LogCopilotReviewPageCompleted" xml:space="preserve">
+    <value>PR {PrNumber} page {PageNumber} Copilot review completed (attempt {Attempt}, {ElapsedMs}ms)</value>
+  </data>
+  <data name="LogCopilotReviewPageFailed" xml:space="preserve">
+    <value>PR {PrNumber} page {PageNumber} Copilot review attempt {Attempt} failed: {Reason}</value>
+  </data>
+  <data name="LogCopilotReviewCompleted" xml:space="preserve">
+    <value>PR {PrNumber} Copilot review completed: {Succeeded}/{Total} pages succeeded</value>
+  </data>
+  <data name="LogCopilotReviewFailed" xml:space="preserve">
+    <value>PR {PrNumber} Copilot review failed: {Reason}</value>
+  </data>
+  <data name="CopilotReviewModeHeader" xml:space="preserve">
+    <value>[review-mode: copilot-assisted]</value>
+  </data>
+  <data name="ErrorCopilotRequired" xml:space="preserve">
+    <value>Copilot SDK is required for code review. Ensure gh copilot is installed and authenticated, and CopilotReview:Enabled is set to true.</value>
+  </data>
+  <data name="LogCopilotReviewUnavailable" xml:space="preserve">
+    <value>Copilot review layer unavailable: {Reason}. Remediation: {Remediation}. TokenSource={TokenSource}, ConfiguredModel={ConfiguredModel}, EntitledModels=[{EntitledModels}], Login={Login}, Host={Host}</value>
+  </data>
+  <data name="LogCopilotReviewAuthenticatedSuccess" xml:space="preserve">
+    <value>Copilot authenticated as {Login} via {AuthType} (host={Host}). TokenSource={TokenSource}, Model={Model}</value>
+  </data>
+  <data name="LogCopilotFreeTierShapeWarning" xml:space="preserve">
+    <value>Copilot quota snapshot looks like a free tier — the configured model may silently downgrade mid-session. QuotaKeys=[{QuotaKeys}]</value>
+  </data>
+  <data name="ErrorCopilotNotAuthenticatedRemediation" xml:space="preserve">
+    <value>Copilot session is not authenticated. Run 'gh auth login --web' with Copilot scopes, then restart the MCP server. Alternatively set REBUSS_COPILOT_TOKEN (env var) or CopilotReview:GitHubToken (config) to a pre-minted Copilot-entitled OAuth token.</value>
+  </data>
+  <data name="ErrorCopilotOverrideTokenRejectedRemediation" xml:space="preserve">
+    <value>The override token supplied via {0} failed Copilot verification. Classic GitHub Personal Access Tokens are NOT valid Copilot-entitled tokens; you need an OAuth token with the 'copilot' scope minted by a first-party GitHub client. Run 'gh auth login --web' to obtain one, or remove the override and use the gh CLI session.</value>
+  </data>
+  <data name="ErrorCopilotModelNotEntitledRemediation" xml:space="preserve">
+    <value>Your Copilot session is not entitled to model '{0}'. Entitled models: [{1}]. Switch CopilotReview:Model in appsettings.json to one of the entitled models, or upgrade your Copilot subscription at https://github.com/settings/copilot.</value>
+  </data>
+  <data name="ErrorCopilotStartFailureRemediation" xml:space="preserve">
+    <value>Copilot SDK client failed to start: {0}. Verify that 'gh' CLI is installed and the 'github/gh-copilot' extension is available (run 'rebuss-pure init' to set them up). Classic GitHub Personal Access Tokens will not work as Copilot tokens.</value>
+  </data>
+  <data name="ErrorCopilotVerificationTimeoutRemediation" xml:space="preserve">
+    <value>Copilot verification exceeded its deadline. The SDK did not respond within the expected window. Retry by restarting the MCP server; if the problem persists, check 'gh copilot --version' and the output of 'gh auth status'.</value>
+  </data>
+  <data name="CopilotSetup_VerificationOk" xml:space="preserve">
+    <value>Copilot session verified ({0}, login={1}, model={2}).</value>
+  </data>
+  <data name="BannerCopilotNotAuthenticatedTitle" xml:space="preserve">
+    <value>  COPILOT SESSION NOT AUTHENTICATED</value>
+  </data>
+  <data name="BannerCopilotNotAuthenticatedBody" xml:space="preserve" xml:lang="en">
+    <value>Your GitHub CLI login does not currently grant access to the configured Copilot model '{0}'.
+
+Reason: {1} ({2})
+{3}
+
+To fix:
+
+  OPTION 1 — Re-run 'gh auth login' with Copilot scopes:
+
+    gh auth login --web
+
+  OPTION 2 — Set a pre-minted Copilot-entitled token (CI/headless):
+
+    set REBUSS_COPILOT_TOKEN=&lt;token&gt;            (Windows)
+    export REBUSS_COPILOT_TOKEN=&lt;token&gt;         (Linux/macOS)
+
+    NOTE: Classic GitHub Personal Access Tokens are NOT valid
+    Copilot-entitled tokens. You need an OAuth token minted by a
+    first-party GitHub client with the 'copilot' scope.
+
+  OPTION 3 — Check your Copilot subscription:
+
+    https://github.com/settings/copilot
+</value>
+  </data>
 </root>

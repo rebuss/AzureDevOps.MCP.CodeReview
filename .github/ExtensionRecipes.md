@@ -200,11 +200,11 @@ public async Task ExecuteAsync_ThrowsMcpException_OnDomainError()
 
 ## 2. Add a New Domain Model
 
-### Reference: `PullRequestDiff.cs` (complex), `FileContent.cs` (simple)
+### Reference: `PullRequestDiff.cs` (complex), `FullPullRequestMetadata.cs` (simple)
 
 ### Steps
 1. **Model** in `REBUSS.Pure.Core/Models/{Name}.cs` (plain class, not record)
-2. **Interface** — if new capability, extend `IPullRequestDataProvider` or `IFileContentDataProvider` in `IScmClient.cs`
+2. **Interface** — if new capability, extend `IPullRequestDataProvider` or `IRepositoryArchiveProvider` in `IScmClient.cs`
 3. **Parser interface + impl** per provider:
    - ADO: `Parsers/I{Name}Parser.cs` + `{Name}Parser.cs` (uses `JsonDocument.Parse`)
    - GitHub: `Parsers/IGitHub{Name}Parser.cs` + `GitHub{Name}Parser.cs`
@@ -336,7 +336,7 @@ REBUSS.Pure.{Provider}/
 services.AddSingleton<{Provider}ScmClient>();
 services.AddSingleton<IScmClient>(sp => sp.GetRequiredService<{Provider}ScmClient>());
 services.AddSingleton<IPullRequestDataProvider>(sp => sp.GetRequiredService<{Provider}ScmClient>());
-services.AddSingleton<IFileContentDataProvider>(sp => sp.GetRequiredService<{Provider}ScmClient>());
+services.AddSingleton<IRepositoryArchiveProvider>(sp => sp.GetRequiredService<{Provider}ScmClient>());
 ```
 
 ### Wire into `Program.cs`:

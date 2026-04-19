@@ -26,4 +26,10 @@ public interface IGitHubApiClient
     /// Returns null when the file does not exist at that ref.
     /// </summary>
     Task<string?> GetFileContentAtRefAsync(string gitRef, string filePath, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Downloads the entire repository as a ZIP archive at a specific ref
+    /// and writes it to <paramref name="destinationPath"/>.
+    /// </summary>
+    Task DownloadRepositoryZipToFileAsync(string commitRef, string destinationPath, CancellationToken cancellationToken = default);
 }

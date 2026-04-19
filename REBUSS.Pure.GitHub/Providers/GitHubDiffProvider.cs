@@ -12,9 +12,14 @@ namespace REBUSS.Pure.GitHub.Providers;
 /// <summary>
 /// Fetches structured diff content from GitHub by:
 /// 1. Reading PR details (title, state, head/base SHAs).
-/// 2. Enumerating changed files from the PR files endpoint.
-/// 3. For each file, fetching raw content at both commits.
-/// 4. Producing structured diff hunks via <see cref="IStructuredDiffBuilder"/>.
+/// 2. Enumerating changed files from the PR files endpoint, including the unified-diff
+///    <c>patch</c> field that GitHub returns for each file.
+/// 3. Parsing the patch directly into <see cref="DiffHunk"/> instances — no per-file
+///    content fetch is needed. GitHub's API call budget is bounded to a single paginated
+///    <c>/pulls/{n}/files</c> request regardless of file count.
+/// 4. For files where GitHub omits the patch (binary, very large diffs, etc.), falls back
+///    to the legacy path: fetch base + head and rebuild hunks via
+///    <see cref="IStructuredDiffBuilder"/>.
 /// </summary>
 public class GitHubDiffProvider
 {
@@ -50,16 +55,17 @@ public class GitHubDiffProvider
             _logger.LogInformation("Fetching diff for PR #{PrNumber}", prNumber);
             var sw = Stopwatch.StartNew();
 
-            var (metadata, files, baseCommit, headCommit) = await FetchPullRequestDataAsync(prNumber, cancellationToken);
+            var (metadata, entries, baseCommit, headCommit) = await FetchPullRequestDataAsync(prNumber, cancellationToken);
 
             _logger.LogInformation(
                 "PR #{PrNumber}: {FileCount} file(s) changed, building diffs (base={BaseCommit}, head={HeadCommit})",
-                prNumber, files.Count,
+                prNumber, entries.Count,
                 baseCommit.Length > 7 ? baseCommit[..7] : baseCommit,
                 headCommit.Length > 7 ? headCommit[..7] : headCommit);
 
-            await BuildFileDiffsAsync(files, baseCommit, headCommit, cancellationToken);
+            await BuildFileDiffsAsync(entries, baseCommit, headCommit, cancellationToken);
 
+            var files = entries.Select(e => e.File).ToList();
             var result = BuildDiff(metadata, files, headCommit);
             sw.Stop();
 
@@ -89,22 +95,23 @@ public class GitHubDiffProvider
             _logger.LogInformation("Fetching diff for file '{Path}' in PR #{PrNumber}", path, prNumber);
             var sw = Stopwatch.StartNew();
 
-            var (metadata, files, baseCommit, headCommit) = await FetchPullRequestDataAsync(prNumber, cancellationToken);
+            var (metadata, entries, baseCommit, headCommit) = await FetchPullRequestDataAsync(prNumber, cancellationToken);
 
             var normalizedPath = NormalizePath(path);
-            var matchingFiles = files
-                .Where(f => NormalizePath(f.Path).Equals(normalizedPath, StringComparison.OrdinalIgnoreCase))
+            var matchingEntries = entries
+                .Where(e => NormalizePath(e.File.Path).Equals(normalizedPath, StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
-            if (matchingFiles.Count == 0)
+            if (matchingEntries.Count == 0)
             {
                 _logger.LogWarning("File '{Path}' not found in PR #{PrNumber}", path, prNumber);
                 throw new FileNotFoundInPullRequestException(
                     string.Format(Resources.ErrorFileNotFoundInPullRequest, path, prNumber));
             }
 
-            await BuildFileDiffsAsync(matchingFiles, baseCommit, headCommit, cancellationToken);
+            await BuildFileDiffsAsync(matchingEntries, baseCommit, headCommit, cancellationToken);
 
+            var matchingFiles = matchingEntries.Select(e => e.File).ToList();
             var result = BuildDiff(metadata, matchingFiles, headCommit);
             sw.Stop();
 
@@ -131,16 +138,16 @@ public class GitHubDiffProvider
         }
     }
 
-    private async Task<(PullRequestMetadata metadata, List<FileChange> files, string baseCommit, string headCommit)>
+    private async Task<(PullRequestMetadata metadata, List<GitHubChangedFile> entries, string baseCommit, string headCommit)>
         FetchPullRequestDataAsync(int prNumber, CancellationToken cancellationToken)
     {
         var prJson = await _apiClient.GetPullRequestDetailsAsync(prNumber, cancellationToken);
         var (metadata, baseCommit, headCommit) = _prParser.ParseWithCommits(prJson);
 
         var filesJson = await _apiClient.GetPullRequestFilesAsync(prNumber, cancellationToken);
-        var files = _changesParser.Parse(filesJson);
+        var entries = _changesParser.ParseWithPatches(filesJson);
 
-        return (metadata, files, baseCommit, headCommit);
+        return (metadata, entries, baseCommit, headCommit);
     }
 
     private static string NormalizePath(string path) => path.TrimStart('/');
@@ -148,56 +155,101 @@ public class GitHubDiffProvider
     internal const int MaxParallelDiffRequests = 5;
 
     private async Task BuildFileDiffsAsync(
-        List<FileChange> files,
+        List<GitHubChangedFile> entries,
         string baseCommit,
         string headCommit,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(baseCommit) || string.IsNullOrEmpty(headCommit))
         {
-            foreach (var file in files)
+            foreach (var entry in entries)
             {
                 _logger.LogDebug(
                     "Skipping diff for '{FilePath}': commit SHAs not resolved (base={BaseCommit}, head={HeadCommit})",
-                    file.Path, baseCommit ?? "<null>", headCommit ?? "<null>");
+                    entry.File.Path, baseCommit ?? "<null>", headCommit ?? "<null>");
             }
             return;
         }
 
         // Pre-filter skippable files synchronously (no I/O needed)
-        foreach (var file in files)
+        foreach (var entry in entries)
         {
-            var skipReason = GetSkipReason(file);
+            var skipReason = GetSkipReason(entry.File);
             if (skipReason is not null)
             {
-                file.SkipReason = skipReason;
+                entry.File.SkipReason = skipReason;
                 _logger.LogDebug(
                     "Skipping diff for '{FilePath}': {SkipReason}",
-                    file.Path, skipReason);
+                    entry.File.Path, skipReason);
             }
         }
 
-        var filesToDiff = files.Where(f => f.SkipReason is null).ToList();
+        var entriesToDiff = entries.Where(e => e.File.SkipReason is null).ToList();
 
-        // Thread-safety: each FileChange is a distinct instance — the lambda
-        // mutates only its own file (Hunks, SkipReason, Additions, Deletions).
+        // Fast path — every entry already has GitHub's pre-built patch. Parsing is purely
+        // CPU-bound, so a synchronous foreach is faster than scheduling tiny parallel tasks.
+        var entriesNeedingFetch = new List<GitHubChangedFile>();
+        foreach (var entry in entriesToDiff)
+        {
+            if (entry.Patch is null)
+            {
+                entriesNeedingFetch.Add(entry);
+                continue;
+            }
+
+            var fileSw = Stopwatch.StartNew();
+            entry.File.Hunks = GitHubPatchHunkParser.Parse(entry.Patch);
+            // GitHub's additions/deletions are authoritative (already populated by the parser);
+            // recomputing from hunks would silently overwrite with potentially smaller numbers
+            // when the patch was truncated.
+            fileSw.Stop();
+
+            _logger.LogDebug(
+                "Parsed patch for '{FilePath}' ({ChangeType}): {HunkCount} hunk(s), {ElapsedMs}ms",
+                entry.File.Path, entry.File.ChangeType, entry.File.Hunks.Count, fileSw.ElapsedMilliseconds);
+        }
+
+        if (entriesNeedingFetch.Count == 0)
+            return;
+
+        _logger.LogDebug(
+            "Falling back to per-file content fetch for {Count} file(s) without patch",
+            entriesNeedingFetch.Count);
+
+        // Slow path — fall back to fetching base + head and rebuilding hunks. Reached when
+        // GitHub omits the patch field (binary file, oversized diff, etc.). Thread-safety:
+        // each FileChange is a distinct instance.
         await Parallel.ForEachAsync(
-            filesToDiff,
+            entriesNeedingFetch,
             new ParallelOptions
             {
                 MaxDegreeOfParallelism = MaxParallelDiffRequests,
                 CancellationToken = cancellationToken
             },
-            async (file, ct) =>
+            async (entry, ct) =>
             {
                 var fileSw = Stopwatch.StartNew();
+                var file = entry.File;
 
-                var baseContentTask = _apiClient.GetFileContentAtRefAsync(baseCommit, file.Path, ct);
-                var headContentTask = _apiClient.GetFileContentAtRefAsync(headCommit, file.Path, ct);
-                await Task.WhenAll(baseContentTask, headContentTask);
+                string? baseContent;
+                string? headContent;
 
-                var baseContent = await baseContentTask;
-                var headContent = await headContentTask;
+                if (string.Equals(file.ChangeType, "add", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Added files have no base version — skip the fetch that would 404.
+                    baseContent = null;
+                    headContent = await _apiClient.GetFileContentAtRefAsync(headCommit, file.Path, ct);
+                    _logger.LogDebug("Skipping base ref fetch for added file '{FilePath}'", file.Path);
+                }
+                else
+                {
+                    var baseContentTask = _apiClient.GetFileContentAtRefAsync(baseCommit, file.Path, ct);
+                    var headContentTask = _apiClient.GetFileContentAtRefAsync(headCommit, file.Path, ct);
+                    await Task.WhenAll(baseContentTask, headContentTask);
+
+                    baseContent = await baseContentTask;
+                    headContent = await headContentTask;
+                }
                 file.Hunks = _diffBuilder.Build(file.Path, baseContent, headContent);
 
                 if (IsFullFileRewrite(baseContent, headContent, file.Hunks))
@@ -249,13 +301,17 @@ public class GitHubDiffProvider
         if (hunks.Count == 0)
             return false;
 
-        var oldLineCount = baseContent.Replace("\r\n", "\n").Split('\n').Length;
-        var newLineCount = targetContent.Replace("\r\n", "\n").Split('\n').Length;
+        var oldLineCount = baseContent.Replace("\r\n", "\n").TrimEnd('\n').Split('\n').Length;
+        var newLineCount = targetContent.Replace("\r\n", "\n").TrimEnd('\n').Split('\n').Length;
 
         if (oldLineCount < FullRewriteMinLineCount && newLineCount < FullRewriteMinLineCount)
             return false;
 
-        return !hunks.SelectMany(h => h.Lines).Any(l => l.Op == ' ');
+        var allLines = hunks.SelectMany(h => h.Lines);
+        var deletions = allLines.Count(l => l.Op == '-');
+        var additions = allLines.Count(l => l.Op == '+');
+
+        return deletions == oldLineCount && additions == newLineCount;
     }
 
     private static PullRequestDiff BuildDiff(

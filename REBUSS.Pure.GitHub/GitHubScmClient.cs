@@ -17,7 +17,7 @@ public sealed class GitHubScmClient : IScmClient
     private readonly GitHubDiffProvider _diffProvider;
     private readonly GitHubMetadataProvider _metadataProvider;
     private readonly GitHubFilesProvider _filesProvider;
-    private readonly GitHubFileContentProvider _contentProvider;
+    private readonly GitHubRepositoryArchiveProvider _archiveProvider;
     private readonly GitHubOptions _options;
 
     public string ProviderName => GitHubOptions.SectionName;
@@ -26,13 +26,13 @@ public sealed class GitHubScmClient : IScmClient
         GitHubDiffProvider diffProvider,
         GitHubMetadataProvider metadataProvider,
         GitHubFilesProvider filesProvider,
-        GitHubFileContentProvider contentProvider,
+        GitHubRepositoryArchiveProvider archiveProvider,
         IOptions<GitHubOptions> options)
     {
         _diffProvider = diffProvider;
         _metadataProvider = metadataProvider;
         _filesProvider = filesProvider;
-        _contentProvider = contentProvider;
+        _archiveProvider = archiveProvider;
         _options = options.Value;
     }
 
@@ -56,6 +56,6 @@ public sealed class GitHubScmClient : IScmClient
     public Task<PullRequestFiles> GetFilesAsync(int prNumber, CancellationToken ct = default)
         => _filesProvider.GetFilesAsync(prNumber, ct);
 
-    public Task<FileContent> GetFileContentAsync(string path, string gitRef, CancellationToken ct = default)
-        => _contentProvider.GetFileContentAsync(path, gitRef, ct);
+    public Task DownloadRepositoryZipAsync(string commitRef, string destinationPath, CancellationToken ct = default)
+        => _archiveProvider.DownloadRepositoryZipAsync(commitRef, destinationPath, ct);
 }

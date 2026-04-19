@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -223,5 +224,49 @@ public class GitHubChainedAuthenticationProviderTests
         var message = Resources.ErrorGitHubAuthRequired;
 
         Assert.Contains("rebuss-pure init", message);
+    }
+
+    [Fact]
+    public async Task GetAuthenticationAsync_CachedToken_LogsAtDebugLevel_NotInformation()
+    {
+        var options = new GitHubOptions();
+        _configStore.Load().Returns(new GitHubCachedConfig
+        {
+            AccessToken = "cached-token",
+            TokenExpiresOn = DateTime.UtcNow.AddHours(1)
+        });
+
+        var logger = new CapturingLogger<GitHubChainedAuthenticationProvider>();
+
+        var provider = new GitHubChainedAuthenticationProvider(
+            Options.Create(options),
+            _configStore,
+            _ghCliTokenProvider,
+            logger);
+
+        await provider.GetAuthenticationAsync();
+
+        // "Using cached GitHub token" must be logged at Debug, not Information
+        Assert.Contains(logger.Entries,
+            e => e.Level == LogLevel.Debug && e.Message.Contains("Using cached GitHub token"));
+        Assert.DoesNotContain(logger.Entries,
+            e => e.Level == LogLevel.Information && e.Message.Contains("Using cached GitHub token"));
+    }
+
+    /// <summary>
+    /// Simple capturing logger that avoids the NSubstitute generic TState matching
+    /// issue with <see cref="ILogger.Log{TState}"/>.
+    /// </summary>
+    private sealed class CapturingLogger<T> : ILogger<T>
+    {
+        public List<(LogLevel Level, string Message)> Entries { get; } = [];
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            Entries.Add((logLevel, formatter(state, exception)));
+        }
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
     }
 }

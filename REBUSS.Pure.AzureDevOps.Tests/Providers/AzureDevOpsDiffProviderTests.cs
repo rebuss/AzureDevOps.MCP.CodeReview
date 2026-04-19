@@ -1,8 +1,10 @@
 using System.Net;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using REBUSS.Pure.AzureDevOps.Api;
+using REBUSS.Pure.AzureDevOps.Configuration;
 using REBUSS.Pure.Core.Exceptions;
 using REBUSS.Pure.Core.Models;
 using REBUSS.Pure.Core.Shared;
@@ -14,6 +16,7 @@ namespace REBUSS.Pure.AzureDevOps.Tests.Providers;
 public class AzureDevOpsDiffProviderTests
 {
     private readonly IAzureDevOpsApiClient _apiClient = Substitute.For<IAzureDevOpsApiClient>();
+    private readonly AzureDevOpsDiffOptions _diffOptions = new() { ZipFallbackThreshold = 30 };
     private readonly AzureDevOpsDiffProvider _provider;
 
     // Minimal valid JSON responses from Azure DevOps API
@@ -58,6 +61,8 @@ public class AzureDevOpsDiffProviderTests
             new FileChangesParser(NullLogger<FileChangesParser>.Instance),
             new StructuredDiffBuilder(new DiffPlexDiffAlgorithm(), NullLogger<StructuredDiffBuilder>.Instance),
             new FileClassifier(),
+            new AzureDevOpsRepositoryArchiveProvider(_apiClient),
+            Options.Create(_diffOptions),
             NullLogger<AzureDevOpsDiffProvider>.Instance);
     }
 
@@ -556,5 +561,315 @@ public class AzureDevOpsDiffProviderTests
     {
         var file = new FileChange { Path = "/src/NewService.cs", ChangeType = "add" };
         Assert.Null(_provider.GetSkipReason(file));
+    }
+
+    // --- ZIP-fallback heuristic ---
+
+    [Fact]
+    public async Task GetDiffAsync_PerFilePath_WhenFileCountAtOrBelowThreshold()
+    {
+        _diffOptions.ZipFallbackThreshold = 5;
+        _apiClient.GetPullRequestDetailsAsync(42).Returns(PrDetailsJson);
+        _apiClient.GetPullRequestIterationsAsync(42).Returns(IterationsJson);
+        _apiClient.GetPullRequestIterationChangesAsync(42, 1).Returns(BuildChangesJson(5));
+
+        for (var i = 1; i <= 5; i++)
+        {
+            _apiClient.GetFileContentAtCommitAsync("bbb222", $"src/F{i}.cs").Returns($"old{i}");
+            _apiClient.GetFileContentAtCommitAsync("aaa111", $"src/F{i}.cs").Returns($"new{i}");
+        }
+
+        await _provider.GetDiffAsync(42);
+
+        // 5 files × 2 calls = 10 per-file fetches; no ZIP download
+        var contentCalls = _apiClient.ReceivedCalls()
+            .Count(c => c.GetMethodInfo().Name == nameof(IAzureDevOpsApiClient.GetFileContentAtCommitAsync));
+        Assert.Equal(10, contentCalls);
+        await _apiClient.DidNotReceive().DownloadRepositoryZipToFileAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GetDiffAsync_ZipPath_WhenFileCountAboveThreshold()
+    {
+        _diffOptions.ZipFallbackThreshold = 5;
+        _apiClient.GetPullRequestDetailsAsync(42).Returns(PrDetailsJson);
+        _apiClient.GetPullRequestIterationsAsync(42).Returns(IterationsJson);
+        _apiClient.GetPullRequestIterationChangesAsync(42, 1).Returns(BuildChangesJson(6));
+
+        // ZIP downloads — produce real archives so extraction can succeed.
+        SetupZipDownload("bbb222", entries: Enumerable.Range(1, 6)
+            .ToDictionary(i => $"src/F{i}.cs", i => $"old{i}"));
+        SetupZipDownload("aaa111", entries: Enumerable.Range(1, 6)
+            .ToDictionary(i => $"src/F{i}.cs", i => $"new{i}"));
+
+        await _provider.GetDiffAsync(42);
+
+        // Two ZIP downloads (base + target), zero per-file fetches.
+        await _apiClient.Received(1).DownloadRepositoryZipToFileAsync(
+            "bbb222", Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await _apiClient.Received(1).DownloadRepositoryZipToFileAsync(
+            "aaa111", Arg.Any<string>(), Arg.Any<CancellationToken>());
+
+        var contentCalls = _apiClient.ReceivedCalls()
+            .Count(c => c.GetMethodInfo().Name == nameof(IAzureDevOpsApiClient.GetFileContentAtCommitAsync));
+        Assert.Equal(0, contentCalls);
+    }
+
+    [Fact]
+    public async Task GetDiffAsync_ZipPath_BuildsCorrectHunks()
+    {
+        _diffOptions.ZipFallbackThreshold = 1;
+        _apiClient.GetPullRequestDetailsAsync(42).Returns(PrDetailsJson);
+        _apiClient.GetPullRequestIterationsAsync(42).Returns(IterationsJson);
+        _apiClient.GetPullRequestIterationChangesAsync(42, 1).Returns(BuildChangesJson(2));
+
+        SetupZipDownload("bbb222", entries: new()
+        {
+            ["src/F1.cs"] = "old line one",
+            ["src/F2.cs"] = "old line two",
+        });
+        SetupZipDownload("aaa111", entries: new()
+        {
+            ["src/F1.cs"] = "new line one",
+            ["src/F2.cs"] = "new line two",
+        });
+
+        var result = await _provider.GetDiffAsync(42);
+
+        Assert.Equal(2, result.Files.Count);
+        foreach (var file in result.Files)
+        {
+            Assert.NotEmpty(file.Hunks);
+            var lines = file.Hunks.SelectMany(h => h.Lines).ToList();
+            Assert.Contains(lines, l => l.Op == '-' && l.Text.StartsWith("old"));
+            Assert.Contains(lines, l => l.Op == '+' && l.Text.StartsWith("new"));
+        }
+    }
+
+    [Fact]
+    public async Task GetDiffAsync_ZipPath_HandlesAddedFile_MissingFromBase()
+    {
+        _diffOptions.ZipFallbackThreshold = 1;
+        _apiClient.GetPullRequestDetailsAsync(42).Returns(PrDetailsJson);
+        _apiClient.GetPullRequestIterationsAsync(42).Returns(IterationsJson);
+        _apiClient.GetPullRequestIterationChangesAsync(42, 1).Returns("""
+            {
+                "changeEntries": [
+                    { "changeType": "add",  "item": { "path": "/src/New.cs" } },
+                    { "changeType": "edit", "item": { "path": "/src/Existing.cs" } }
+                ]
+            }
+            """);
+
+        // Base archive: only the existing file is present.
+        SetupZipDownload("bbb222", entries: new()
+        {
+            ["src/Existing.cs"] = "old",
+        });
+        // Target archive: both files are present.
+        SetupZipDownload("aaa111", entries: new()
+        {
+            ["src/New.cs"] = "class New { }",
+            ["src/Existing.cs"] = "new",
+        });
+
+        var result = await _provider.GetDiffAsync(42);
+
+        var added = result.Files.First(f => f.Path == "src/New.cs");
+        Assert.NotEmpty(added.Hunks);
+        Assert.All(added.Hunks.SelectMany(h => h.Lines), l => Assert.Equal('+', l.Op));
+
+        var edited = result.Files.First(f => f.Path == "src/Existing.cs");
+        Assert.NotEmpty(edited.Hunks);
+    }
+
+    [Fact]
+    public async Task GetDiffAsync_ZipPath_DisabledByZeroThreshold()
+    {
+        _diffOptions.ZipFallbackThreshold = 0;
+        _apiClient.GetPullRequestDetailsAsync(42).Returns(PrDetailsJson);
+        _apiClient.GetPullRequestIterationsAsync(42).Returns(IterationsJson);
+        _apiClient.GetPullRequestIterationChangesAsync(42, 1).Returns(BuildChangesJson(50));
+
+        for (var i = 1; i <= 50; i++)
+        {
+            _apiClient.GetFileContentAtCommitAsync("bbb222", $"src/F{i}.cs").Returns("old");
+            _apiClient.GetFileContentAtCommitAsync("aaa111", $"src/F{i}.cs").Returns("new");
+        }
+
+        await _provider.GetDiffAsync(42);
+
+        await _apiClient.DidNotReceive().DownloadRepositoryZipToFileAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+        var contentCalls = _apiClient.ReceivedCalls()
+            .Count(c => c.GetMethodInfo().Name == nameof(IAzureDevOpsApiClient.GetFileContentAtCommitAsync));
+        Assert.Equal(100, contentCalls);
+    }
+
+    [Fact]
+    public async Task GetDiffAsync_ZipPath_DeletesTempDirectory_AfterCompletion()
+    {
+        _diffOptions.ZipFallbackThreshold = 1;
+        _apiClient.GetPullRequestDetailsAsync(42).Returns(PrDetailsJson);
+        _apiClient.GetPullRequestIterationsAsync(42).Returns(IterationsJson);
+        _apiClient.GetPullRequestIterationChangesAsync(42, 1).Returns(BuildChangesJson(2));
+
+        var capturedZipPaths = new List<string>();
+        _apiClient.DownloadRepositoryZipToFileAsync(
+                Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                var commitId = call.ArgAt<string>(0);
+                var destPath = call.ArgAt<string>(1);
+                capturedZipPaths.Add(destPath);
+                WriteZipForCommit(destPath, commitId, entries: new()
+                {
+                    ["src/F1.cs"] = commitId == "bbb222" ? "old1" : "new1",
+                    ["src/F2.cs"] = commitId == "bbb222" ? "old2" : "new2",
+                });
+                return Task.CompletedTask;
+            });
+
+        await _provider.GetDiffAsync(42);
+
+        // Both ZIP destinations and their parent extraction directory should be gone.
+        Assert.NotEmpty(capturedZipPaths);
+        var instanceDir = Path.GetDirectoryName(capturedZipPaths[0])!;
+        Assert.False(Directory.Exists(instanceDir),
+            $"Temp dir {instanceDir} should be deleted after diff completion");
+    }
+
+    // --- ZIP-fallback test helpers ---
+
+    private static string BuildChangesJson(int fileCount)
+    {
+        var entries = string.Join(",", Enumerable.Range(1, fileCount).Select(i =>
+            $$"""{ "changeType": "edit", "item": { "path": "/src/F{{i}}.cs" } }"""));
+        return $$"""{ "changeEntries": [{{entries}}] }""";
+    }
+
+    private void SetupZipDownload(string commitId, Dictionary<string, string> entries)
+    {
+        _apiClient.DownloadRepositoryZipToFileAsync(
+                commitId, Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                var destPath = call.ArgAt<string>(1);
+                WriteZipForCommit(destPath, commitId, entries);
+                return Task.CompletedTask;
+            });
+    }
+
+    private static void WriteZipForCommit(
+        string destPath, string commitId, Dictionary<string, string> entries)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(destPath)!);
+        using var fs = new FileStream(destPath, FileMode.Create);
+        using var archive = new System.IO.Compression.ZipArchive(
+            fs, System.IO.Compression.ZipArchiveMode.Create);
+        foreach (var (path, content) in entries)
+        {
+            var entry = archive.CreateEntry(path);
+            using var writer = new StreamWriter(entry.Open());
+            writer.Write(content);
+        }
+    }
+
+    // ─── TryResolveFilePath: path-traversal defence ─────────────────────────────
+
+    public class TryResolveFilePathTests : IDisposable
+    {
+        private readonly string _tempDir = Path.Combine(Path.GetTempPath(), $"adotr-{Guid.NewGuid():N}");
+
+        public void Dispose()
+        {
+            try { if (Directory.Exists(_tempDir)) Directory.Delete(_tempDir, true); } catch { }
+        }
+
+        [Fact]
+        public void NormalPath_ReturnsResolvedFile()
+        {
+            var rootDir = Path.Combine(_tempDir, "archive");
+            var srcDir = Path.Combine(rootDir, "src");
+            Directory.CreateDirectory(srcDir);
+            File.WriteAllText(Path.Combine(srcDir, "File.cs"), "class C { }");
+
+            var resolved = AzureDevOpsDiffProvider.TryResolveFilePath(rootDir, "src/File.cs");
+
+            Assert.NotNull(resolved);
+            Assert.Equal(Path.Combine(rootDir, "src", "File.cs"), resolved);
+        }
+
+        [Fact]
+        public void ParentTraversalEscape_ReturnsNull()
+        {
+            // Attacker-supplied diff path escaping the archive root via `..`.
+            var rootDir = Path.Combine(_tempDir, "archive");
+            Directory.CreateDirectory(rootDir);
+
+            // Plant a file OUTSIDE the root that would be reached by the traversal.
+            var outsideDir = Path.Combine(_tempDir, "outside");
+            Directory.CreateDirectory(outsideDir);
+            File.WriteAllText(Path.Combine(outsideDir, "secret.cs"), "secret");
+
+            // ../outside/secret.cs  ← resolves outside rootDir
+            var resolved = AzureDevOpsDiffProvider.TryResolveFilePath(rootDir, "../outside/secret.cs");
+
+            Assert.Null(resolved);
+        }
+
+        [Fact]
+        public void ParentTraversalViaWrapper_ReturnsNull()
+        {
+            // Wrapper layout: archive/commit-abc/src/File.cs. A `..` traversal from inside
+            // the wrapper must not reach siblings or the temp root.
+            var rootDir = Path.Combine(_tempDir, "archive");
+            var wrapper = Path.Combine(rootDir, "commit-abc");
+            Directory.CreateDirectory(wrapper);
+
+            // Create a sibling directory next to rootDir and a file inside it.
+            var outsideDir = Path.Combine(_tempDir, "outside");
+            Directory.CreateDirectory(outsideDir);
+            File.WriteAllText(Path.Combine(outsideDir, "secret.cs"), "secret");
+
+            // Without the guard, wrapper fallback + `..` segments could escape.
+            var resolved = AzureDevOpsDiffProvider.TryResolveFilePath(rootDir, "../../outside/secret.cs");
+
+            Assert.Null(resolved);
+        }
+
+        [Fact]
+        public void LookalikeSiblingPrefix_ReturnsNull()
+        {
+            // rootDir = archive, a sibling named archive-evil whose full path starts with "archive"
+            // would pass a naive StartsWith check that forgot the trailing separator.
+            var rootDir = Path.Combine(_tempDir, "archive");
+            var evilDir = Path.Combine(_tempDir, "archive-evil");
+            Directory.CreateDirectory(rootDir);
+            Directory.CreateDirectory(evilDir);
+            File.WriteAllText(Path.Combine(evilDir, "payload.cs"), "x");
+
+            // The normalized candidate becomes .../archive-evil/payload.cs — outside rootDir.
+            var resolved = AzureDevOpsDiffProvider.TryResolveFilePath(rootDir, "../archive-evil/payload.cs");
+
+            Assert.Null(resolved);
+        }
+
+        [Fact]
+        public void WrapperFallback_StillResolvesLegitimatePaths()
+        {
+            // Azure DevOps occasionally nests the archive under a single commit-named directory.
+            var rootDir = Path.Combine(_tempDir, "archive");
+            var wrapper = Path.Combine(rootDir, "repo-abc123");
+            var srcDir = Path.Combine(wrapper, "src");
+            Directory.CreateDirectory(srcDir);
+            File.WriteAllText(Path.Combine(srcDir, "File.cs"), "class C { }");
+
+            var resolved = AzureDevOpsDiffProvider.TryResolveFilePath(rootDir, "src/File.cs");
+
+            Assert.NotNull(resolved);
+            Assert.Equal(Path.Combine(wrapper, "src", "File.cs"), resolved);
+        }
     }
 }

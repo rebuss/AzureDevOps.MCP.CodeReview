@@ -175,6 +175,23 @@ public class FileTokenMeasurementTests
         Assert.Equal(100, candidates[0].EstimatedTokens);
     }
 
+    [Fact]
+    public void BuildCandidatesFromDiff_ZeroChangesFile_IsExcluded()
+    {
+        var diff = CreateDiff(
+            CreateFileChange("src/A.cs", additions: 10, deletions: 5),
+            CreateFileChange("src/Unchanged.cs", additions: 0, deletions: 0));
+
+        _tokenEstimator.EstimateTokenCount(Arg.Any<string>()).Returns(500);
+        _fileClassifier.Classify(Arg.Any<string>())
+            .Returns(new FileClassification { Category = FileCategory.Source });
+
+        var candidates = FileTokenMeasurement.BuildCandidatesFromDiff(diff, _tokenEstimator, _fileClassifier);
+
+        Assert.Single(candidates);
+        Assert.Equal("src/A.cs", candidates[0].Path);
+    }
+
     // --- MapToStructured ---
 
     [Fact]

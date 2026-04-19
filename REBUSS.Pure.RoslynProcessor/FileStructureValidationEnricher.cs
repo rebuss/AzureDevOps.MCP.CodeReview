@@ -1,0 +1,127 @@
+using System.Text.RegularExpressions;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.Extensions.Logging;
+using REBUSS.Pure.Core.Shared;
+
+namespace REBUSS.Pure.RoslynProcessor;
+
+/// <summary>
+/// Enriches C# file diffs with a <c>[file-structure]</c> annotation indicating whether
+/// the after-version of the file has valid syntax and balanced braces. This metadata
+/// helps AI reviewers avoid false positives about structural issues (e.g., incorrectly
+/// reporting missing closing braces in unified diffs where the brace is outside the hunk).
+/// </summary>
+public partial class FileStructureValidationEnricher : IDiffEnricher
+{
+    private static readonly Regex HeaderLineRegex = HeaderLinePattern();
+
+    [GeneratedRegex(@"^=== .+ ===\s*$", RegexOptions.Multiline)]
+    private static partial Regex HeaderLinePattern();
+
+    private readonly DiffSourceResolver _sourceResolver;
+    private readonly ILogger<FileStructureValidationEnricher> _logger;
+
+    public FileStructureValidationEnricher(
+        DiffSourceResolver sourceResolver,
+        ILogger<FileStructureValidationEnricher> logger)
+    {
+        _sourceResolver = sourceResolver;
+        _logger = logger;
+    }
+
+    /// <summary>
+    /// Runs last — after all content enrichers have processed the diff.
+    /// The annotation is purely metadata about the underlying file structure.
+    /// </summary>
+    public int Order => 400;
+
+    public bool CanEnrich(string diff)
+    {
+        return DiffLanguageDetector.IsCSharp(diff) && !DiffLanguageDetector.IsSkipped(diff);
+    }
+
+    public async Task<string> EnrichAsync(string diff, CancellationToken ct = default)
+    {
+        try
+        {
+            if (DiffParser.ParseHunks(diff).Count == 0)
+                return diff;
+
+            var pair = await _sourceResolver.ResolveAsync(diff, ct);
+            if (pair == null)
+            {
+                // Source unavailable (download timeout, file missing, >100KB) — emit
+                // `unknown` rather than omitting the annotation. Feature 021: a missing
+                // annotation was previously interpreted by the reviewer as "file may be
+                // broken", producing structural false positives.
+                var unknownAnnotation = FormatAnnotation(null, null);
+                return InsertAfterHeader(diff, unknownAnnotation);
+            }
+
+            var (syntaxValid, balancedBraces) = Validate(pair.AfterCode);
+            var annotation = FormatAnnotation(syntaxValid, balancedBraces);
+
+            return InsertAfterHeader(diff, annotation);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error during file structure validation, returning diff unchanged");
+            return diff;
+        }
+    }
+
+    /// <summary>
+    /// Validates the source code for syntax errors and balanced braces using Roslyn
+    /// syntax-only parsing (no compilation required). Brace balance is counted from
+    /// Roslyn <see cref="SyntaxKind.OpenBraceToken"/>/<see cref="SyntaxKind.CloseBraceToken"/>
+    /// tokens, which naturally excludes braces inside string literals and comments.
+    /// </summary>
+    public static (bool SyntaxValid, bool BalancedBraces) Validate(string sourceCode)
+    {
+        var tree = CSharpSyntaxTree.ParseText(sourceCode);
+        var syntaxValid = !tree.GetDiagnostics().Any(d => d.Severity == DiagnosticSeverity.Error);
+
+        var root = tree.GetRoot();
+        int openBraces = 0, closeBraces = 0;
+        foreach (var token in root.DescendantTokens())
+        {
+            // Skip synthetic tokens inserted by Roslyn's error recovery —
+            // they mask structural imbalances by always adding the missing counterpart.
+            if (token.IsMissing) continue;
+
+            if (token.IsKind(SyntaxKind.OpenBraceToken)) openBraces++;
+            else if (token.IsKind(SyntaxKind.CloseBraceToken)) closeBraces++;
+        }
+
+        return (syntaxValid, openBraces == closeBraces);
+    }
+
+    /// <summary>
+    /// Formats the <c>[file-structure]</c> annotation. Feature 021: accepts nullable
+    /// inputs so callers can emit <c>unknown</c> when the source is unavailable.
+    /// </summary>
+    public static string FormatAnnotation(bool? syntaxValid, bool? balancedBraces)
+    {
+        var compiles = syntaxValid switch { true => "yes", false => "no", null => "unknown" };
+        var braces = balancedBraces switch { true => "yes", false => "no", null => "unknown" };
+        return $"[file-structure: compiles={compiles}, balanced-braces={braces}]\n";
+    }
+
+    private static string InsertAfterHeader(string diff, string annotation)
+    {
+        var headerMatch = HeaderLineRegex.Match(diff);
+        if (!headerMatch.Success)
+            return diff;
+
+        var insertPos = headerMatch.Index + headerMatch.Length;
+        if (insertPos < diff.Length && diff[insertPos] == '\n')
+            insertPos++;
+
+        return diff.Insert(insertPos, annotation);
+    }
+}

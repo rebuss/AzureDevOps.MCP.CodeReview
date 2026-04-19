@@ -21,7 +21,7 @@ rebuss-pure init --provider azuredevops
 rebuss-pure init --ide vscode
 rebuss-pure init --ide vs
 
-# Global mode — writes user-level config (~\.mcp.json & %APPDATA%\Code\User\mcp.json)
+# Global mode — writes user-level config (~\.mcp.json, %APPDATA%\Code\User\mcp.json & ~\.copilot\mcp-config.json)
 rebuss-pure init -g
 ```
 
@@ -31,7 +31,110 @@ rebuss-pure init -g
 2. Authenticates (Azure CLI or PAT)
 3. Detects IDEs and writes `mcp.json` to the appropriate directory
 4. Copies prompt files to `.github/prompts/`
-5. Copies instruction files to `.github/instructions/` (`.instructions.md` extension)
+5. **(Optional)** Offers to set up GitHub Copilot CLI (`gh copilot` extension) for the
+   summarization-resilient Copilot-powered review flow. This step runs regardless of SCM
+   provider or whether `--pat` was supplied, and is fully optional — declining, failure, or
+   a non-interactive session never changes `init`'s exit code. State is detected fresh on
+   every run, so a previous decline does not suppress the prompt on the next run. When
+   `gh` itself is missing, the first prompt is framed as Copilot setup and declining there
+   skips the entire chain (no separate extension prompt follows). To enable later without
+   re-running `init`, use: `gh extension install github/gh-copilot`.
+
+### Copilot Review Layer (feature 013)
+
+When the `GitHub.Copilot.SDK` package is installed and `gh copilot` is available on the
+machine (set up via feature 012), the MCP server can perform PR reviews **server-side**
+by sending every page of enriched content to GitHub Copilot in parallel and returning
+compact review summaries to the IDE agent. This eliminates the "IDE conversation
+summarization drops earlier findings" problem on large PRs.
+
+**Two modes**: every `get_pr_content` response carries a mode indicator in its first block:
+
+- `[review-mode: copilot-assisted]` — the MCP performed the review. The response contains
+  `=== Page N Review ===` blocks with free-form Copilot output (and `=== Page N Review (FAILED) ===`
+  blocks listing file paths when a page exhausts all 3 retry attempts). The IDE agent
+  organizes findings by severity and does NOT prompt the user page-by-page.
+- `[review-mode: content-only]` — the existing enriched-diff flow. Unchanged behavior.
+
+**Configuration keys** — every key below lives under the `CopilotReview` section:
+
+| Key | Default | Meaning |
+|---|---|---|
+| `Enabled` | `true` | Master switch. `false` forces content-only mode regardless of Copilot availability. |
+| `ReviewBudgetTokens` | `128000` | Per-call Copilot context budget. Used to re-paginate the enrichment result into Copilot-sized pages. |
+| `Model` | `"claude-sonnet-4.6"` | Copilot model passed to `SessionConfig.Model`. If the SDK rejects this string, check `client.ListModelsAsync()` output. |
+| `MaxConcurrentPages` | `6` | Upper bound on how many pages the orchestrator dispatches to Copilot in parallel per batch. Values `< 1` are clamped to `1`. Raise cautiously — the Copilot backend silently re-queues fan-outs above its per-client limit, which can double wall-clock time. |
+| `MinRequestIntervalSeconds` | `3` | Minimum spacing between successive outbound Copilot SDK calls (`CreateSessionAsync` / `SendAsync`), enforced by a process-wide gate. Combines with `MaxConcurrentPages` to shape throughput: the batch size controls fan-out width, this interval controls request rate. Set to `0` to disable (tests only). |
+
+**How to set them — `mcp.json` (recommended)**
+
+When installed as a `dotnet tool`, REBUSS.Pure runs from the tool shim directory and the AI-chat host launches it from `mcp.json`. The cleanest way to pass config is the `env` block of the same `mcp.json` that `rebuss-pure init` wrote — typically one of:
+
+- `.vscode/mcp.json` (VS Code, repo-local)
+- `.vs/mcp.json` (Visual Studio, repo-local)
+- `~/.copilot/mcp-config.json` (Copilot CLI)
+- `~/.mcp.json` or `%APPDATA%\Code\User\mcp.json` (global mode — `rebuss-pure init -g`)
+
+REBUSS.Pure reads environment variables using .NET's standard `__` (double-underscore) → `:` mapping, so `CopilotReview__MaxConcurrentPages` binds to `CopilotReview:MaxConcurrentPages`:
+
+```json
+{
+  "servers": {
+    "REBUSS.Pure": {
+      "type": "stdio",
+      "command": "rebuss-pure",
+      "args": ["--repo", "C:\\path\\to\\repo"],
+      "env": {
+        "CopilotReview__MaxConcurrentPages": "4",
+        "CopilotReview__MinRequestIntervalSeconds": "2"
+      }
+    }
+  }
+}
+```
+
+Reload the IDE (or restart the chat session) after editing `mcp.json` — the MCP client spawns a fresh server process and the new `env` takes effect.
+
+**Alternative — `appsettings.json` (advanced)**
+
+`appsettings.json` is loaded from the tool's install directory (`AppContext.BaseDirectory`), not from the repo. For a `dotnet tool install -g CodeReview.MCP` the file lives at:
+
+- **Windows:** `%USERPROFILE%\.dotnet\tools\.store\codereview.mcp\<VERSION>\codereview.mcp\<VERSION>\tools\net10.0\any\appsettings.json`
+- **Linux/macOS:** `~/.dotnet/tools/.store/codereview.mcp/<VERSION>/codereview.mcp/<VERSION>/tools/net10.0/any/appsettings.json`
+
+This path is **version-scoped** — every `dotnet tool update -g CodeReview.MCP` installs a new version alongside the old one and your edits do not carry forward. Prefer `mcp.json` `env` unless you are running a repo-local dev build where `appsettings.json` sits next to the binary. Either way the schema is the same:
+
+```json
+"CopilotReview": {
+  "Enabled": true,
+  "ReviewBudgetTokens": 128000,
+  "Model": "claude-sonnet-4.6",
+  "MaxConcurrentPages": 6,
+  "MinRequestIntervalSeconds": 3
+}
+```
+
+**Tuning throughput**: `MaxConcurrentPages` and `MinRequestIntervalSeconds` are the two knobs
+that shape how fast the orchestrator drains a multi-page review against the Copilot rate
+limit. Values are re-read from config on every SDK call (hot-reload from `appsettings.json`
+works without a server restart; changes to `mcp.json` `env` require reloading the IDE so the
+child process is respawned). Lowering the interval (e.g. `1.5`) speeds up small PRs but
+risks transient 429s on larger ones; raising concurrency past the default `6` rarely helps
+and often hurts, because the backend re-queues the excess silently.
+
+**Retry**: each page review is attempted up to **3 times** before giving up. Retries fire
+immediately (no backoff). On exhaustion, the response still succeeds and carries a
+`=== Page N Review (FAILED) ===` block listing the source files that were on the failed
+page, plus the last-attempt reason. (Clarification Q1.)
+
+**Idempotency**: the copilot review cache is keyed on **PR number only** (Clarification Q2).
+Changing `ReviewBudgetTokens` mid-session does NOT invalidate an already-cached PR review;
+restart the server to force a re-run under a new budget. Within one server session,
+triggering a review of the same PR twice consumes zero additional Copilot calls.
+
+**Privacy (Principle VIII)**: enriched PR content is relayed only to GitHub Copilot via the
+user's own authenticated `gh` session. No intermediary. No telemetry. The operator explicitly
+opts into the feature via `CopilotReview.Enabled` plus the feature-012 onboarding.
 
 **IDE detection logic (local mode):**
 
@@ -39,12 +142,13 @@ rebuss-pure init -g
 |---|---|
 | `.vscode/` or `*.code-workspace` only | `.vscode/mcp.json` |
 | `.vs/` or `*.sln` only | `.vs/mcp.json` |
-| Both or neither | Both locations |
+| Multiple IDEs detected | All detected locations |
+| No markers found | `.vscode/mcp.json` + `.vs/mcp.json` |
 
 **Global mode (`-g` / `--global`):**
 
-When the `-g` flag is used, the MCP configuration is written to the user's home directory
-(`~/.mcp.json` for Visual Studio and `%APPDATA%\Code\User\mcp.json` for VS Code on Windows, `~/.config/Code/User/mcp.json` on Linux/macOS) instead of the repository-local directories.
+When the `-g` flag is used, the MCP configuration is written to the user-level directories
+(`~/.mcp.json` for Visual Studio, `%APPDATA%\Code\User\mcp.json` for VS Code on Windows / `~/.config/Code/User/mcp.json` on Linux/macOS, `~/.copilot/mcp-config.json` for Copilot CLI) instead of the repository-local directories.
 The `--repo` argument in the config points to the current repository's git root.
 
 This is useful when Visual Studio does not detect the local `.vs/mcp.json` file.
@@ -189,7 +293,7 @@ gh auth token
 
 If none of the above methods work, the server returns a clear error message instructing you to run `gh auth login` or configure a PAT.
 
-> **Note:** Local self-review (`get_local_files`, `get_local_file_diff`) works without any authentication.
+> **Note:** Local self-review (`get_local_content`) works without any authentication.
 
 ---
 
@@ -207,10 +311,26 @@ Located next to the server executable. All fields are optional — auto-detected
     "OrganizationName": "",
     "ProjectName": "",
     "RepositoryName": "",
-    "PersonalAccessToken": ""
+    "PersonalAccessToken": "",
+    "Diff": {
+      "ZipFallbackThreshold": 30
+    }
   }
 }
 ```
+
+The optional `Diff:ZipFallbackThreshold` controls how the diff provider fetches per-file
+content. For PRs with **N ≤ threshold** changed files the provider issues 2N `items`
+requests (one per side). Above the threshold it downloads the base + target repository
+ZIPs once each and reads file contents from disk, bounding API request count to two
+regardless of file count — this avoids Azure DevOps' per-window TSTU rate limits on
+large refactor PRs.
+
+- **Default `30`** — keeps small PRs on the cheap per-file path while protecting large
+  PRs from throttling.
+- **`0`** — disables the ZIP path entirely (always per-file, regardless of count).
+- **Higher value** — appropriate when running against a private Azure DevOps Server
+  with no practical rate limits, or when bandwidth is constrained.
 
 **GitHub:**
 
@@ -262,7 +382,6 @@ The `ContextWindow` section in `appsettings.json` includes a `GatewayMaxTokens` 
 | Platform | Recommended `GatewayMaxTokens` |
 |---|---|
 | GitHub Copilot (VS Code / Visual Studio) | `128000` (default) |
-| Claude Code / Anthropic API | `null` (disabled) |
 | Cursor | `128000` (verify with your setup) |
 | Direct API access | `null` (disabled) |
 
@@ -278,6 +397,30 @@ To disable the gateway cap, add to `appsettings.Local.json`:
 
 Or via environment variable: `ContextWindow__GatewayMaxTokens=0`
 
+### Workflow timeouts (Progressive PR Metadata)
+
+For large PRs the diff fetch + enrichment pipeline can exceed the host's hard ~30 s tool-call ceiling. The **Progressive PR Metadata** workflow handles this:
+
+1. `get_pr_metadata` enforces an internal 28 s timeout. On timeout it returns the basic-summary response with an explicit "Content paging: not yet available" indicator instead of failing — the host never sees a tool-call timeout.
+2. Background enrichment continues to run in the singleton `PrEnrichmentOrchestrator` even after the metadata response has returned.
+3. A follow-up `get_pr_content` call gets its own fresh 28 s budget and serves the result from the orchestrator's cache. The effective end-to-end processing budget for one review is therefore >60 s without any host-visible timeout.
+4. If even the content call cannot complete in time — or the background job has failed — both handlers return a friendly plain-text status block via `PlainTextFormatter.FormatFriendlyStatus(...)`. The MCP tool response is always a successful payload.
+
+Configuration in `appsettings.json`:
+
+```json
+{
+  "Workflow": {
+    "MetadataInternalTimeoutMs": 28000,
+    "ContentInternalTimeoutMs": 28000
+  }
+}
+```
+
+Or via environment variables: `Workflow__MetadataInternalTimeoutMs`, `Workflow__ContentInternalTimeoutMs`. Both must be strictly less than the host's hard tool-call ceiling so the response has time to serialize. Default 28 000 ms leaves a 2 s margin under the typical 30 s ceiling.
+
+The orchestrator's load-bearing semantic — caller cancellation never cancels the background body — is asserted by `PrEnrichmentOrchestratorTests.CallerCancellation_DoesNotCancelBackgroundBody`. Do not regress it.
+
 ---
 
 ## MCP Tools Reference
@@ -289,31 +432,13 @@ Or via environment variable: `ContextWindow__GatewayMaxTokens=0`
 | Tool | Description |
 |---|---|
 | `get_pr_metadata(prNumber, [modelName], [maxTokens])` | Returns PR metadata. Pass `modelName` or `maxTokens` to also receive `contentPaging` — total page count and per-page file breakdown for use with `get_pr_content` |
-| `get_pr_content(prNumber, pageNumber, [modelName], [maxTokens])` | Returns diff content for a specific page of the PR. Call `get_pr_metadata` with budget params first to discover the total page count |
-| `get_pr_files(prNumber, [pageReference])` | Returns classified list of changed files with per-file stats and review priority; supports pagination via `pageReference` |
-| `get_file_content_at_ref(path, ref)` | Returns full file content at a specific commit/branch/tag |
-
-#### Legacy tools — single-response (suitable for small PRs)
-
-| Tool | Description |
-|---|---|
-| `get_pr_diff(prNumber, [pageReference])` | Returns the complete diff for all files in the PR; supports pagination via `pageReference` |
-| `get_file_diff(prNumber, path)` | Returns the diff for a single file |
+| `get_pr_content(prNumber, [pageNumber], [modelName], [maxTokens])` | Returns the full Copilot-assisted review for the PR in a single call. `pageNumber` is accepted for backward compatibility but ignored — all pages are returned together. Call `get_pr_metadata` with budget params first if you want a breakdown of the planned page count |
 
 ### Local Self-Review Tools (no authentication needed)
 
-#### Primary tools — pagination-aware (recommended for all change sizes)
-
 | Tool | Description |
 |---|---|
-| `get_local_content(pageNumber, [scope], [modelName], [maxTokens])` | Returns diff content for a specific page of local uncommitted changes. Page allocation is computed internally — no separate metadata call needed |
-| `get_local_files([scope], [pageReference])` | Lists locally changed files with classification metadata; supports pagination via `pageReference` |
-
-#### Legacy tools
-
-| Tool | Description |
-|---|---|
-| `get_local_file_diff(path, [scope])` | Returns structured diff for a single locally changed file |
+| `get_local_content([pageNumber], [scope], [modelName], [maxTokens])` | Returns the full Copilot-assisted review for local changes in a single call. Page allocation is computed internally. `pageNumber` is accepted for backward compatibility but ignored — all pages are returned together. No separate metadata call needed |
 
 **Scopes for local tools:**
 
@@ -327,34 +452,17 @@ Or via environment variable: `ContextWindow__GatewayMaxTokens=0`
 
 ## Review Workflows
 
-### PR Review — paginated (recommended)
+### PR Review (recommended)
 
 ```
-get_pr_metadata(prNumber, modelName)          ← discovers total pages via contentPaging
-  → loop: get_pr_content(prNumber, page, modelName)  ← one page at a time until hasMorePages = false
-    → get_file_content_at_ref(path, ref)      ← only when diff context is insufficient
+get_pr_metadata(prNumber, modelName)   ← optional: reports the planned page count via contentPaging
+get_pr_content(prNumber, modelName)    ← returns the full Copilot-assisted review in one call
 ```
 
-### PR Review — simple (small PRs only)
+### Self-Review (recommended)
 
 ```
-get_pr_metadata(prNumber)
-  → get_pr_files(prNumber)
-    → get_file_diff(prNumber, path)           ← per file, minimal tokens
-      → get_file_content_at_ref(path, ref)    ← only when diff is insufficient
-```
-
-### Self-Review — paginated (recommended)
-
-```
-get_local_content(page, scope, modelName)     ← computes pages internally; loop until hasMorePages = false
-```
-
-### Self-Review — simple (small changesets only)
-
-```
-get_local_files(scope)
-  → get_local_file_diff(path, scope)          ← per file
+get_local_content(scope, modelName)    ← computes pages internally and returns the full review in one call
 ```
 
 ---
@@ -367,15 +475,11 @@ After running `rebuss-pure init`, you get:
 .github/prompts/
 ├── review-pr.prompt.md
 └── self-review.prompt.md
-
-.github/instructions/
-├── review-pr.instructions.md
-└── self-review.instructions.md
 ```
 
-> **Note for contributors:** The files in `.github/prompts/` and `.github/instructions/` are **generated** by `rebuss-pure init` from embedded resources compiled into the tool (`REBUSS.Pure/Cli/Prompts/*.md`). The embedded files in `REBUSS.Pure/Cli/Prompts/` are the **source of truth**. Always edit the embedded source files — do **not** edit the deployed files directly, as `init` **always overwrites** them on every run to ensure prompt updates are deployed.
+> **Note for contributors:**
 
-These prompts instruct the AI agent on the review workflows. If you need to add custom rules for your repository, create **separate** files (e.g. `.github/instructions/team-rules.instructions.md`) rather than editing the deployed copies, which will be overwritten by the next `rebuss-pure init` run.
+These prompts instruct the AI agent on the review workflows. If you need to add custom rules for your repository, create your own files under `.github/instructions/` (e.g. `team-rules.instructions.md`); `init` will leave them alone.
 
 ---
 

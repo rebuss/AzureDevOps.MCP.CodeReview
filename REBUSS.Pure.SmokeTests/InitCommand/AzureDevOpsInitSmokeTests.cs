@@ -33,9 +33,9 @@ public class AzureDevOpsInitSmokeTests
         Assert.True(repo.FileExists(Path.Combine(".github", "prompts", "self-review.prompt.md")));
         Assert.False(repo.FileExists(Path.Combine(".github", "prompts", "create-pr.md")));
 
-        // Instruction files should be copied
-        Assert.True(repo.FileExists(Path.Combine(".github", "instructions", "review-pr.instructions.md")));
-        Assert.True(repo.FileExists(Path.Combine(".github", "instructions", "self-review.instructions.md")));
+        // init must not create instruction files
+        Assert.False(repo.FileExists(Path.Combine(".github", "instructions", "review-pr.instructions.md")));
+        Assert.False(repo.FileExists(Path.Combine(".github", "instructions", "self-review.instructions.md")));
     }
 
     [Fact]
@@ -45,16 +45,17 @@ public class AzureDevOpsInitSmokeTests
 
         // Restricted PATH hides az CLI → triggers "CLI not installed" prompt.
         // "n" declines the install prompt.
+        using var restrictedPath = CliProcessHelper.BuildRestrictedPathEnv();
         var result = await CliProcessHelper.RunAsync(
             repo.RootPath,
             "init",
             stdin: "n\n",
-            environmentOverrides: CliProcessHelper.BuildRestrictedPathEnv());
+            environmentOverrides: restrictedPath.Env);
 
         Assert.Equal(0, result.ExitCode);
         Assert.True(repo.FileExists(Path.Combine(".vscode", "mcp.json")));
         Assert.True(repo.FileExists(Path.Combine(".github", "prompts", "review-pr.prompt.md")));
-        Assert.True(repo.FileExists(Path.Combine(".github", "instructions", "review-pr.instructions.md")));
+        Assert.False(repo.FileExists(Path.Combine(".github", "instructions", "review-pr.instructions.md")));
 
         var config = repo.ReadFile(Path.Combine(".vscode", "mcp.json"));
         Assert.DoesNotContain("--pat", config);

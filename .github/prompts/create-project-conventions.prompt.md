@@ -27,7 +27,7 @@ Read these to extract the actual patterns (don't guess from docs — verify from
 - `REBUSS.Pure/Program.cs` — composition root: `ConfigureBusinessServices`, `DetectProvider`, `BuildCliConfigOverrides`, `ResolvePatTarget`
 - `REBUSS.Pure.AzureDevOps/ServiceCollectionExtensions.cs` — DI registration pattern for a provider
 - `REBUSS.Pure.GitHub/ServiceCollectionExtensions.cs` — same pattern, GitHub variant
-- `REBUSS.Pure.Core/IScmClient.cs` — the core abstraction: `IScmClient`, `IPullRequestDataProvider`, `IFileContentDataProvider`
+- `REBUSS.Pure.Core/IScmClient.cs` — the core abstraction: `IScmClient`, `IPullRequestDataProvider`, `IRepositoryArchiveProvider`
 - `REBUSS.Pure/Tools/GetPullRequestDiffToolHandler.cs` — reference MCP tool: `[McpServerToolType]` class, `[McpServerTool]` method, `[Description]` attributes (the MCP SDK handles tool discovery and JSON-RPC dispatch)
 - `REBUSS.Pure.Core/Analysis/IReviewAnalyzer.cs` — pluggable analyzer interface
 - `REBUSS.Pure.Core/Analysis/ReviewContextOrchestrator.cs` — analyzer pipeline orchestration
@@ -38,15 +38,15 @@ Read these to extract the actual patterns (don't guess from docs — verify from
 
 ### Step 3: Understand data flow by tracing a real request
 
-Trace the path for `get_pr_diff(prNumber: 42)` from MCP request to JSON response:
+Trace the path for `get_pr_content(prNumber: 42, pageNumber: 1)` from MCP request to JSON response:
 1. MCP SDK receives JSON-RPC via stdin → dispatches to `[McpServerTool]`-annotated method
-2. SDK resolves `GetPullRequestDiffToolHandler` from DI → calls `ExecuteAsync`
+2. SDK resolves `GetPullRequestContentToolHandler` from DI → calls `ExecuteAsync`
 3. Handler calls `IPullRequestDataProvider.GetDiffAsync(42)`
 4. DI resolves this to `AzureDevOpsScmClient` (or `GitHubScmClient`) → delegates to `DiffProvider`
 5. `DiffProvider` calls API client → parses JSON → builds `PullRequestDiff` via `StructuredDiffBuilder`
-6. Handler maps domain model → `StructuredDiffResult` → serialized to JSON string → returned to SDK
+6. Handler maps domain model → paginated plain text content → returned to SDK
 
-Do the same for `get_local_files` (local review path without network).
+Do the same for `get_local_content` (local review path without network).
 
 ### Step 4: Write the document
 
@@ -89,7 +89,7 @@ One provider per process (selected by DetectProvider).]
 - async all the way, CancellationToken propagation
 - CLI output to stderr (stdout reserved for MCP stdio JSON-RPC)
 - Error handling: custom exceptions → caught in tool handler → ToolResult.IsError = true
-- DI: constructor injection, singletons, interface forwarding for IScmClient/IPullRequestDataProvider/IFileContentDataProvider
+- DI: constructor injection, singletons, interface forwarding for IScmClient/IPullRequestDataProvider/IRepositoryArchiveProvider
 - Logging: Microsoft.Extensions.Logging, stderr + file]
 
 ## 4. Testing Conventions

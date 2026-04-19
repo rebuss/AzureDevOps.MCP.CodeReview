@@ -1,5 +1,7 @@
 using System.Text;
 using REBUSS.Pure.Core.Models;
+using REBUSS.Pure.Core.Models.CopilotReview;
+using REBUSS.Pure.Properties;
 using REBUSS.Pure.Tools.Models;
 
 namespace REBUSS.Pure.Tools.Shared;
@@ -29,7 +31,7 @@ internal static class PlainTextFormatter
         {
             sb.AppendLine($"=== {file.Path} ({file.ChangeType}: skipped) ===");
             sb.Append($"Reason: {file.SkipReason}");
-            return sb.ToString();
+            return sb.ToString().TrimEnd();
         }
 
         sb.AppendLine($"=== {file.Path} ({file.ChangeType}: +{file.Additions} -{file.Deletions}) ===");
@@ -42,8 +44,6 @@ internal static class PlainTextFormatter
 
     /// <summary>
     /// Formats a single diff hunk with a unified-diff <c>@@</c> header line.
-    /// Used both for output and for token-count estimation in
-    /// <see cref="ToolHandlerHelpers.TruncateHunks"/>.
     /// </summary>
     public static string FormatHunk(StructuredHunk hunk)
     {
@@ -58,58 +58,6 @@ internal static class PlainTextFormatter
         return sb.ToString();
     }
 
-    // ─── File list ────────────────────────────────────────────────────────────────
-
-    /// <summary>Returns a single-line representation used for token-size estimation.</summary>
-    public static string FormatFileEntry(PullRequestFileInfo f, int pathWidth = DefaultPathWidth)
-    {
-        var flags = new List<string>(3);
-        if (f.IsTestFile) flags.Add("test");
-        if (f.IsBinary) flags.Add("binary");
-        if (f.IsGenerated) flags.Add("generated");
-        var flagsStr = flags.Count > 0 ? $" [{string.Join(", ", flags)}]" : string.Empty;
-        var paddedPath = f.Path.Length > pathWidth ? f.Path[..(pathWidth - 3)] + "..." : f.Path.PadRight(pathWidth);
-        return $"  {paddedPath} {f.Status,-10} +{f.Additions,4} -{f.Deletions,4}  {f.ReviewPriority,-6}{flagsStr}";
-    }
-
-    /// <summary>
-    /// Formats a full file list as a table. <paramref name="context"/> is placed in
-    /// the header line, e.g. <c>"PR #42"</c> or <c>"working-tree"</c>.
-    /// </summary>
-    public static string FormatFileList(
-        IReadOnlyList<PullRequestFileInfo> files,
-        PullRequestFilesSummary summary,
-        string context)
-    {
-        ArgumentNullException.ThrowIfNull(files);
-        ArgumentNullException.ThrowIfNull(summary);
-        var pathWidth = Math.Max(DefaultPathWidth, files.Count > 0 ? files.Max(f => f.Path.Length) + 2 : DefaultPathWidth);
-        var sb = new StringBuilder();
-        sb.AppendLine($"Changed files: {context} ({files.Count} file(s))");
-        sb.AppendLine($"  {"Path".PadRight(pathWidth)} {"Status",-10} {"  +Add",6} {"  -Del",6}  {"Priority",-8} Flags");
-        sb.AppendLine("  " + new string('-', pathWidth + 40));
-
-        foreach (var f in files)
-            sb.AppendLine(FormatFileEntry(f, pathWidth));
-
-        sb.AppendLine();
-        sb.Append(FormatFilesSummaryLine(summary));
-        return sb.ToString();
-    }
-
-    private static string FormatFilesSummaryLine(PullRequestFilesSummary summary)
-    {
-        var parts = new List<string>(7);
-        if (summary.SourceFiles > 0) parts.Add($"{summary.SourceFiles} source");
-        if (summary.TestFiles > 0) parts.Add($"{summary.TestFiles} test");
-        if (summary.ConfigFiles > 0) parts.Add($"{summary.ConfigFiles} config");
-        if (summary.DocsFiles > 0) parts.Add($"{summary.DocsFiles} docs");
-        if (summary.BinaryFiles > 0) parts.Add($"{summary.BinaryFiles} binary");
-        if (summary.GeneratedFiles > 0) parts.Add($"{summary.GeneratedFiles} generated");
-        var categoriesText = parts.Count > 0 ? string.Join(", ", parts) : "no files";
-        return $"Summary: {categoriesText} | High priority: {summary.HighPriorityFiles}";
-    }
-
     // ─── PR Metadata ──────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -120,7 +68,8 @@ internal static class PlainTextFormatter
     public static string FormatMetadata(
         FullPullRequestMetadata m,
         int prNumber,
-        (int TotalPages, int TotalFiles, int BudgetPerPage, IReadOnlyList<(int Page, int Count)> ByPage)? paging = null)
+        (int TotalPages, int TotalFiles, int BudgetPerPage, IReadOnlyList<(int Page, int Count)> ByPage)? paging = null,
+        bool pagingDeferred = false)
     {
         ArgumentNullException.ThrowIfNull(m);
         var sb = new StringBuilder();
@@ -159,26 +108,38 @@ internal static class PlainTextFormatter
             var pageSummary = string.Join(", ", p.ByPage.Select(x => $"p{x.Page}:{x.Count}f"));
             sb.AppendLine($"Files per page: {pageSummary}");
         }
+        else if (pagingDeferred)
+        {
+            // FR-004: explicit indicator that paging is not yet available because
+            // background enrichment did not complete within the metadata tool's
+            // internal timeout. Tells the agent to follow up with get_pr_content.
+            sb.AppendLine();
+            sb.AppendLine("Content paging: not yet available — background enrichment is still running.");
+            sb.AppendLine("Action: call get_pr_content with pageNumber=1 to retrieve the enriched content.");
+        }
 
         return sb.ToString().TrimEnd();
     }
 
-    // ─── File content at ref ──────────────────────────────────────────────────────
-
-    public static string FormatFileContent(FileContent f)
+    /// <summary>
+    /// Formats a "friendly status" plain-text block for cases where the tool
+    /// cannot produce its real result yet (e.g. background enrichment is still
+    /// running, or has failed). The MCP tool response remains a successful
+    /// payload — never an exception or error tool-call.
+    ///
+    /// Used by progressive PR metadata pipeline (FR-014, FR-015, FR-016, FR-017).
+    /// </summary>
+    public static string FormatFriendlyStatus(string headline, string explanation, string suggestedNextAction)
     {
-        ArgumentNullException.ThrowIfNull(f);
+        ArgumentException.ThrowIfNullOrWhiteSpace(headline);
+        ArgumentException.ThrowIfNullOrWhiteSpace(explanation);
+        ArgumentException.ThrowIfNullOrWhiteSpace(suggestedNextAction);
+
         var sb = new StringBuilder();
-        sb.AppendLine($"=== {f.Path} @ {f.Ref} ===");
-
-        if (f.IsBinary)
-            sb.Append($"[binary file, size: {f.Size} bytes, encoding: {f.Encoding}]");
-        else if (f.Content != null)
-            sb.Append(f.Content);
-        else
-            sb.Append("[file content not available]");
-
-        return sb.ToString();
+        sb.AppendLine($"Status: {headline}");
+        sb.AppendLine($"Detail: {explanation}");
+        sb.AppendLine($"Suggested next: {suggestedNextAction}");
+        return sb.ToString().TrimEnd();
     }
 
     // ─── Pagination block ─────────────────────────────────────────────────────────
@@ -284,4 +245,47 @@ internal static class PlainTextFormatter
         sb.Append($"Budget: {manifest.Summary.BudgetUsed}/{manifest.Summary.TotalBudgetTokens} tokens ({manifest.Summary.UtilizationPercent:F0}%)");
         return sb.ToString();
     }
+
+    // ─── Copilot review layer (feature 013) ───────────────────────────────────────
+
+    /// <summary>
+    /// Formats the copilot-assisted mode indicator header. The first line MUST be the
+    /// <c>[review-mode: copilot-assisted]</c> string from <see cref="Resources.CopilotReviewModeHeader"/>
+    /// so the IDE prompt can detect the mode and adapt behavior (FR-004, FR-014).
+    /// </summary>
+    public static string FormatCopilotReviewHeader(int prNumber, int totalPages, int succeeded, int failed)
+        => FormatCopilotReviewHeader($"PR #{prNumber}", totalPages, succeeded, failed);
+
+    public static string FormatCopilotReviewHeader(string reviewSubject, int totalPages, int succeeded, int failed)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine(Resources.CopilotReviewModeHeader);
+        sb.Append($"{reviewSubject} — Review completed ({totalPages} pages reviewed, {succeeded} succeeded, {failed} failed)");
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Formats a single page's Copilot review outcome. On success renders the review text;
+    /// on failure renders the list of file paths that were on the failed page plus the
+    /// last-attempt reason (FR-007a, Clarification Q1).
+    /// </summary>
+    public static string FormatCopilotPageReviewBlock(CopilotPageReviewResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        var sb = new StringBuilder();
+        if (result.Succeeded)
+        {
+            sb.AppendLine($"=== Page {result.PageNumber} Review ===");
+            sb.Append(result.ReviewText);
+            return sb.ToString();
+        }
+
+        sb.AppendLine($"=== Page {result.PageNumber} Review (FAILED) ===");
+        sb.AppendLine("Files not reviewed:");
+        foreach (var path in result.FailedFilePaths)
+            sb.AppendLine($"  - {path}");
+        sb.Append($"Reason: {result.ErrorMessage}");
+        return sb.ToString();
+    }
+
 }

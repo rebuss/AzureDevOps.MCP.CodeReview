@@ -204,7 +204,7 @@ Emphasize: three test layers must be updated — unit, smoke, contract.]
 How to access diff/metadata/files from AnalysisInput.
 How to consume previous analyzer output via PreviousSections.
 DI registration: services.AddSingleton<IReviewAnalyzer, {Name}Analyzer>().
-Test template: mock IFileContentDataProvider if content fetch needed.]
+Test template: mock IRepositoryArchiveProvider if content fetch needed.]
 
 ### Validation checklist
 ### Common pitfalls

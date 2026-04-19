@@ -37,7 +37,10 @@ public sealed class ContentManifestResult
                 TotalBudgetTokens = manifest.Summary.TotalBudgetTokens,
                 BudgetUsed = manifest.Summary.BudgetUsed,
                 BudgetRemaining = manifest.Summary.BudgetRemaining,
-                UtilizationPercent = manifest.Summary.UtilizationPercent
+                UtilizationPercent = manifest.Summary.UtilizationPercent,
+                IncludedOnThisPage = manifest.Summary.IncludedOnThisPage,
+                RemainingAfterThisPage = manifest.Summary.RemainingAfterThisPage,
+                TotalPages = manifest.Summary.TotalPages
             }
         };
 }

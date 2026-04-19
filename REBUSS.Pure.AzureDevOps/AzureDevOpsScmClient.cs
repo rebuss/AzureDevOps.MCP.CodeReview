@@ -18,7 +18,7 @@ public sealed class AzureDevOpsScmClient : IScmClient
     private readonly AzureDevOpsDiffProvider _diffProvider;
     private readonly AzureDevOpsMetadataProvider _metadataProvider;
     private readonly AzureDevOpsFilesProvider _filesProvider;
-    private readonly AzureDevOpsFileContentProvider _contentProvider;
+    private readonly AzureDevOpsRepositoryArchiveProvider _archiveProvider;
     private readonly AzureDevOpsOptions _options;
 
     public string ProviderName => Resources.ProviderDisplayName;
@@ -27,13 +27,13 @@ public sealed class AzureDevOpsScmClient : IScmClient
         AzureDevOpsDiffProvider diffProvider,
         AzureDevOpsMetadataProvider metadataProvider,
         AzureDevOpsFilesProvider filesProvider,
-        AzureDevOpsFileContentProvider contentProvider,
+        AzureDevOpsRepositoryArchiveProvider archiveProvider,
         IOptions<AzureDevOpsOptions> options)
     {
         _diffProvider = diffProvider;
         _metadataProvider = metadataProvider;
         _filesProvider = filesProvider;
-        _contentProvider = contentProvider;
+        _archiveProvider = archiveProvider;
         _options = options.Value;
     }
 
@@ -60,6 +60,6 @@ public sealed class AzureDevOpsScmClient : IScmClient
     public Task<PullRequestFiles> GetFilesAsync(int prNumber, CancellationToken ct = default)
         => _filesProvider.GetFilesAsync(prNumber, ct);
 
-    public Task<FileContent> GetFileContentAsync(string path, string gitRef, CancellationToken ct = default)
-        => _contentProvider.GetFileContentAsync(path, gitRef, ct);
+    public Task DownloadRepositoryZipAsync(string commitRef, string destinationPath, CancellationToken ct = default)
+        => _archiveProvider.DownloadRepositoryZipAsync(commitRef, destinationPath, ct);
 }

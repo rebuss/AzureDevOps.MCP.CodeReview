@@ -67,7 +67,7 @@ public class PaginationOrchestratorTests
     {
         var codec = Substitute.For<IPageReferenceCodec>();
         var requestParams = JsonDocument.Parse("{\"prNumber\":42}").RootElement;
-        codec.TryDecode("valid").Returns(new PageReferenceData("get_pr_diff", requestParams, 89600, 2, "sha123"));
+        codec.TryDecode("valid").Returns(new PageReferenceData("get_pr_files", requestParams, 89600, 2, "sha123"));
 
         var result = PaginationOrchestrator.ResolvePage("valid", null, codec, 89600, false);
 
@@ -94,7 +94,7 @@ public class PaginationOrchestratorTests
     {
         var codec = Substitute.For<IPageReferenceCodec>();
         var requestParams = JsonDocument.Parse("{\"prNumber\":42}").RootElement;
-        codec.TryDecode("ref").Returns(new PageReferenceData("get_pr_diff", requestParams, 89600, 2, "sha"));
+        codec.TryDecode("ref").Returns(new PageReferenceData("get_pr_files", requestParams, 89600, 2, "sha"));
 
         var result = PaginationOrchestrator.ResolvePage("ref", null, codec, 50000, true);
 
@@ -107,7 +107,7 @@ public class PaginationOrchestratorTests
     {
         var codec = Substitute.For<IPageReferenceCodec>();
         var requestParams = JsonDocument.Parse("{\"prNumber\":42}").RootElement;
-        codec.TryDecode("ref").Returns(new PageReferenceData("get_pr_diff", requestParams, 89600, 2, "sha"));
+        codec.TryDecode("ref").Returns(new PageReferenceData("get_pr_files", requestParams, 89600, 2, "sha"));
 
         // When no explicit budget (false), reference budget is authoritative (Q18)
         var result = PaginationOrchestrator.ResolvePage("ref", null, codec, 50000, false);
@@ -213,7 +213,7 @@ public class PaginationOrchestratorTests
 
         var requestParams = JsonDocument.Parse("{\"prNumber\":42}").RootElement;
         var meta = PaginationOrchestrator.BuildPaginationMetadata(
-            allocation, 1, codec, "get_pr_diff", requestParams, 1000, "sha");
+            allocation, 1, codec, "get_pr_files", requestParams, 1000, "sha");
 
         Assert.Equal(1, meta.CurrentPage);
         Assert.Equal(1, meta.TotalPages);
@@ -238,7 +238,7 @@ public class PaginationOrchestratorTests
 
         var requestParams = JsonDocument.Parse("{\"prNumber\":42}").RootElement;
         var meta = PaginationOrchestrator.BuildPaginationMetadata(
-            allocation, 1, codec, "get_pr_diff", requestParams, 1000, "sha");
+            allocation, 1, codec, "get_pr_files", requestParams, 1000, "sha");
 
         Assert.Equal(1, meta.CurrentPage);
         Assert.Equal(3, meta.TotalPages);

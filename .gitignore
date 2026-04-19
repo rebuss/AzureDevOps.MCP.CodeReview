@@ -21,10 +21,14 @@ REBUSS.Pure.SmokeTests/obj/
 speckit*.md
 .specify/
 specs/
-.github/instructions/review-pr.instructions.md
-.github/instructions/self-review.instructions.md
 .vscode/mcp.json
 .vscode/settings.json
 .github/prompts/review-pr.prompt.md
 .github/prompts/self-review.prompt.md
 scripts/
+REBUSS.Pure.RoslynProcessor.Tests/bin/
+REBUSS.Pure.RoslynProcessor.Tests/obj/
+REBUSS.Pure.RoslynProcessor/bin/
+REBUSS.Pure.RoslynProcessor/obj/
+.claude/
+Files/

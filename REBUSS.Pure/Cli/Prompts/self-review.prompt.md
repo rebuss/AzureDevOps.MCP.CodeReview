@@ -1,4 +1,4 @@
-# Self-Review (MCP-Only, paginated with confirmation)
+# Self-Review of Local Changes (Copilot-Assisted)
 
 Perform a professional self-review of **local git changes** using **only** MCP tools from the `REBUSS.Pure` server.
 
@@ -24,68 +24,35 @@ Do not infer scope from anywhere else.
 
 ---
 
-## Allowed MCP Tool
+## Workflow
 
-### `get_local_content(pageNumber, [scope], [modelName], [maxTokens])`
+### Step 1 — Get Copilot review
 
-Primary tool for reviewing local changes.
+Call:
+`get_local_content(scope: "<scope>")`
 
-It returns:
-- `repositoryRoot`
-- `currentBranch`
-- `scope`
-- `pageNumber`, `totalPages`
-- `files` – structured diffs for this page
-- `summary.filesOnPage`, `summary.totalFiles`, `summary.hasMorePages`, `summary.categories`
+The server performs the review using GitHub Copilot and returns pre-reviewed summaries.
 
-Start with page 1 and the chosen scope (default: `"staged"`).
+**If the call succeeds**: the response contains `[review-mode: copilot-assisted]` followed by page review blocks (`=== Page N Review ===`).
 
-Example:
-`get_local_content(pageNumber: 1, scope: "staged")`
+**If the call returns an error about Copilot SDK**: inform the user that Copilot must be installed and authenticated. Suggest running `gh copilot` setup. Do not attempt alternative review methods.
 
----
+### Step 2 — Organize findings
 
-## Mandatory Workflow
-
-### Step 1 – First page
-
-1. Determine the scope (user-provided or default `"staged"`).
-2. Call:
-   `get_local_content(pageNumber: 1, scope: <scope>)`
-3. From the response:
-   - note `repositoryRoot`, `currentBranch`, `scope`
-   - note `totalPages` and `summary` info
-   - review each file in `files`
-   - for each file:
-     - analyze diff hunks
-     - if `skipReason` is present, do not analyze content, just note the skip
-
-After finishing page 1, ask the user:
-**“Page 1 of N reviewed. Continue to page 2?”**
-
-Do NOT load page 2 before the user confirms.
-
----
-
-### Step 2 – Subsequent pages (with user confirmation)
-
-For each next page (2, 3, … up to `totalPages`):
-
-1. Only if the user confirms, call:
-   `get_local_content(pageNumber: X, scope: <scope>)`
-2. Review files on that page as above.
-3. After finishing the page:
-   - if `pageNumber < totalPages`, ask:
-     **“Page X of N reviewed. Continue to page X+1?”**
-   - if this was the last page, finish the review.
-
-Never pre-fetch future pages without explicit user confirmation.
+1. Read all `=== Page N Review ===` blocks.
+2. Organize findings **by severity**:
+   - **Critical Issues** — group all critical findings from all pages
+   - **Major Issues** — group all major findings from all pages
+   - **Minor Suggestions** — group all minor findings from all pages
+3. Remove duplicates (same finding reported from multiple pages).
+4. Produce one coherent review report in the Output Format below.
+5. If any `=== Page N Review (FAILED) ===` blocks are present, list the failed pages (with their file paths) in a dedicated "Manual Follow-up Needed" section at the end.
 
 ---
 
 ## Review Focus
 
-When inspecting diffs, look for:
+When organizing findings, prioritize:
 - correctness and potential regressions
 - null safety issues
 - concurrency / async/await problems
@@ -132,10 +99,8 @@ Optional improvements.
 ### Review Notes
 Include:
 - scope used
-- which pages were reviewed
-- which files were reviewed
-- which files were skipped and why
-- any limitations due to large change sets
+- total pages reviewed
+- any failed pages with reasons
 
 ---
 
@@ -146,3 +111,4 @@ Include:
 - Avoid unnecessary tool calls.
 - Prefer fewer, higher-value findings over many trivial comments.
 - If something is uncertain, label it as a potential risk.
+- Do NOT ask the user to confirm between pages — all pages are reviewed in a single call.

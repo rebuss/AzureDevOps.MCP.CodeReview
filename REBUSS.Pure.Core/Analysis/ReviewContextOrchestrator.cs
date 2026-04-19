@@ -36,7 +36,6 @@ public class ReviewContextOrchestrator
             Diff = diff,
             Metadata = metadata,
             Files = files,
-            ContentProvider = _scmClient,
             LocalRepositoryRoot = null
         };
 

@@ -246,6 +246,34 @@ namespace REBUSS.Pure.AzureDevOps.Api
             return body;
         }
 
+        public async Task DownloadRepositoryZipToFileAsync(string commitRef, string destinationPath, CancellationToken ct = default)
+        {
+            if (_httpClient.BaseAddress is null)
+                throw new InvalidOperationException(Resources.ErrorConfigurationIncomplete);
+
+            var url = $"{_options.ProjectName}/_apis/git/repositories/{_options.RepositoryName}/items" +
+                      $"?path=/&$format=zip&download=true" +
+                      $"&versionDescriptor.version={Uri.EscapeDataString(commitRef)}" +
+                      $"&versionDescriptor.versionType=commit" +
+                      $"&api-version=7.0";
+
+            _logger.LogDebug("Downloading repository ZIP at commit {CommitRef}", commitRef);
+
+            var sw = Stopwatch.StartNew();
+            using var response = await _httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
+            response.EnsureSuccessStatusCode();
+
+            await using var httpStream = await response.Content.ReadAsStreamAsync(ct);
+            await using var fileStream = new FileStream(destinationPath, FileMode.Create, FileAccess.Write, FileShare.None);
+            await httpStream.CopyToAsync(fileStream, ct);
+
+            sw.Stop();
+            var fileSize = new FileInfo(destinationPath).Length;
+            _logger.LogDebug(
+                "Repository ZIP downloaded: {FileSize} bytes, {ElapsedMs}ms",
+                fileSize, sw.ElapsedMilliseconds);
+        }
+
         /// <summary>
         /// Detects whether a 2xx response actually contains HTML instead of JSON.
         /// This happens when Azure DevOps returns an authentication/login page

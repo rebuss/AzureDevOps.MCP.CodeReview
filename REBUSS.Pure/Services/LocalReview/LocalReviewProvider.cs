@@ -158,10 +158,14 @@ namespace REBUSS.Pure.Services.LocalReview
 
             var (baseRef, targetRef) = GetDiffRefs(scope);
 
-            var baseContent = await _gitClient.GetFileContentAtRefAsync(
+            var baseContentTask = _gitClient.GetFileContentAtRefAsync(
                 repoRoot, status.Path, baseRef, cancellationToken);
-            var targetContent = await _gitClient.GetFileContentAtRefAsync(
+            var targetContentTask = _gitClient.GetFileContentAtRefAsync(
                 repoRoot, status.Path, targetRef, cancellationToken);
+            await Task.WhenAll(baseContentTask, targetContentTask);
+
+            var baseContent = await baseContentTask;
+            var targetContent = await targetContentTask;
 
             fileChange.Hunks = _diffBuilder.Build(status.Path, baseContent, targetContent);
 
@@ -222,8 +226,8 @@ namespace REBUSS.Pure.Services.LocalReview
             if (hunks.Count == 0)
                 return false;
 
-            var oldLineCount = baseContent.Replace("\r\n", "\n").Split('\n').Length;
-            var newLineCount = targetContent.Replace("\r\n", "\n").Split('\n').Length;
+            var oldLineCount = baseContent.Replace("\r\n", "\n").TrimEnd('\n').Split('\n').Length;
+            var newLineCount = targetContent.Replace("\r\n", "\n").TrimEnd('\n').Split('\n').Length;
 
             if (oldLineCount < fullRewriteMinLineCount && newLineCount < fullRewriteMinLineCount)
                 return false;

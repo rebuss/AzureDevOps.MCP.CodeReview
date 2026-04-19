@@ -11,14 +11,19 @@ using REBUSS.Pure.Core.Shared;
 using REBUSS.Pure.GitHub;
 using REBUSS.Pure.GitHub.Configuration;
 using REBUSS.Pure.Logging;
+using REBUSS.Pure.Core.Services.CopilotReview;
 using REBUSS.Pure.Services;
 using REBUSS.Pure.Services.ContextWindow;
+using REBUSS.Pure.Services.CopilotReview;
 using REBUSS.Pure.Services.LocalReview;
+using REBUSS.Pure.Services.PrEnrichment;
 using AzureDevOpsNames = REBUSS.Pure.AzureDevOps.Names;
 using GitHubNames = REBUSS.Pure.GitHub.Names;
 using ResponsePacking = REBUSS.Pure.Services.ResponsePacking;
 using Pagination = REBUSS.Pure.Services.Pagination;
 using REBUSS.Pure.Properties;
+using REBUSS.Pure.RoslynProcessor;
+using REBUSS.Pure.Services.RepositoryDownload;
 
 namespace REBUSS.Pure
 {
@@ -93,14 +98,19 @@ namespace REBUSS.Pure
                 // Replace the host's default configuration with our pre-built one
                 builder.Services.AddSingleton<IConfiguration>(configuration);
 
-                // Configure logging: all output to stderr (Constitution Principle II)
+                // Configure logging: all output to stderr (Constitution Principle II).
+                // The `Logging:LogLevel` rules from appsettings.json must be wired to our
+                // explicit configuration — Host.CreateApplicationBuilder() reads from the
+                // process working directory which, for MCP servers spawned by an IDE, is not
+                // the executable directory. Without this line our LogLevel filters silently
+                // never apply and every category logs at Information.
                 builder.Logging.ClearProviders();
+                builder.Logging.AddConfiguration(configuration.GetSection("Logging"));
                 builder.Logging.AddConsole(options =>
                 {
                     options.LogToStandardErrorThreshold = LogLevel.Trace;
                 });
                 builder.Logging.AddProvider(new FileLoggerProvider(GetLogDirectory()));
-                builder.Logging.SetMinimumLevel(LogLevel.Debug);
 
                 // Register business services (providers, algorithms, shared services)
                 ConfigureBusinessServices(builder.Services, configuration, parseResult.RepoPath);
@@ -151,9 +161,70 @@ namespace REBUSS.Pure
             services.AddSingleton<IDiffAlgorithm, DiffPlexDiffAlgorithm>();
             services.AddSingleton<IStructuredDiffBuilder, StructuredDiffBuilder>();
             services.AddSingleton<IFileClassifier, FileClassifier>();
+            services.AddSingleton<DiffSourceResolver>();
+            services.AddSingleton<IDiffEnricher, BeforeAfterEnricher>();         // Order=100
+            services.AddSingleton<IDiffEnricher, ScopeAnnotatorEnricher>();      // Order=150
+            services.AddSingleton<IDiffEnricher, StructuralChangeEnricher>();    // Order=200
+            services.AddSingleton<IDiffEnricher, UsingsChangeEnricher>();        // Order=250
+            services.AddSingleton<CallSiteScanner>();
+            services.AddSingleton<IDiffEnricher, CallSiteEnricher>();            // Order=300
+            services.AddSingleton<IDiffEnricher, FileStructureValidationEnricher>(); // Order=400
+            services.AddSingleton<ICodeProcessor, CompositeCodeProcessor>();
+
+            // Progress reporting (MCP notifications/progress)
+            services.AddSingleton<IProgressReporter, ProgressReporter>();
+
+            // Workflow timeouts (progressive PR metadata feature)
+            services.Configure<WorkflowOptions>(configuration.GetSection(WorkflowOptions.SectionName));
+            services.AddSingleton<IPrEnrichmentOrchestrator, PrEnrichmentOrchestrator>();
+
+            // Copilot Review Layer (feature 013) — SDK-backed server-side PR review.
+            // The provider is registered three ways: (1) concrete singleton, (2) interface
+            // alias so consumers can depend on ICopilotClientProvider, (3) IHostedService so
+            // the generic host calls StopAsync on shutdown. All three resolve to the same instance.
+            services.Configure<CopilotReviewOptions>(configuration.GetSection(CopilotReviewOptions.SectionName));
+            services.AddSingleton<ICopilotTokenResolver, CopilotTokenResolver>();
+            services.AddSingleton<CopilotVerificationRunner>();
+            services.AddSingleton<ICopilotVerificationProbe>(sp => sp.GetRequiredService<CopilotVerificationRunner>());
+            services.AddSingleton<CopilotClientProvider>();
+            services.AddSingleton<ICopilotClientProvider>(sp => sp.GetRequiredService<CopilotClientProvider>());
+            services.AddHostedService(sp => sp.GetRequiredService<CopilotClientProvider>());
+            services.AddSingleton<CopilotRequestThrottle>();
+            services.AddSingleton<ICopilotSessionFactory, CopilotSessionFactory>();
+            services.AddSingleton<ICopilotAvailabilityDetector, CopilotAvailabilityDetector>();
+            services.AddSingleton<ICopilotPageReviewer, CopilotPageReviewer>();
+
+            // Feature 022 — Copilot inspection (internal diagnostic, env-var gated).
+            // REBUSS_COPILOT_INSPECT=1|true|True registers the filesystem writer; any other
+            // value registers a no-op. Read once at DI composition time; restart to toggle.
+            var inspectEnabled = Environment.GetEnvironmentVariable("REBUSS_COPILOT_INSPECT")
+                is "1" or "true" or "True";
+            if (inspectEnabled)
+            {
+                services.AddSingleton<
+                    REBUSS.Pure.Services.CopilotReview.Inspection.ICopilotInspectionWriter,
+                    REBUSS.Pure.Services.CopilotReview.Inspection.FileSystemCopilotInspectionWriter>();
+            }
+            else
+            {
+                services.AddSingleton<
+                    REBUSS.Pure.Services.CopilotReview.Inspection.ICopilotInspectionWriter,
+                    REBUSS.Pure.Services.CopilotReview.Inspection.NoOpCopilotInspectionWriter>();
+            }
+
+            // Feature 021 — Finding validation pipeline (false positive reduction).
+            // Registered unconditionally; CopilotReviewOrchestrator short-circuits at
+            // runtime based on CopilotReviewOptions.ValidateFindings (per Principle V
+            // deferred resolution — the flag is read at first review, not at DI time).
+            services.AddSingleton<REBUSS.Pure.Services.CopilotReview.Validation.FindingScopeResolver>();
+            services.AddSingleton<REBUSS.Pure.Services.CopilotReview.Validation.FindingValidator>();
+
+            services.AddSingleton<ICopilotReviewOrchestrator, CopilotReviewOrchestrator>();
+            services.AddSingleton<CopilotReviewWaiter>();
 
             // Context Window Awareness
             services.Configure<ContextWindowOptions>(configuration.GetSection(ContextWindowOptions.SectionName));
+
             services.AddSingleton<IContextBudgetResolver, ContextBudgetResolver>();
             services.AddSingleton<ITokenEstimator, TokenEstimator>();
 
@@ -180,9 +251,14 @@ namespace REBUSS.Pure
                     break;
             }
 
+            // Repository download orchestrator + startup cleanup
+            services.AddSingleton<IRepositoryDownloadOrchestrator, RepositoryDownloadOrchestrator>();
+            services.AddHostedService<RepositoryCleanupService>();
+
             // Local self-review pipeline
             services.AddSingleton<ILocalGitClient, LocalGitClient>();
             services.AddSingleton<ILocalReviewProvider, LocalReviewProvider>();
+            services.AddSingleton<ILocalEnrichmentOrchestrator, LocalEnrichmentOrchestrator>();
         }
 
         private static Dictionary<string, string?> BuildCliConfigOverrides(CliParseResult parseResult)
@@ -303,9 +379,14 @@ namespace REBUSS.Pure
 
                 process.Start();
                 process.StandardInput.Close();
-                var output = process.StandardOutput.ReadToEnd();
-                process.WaitForExit(TimeSpan.FromSeconds(5));
 
+                if (!process.WaitForExit(TimeSpan.FromSeconds(5)))
+                {
+                    try { process.Kill(entireProcessTree: true); } catch { }
+                    return null;
+                }
+
+                var output = process.StandardOutput.ReadToEnd();
                 return process.ExitCode == 0 ? output.Trim() : null;
             }
             catch

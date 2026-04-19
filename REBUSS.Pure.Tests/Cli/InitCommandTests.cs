@@ -704,7 +704,7 @@ public class InitCommandTests
     }
 
     [Fact]
-    public async Task ExecuteAsync_CopiesInstructionFiles_ToGitHubInstructionsDirectory()
+    public async Task ExecuteAsync_DoesNotCreateInstructionFiles()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(Path.Combine(tempDir, ".git"));
@@ -718,22 +718,12 @@ public class InitCommandTests
 
             Assert.Equal(0, exitCode);
 
-            var reviewPrInstr = Path.Combine(tempDir, ".github", "instructions", "review-pr.instructions.md");
-            var selfReviewInstr = Path.Combine(tempDir, ".github", "instructions", "self-review.instructions.md");
-            var createPrInstr = Path.Combine(tempDir, ".github", "instructions", "create-pr.instructions.md");
-
-            Assert.True(File.Exists(reviewPrInstr), $"Expected instruction file at {reviewPrInstr}");
-            Assert.True(File.Exists(selfReviewInstr), $"Expected instruction file at {selfReviewInstr}");
-            Assert.False(File.Exists(createPrInstr), "create-pr.instructions.md should not be deployed yet");
-
-            var reviewPrContent = await File.ReadAllTextAsync(reviewPrInstr);
-            Assert.Contains("Pull Request Code Review", reviewPrContent);
-
-            var selfReviewContent = await File.ReadAllTextAsync(selfReviewInstr);
-            Assert.Contains("Self-Review", selfReviewContent);
+            var instructionsDir = Path.Combine(tempDir, ".github", "instructions");
+            Assert.False(Directory.Exists(instructionsDir),
+                "init must not create .github/instructions/");
 
             var outputText = output.ToString();
-            Assert.Contains("instruction file(s)", outputText);
+            Assert.DoesNotContain("instruction file(s)", outputText);
         }
         finally
         {
@@ -811,7 +801,7 @@ public class InitCommandTests
     }
 
     [Fact]
-    public async Task ExecuteAsync_OverwritesInstructionFiles_WhenAlreadyExist()
+    public async Task ExecuteAsync_PreservesPreExistingInstructionFiles()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         var instructionsDir = Path.Combine(tempDir, ".github", "instructions");
@@ -819,7 +809,8 @@ public class InitCommandTests
         Directory.CreateDirectory(instructionsDir);
 
         var existingContent = "# My custom instruction";
-        await File.WriteAllTextAsync(Path.Combine(instructionsDir, "review-pr.instructions.md"), existingContent);
+        var existingPath = Path.Combine(instructionsDir, "review-pr.instructions.md");
+        await File.WriteAllTextAsync(existingPath, existingContent);
 
         try
         {
@@ -830,15 +821,9 @@ public class InitCommandTests
 
             Assert.Equal(0, exitCode);
 
-            // Existing instruction file should be overwritten with embedded content
-            var reviewPrContent = await File.ReadAllTextAsync(
-                Path.Combine(instructionsDir, "review-pr.instructions.md"));
-            Assert.NotEqual(existingContent, reviewPrContent);
-            Assert.Contains("Pull Request Code Review", reviewPrContent);
-
-            // Other instruction file should also be created
-            var selfReviewInstr = Path.Combine(instructionsDir, "self-review.instructions.md");
-            Assert.True(File.Exists(selfReviewInstr));
+            // init must not touch user instruction files
+            Assert.Equal(existingContent, await File.ReadAllTextAsync(existingPath));
+            Assert.False(File.Exists(Path.Combine(instructionsDir, "self-review.instructions.md")));
         }
         finally
         {
@@ -847,7 +832,7 @@ public class InitCommandTests
     }
 
     [Fact]
-    public async Task ExecuteAsync_OutputMentionsPromptAndInstructionCopy()
+    public async Task ExecuteAsync_OutputMentionsPromptCopy()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(Path.Combine(tempDir, ".git"));
@@ -862,7 +847,7 @@ public class InitCommandTests
             var outputText = output.ToString();
             Assert.Contains("Copied", outputText);
             Assert.Contains("prompt file(s)", outputText);
-            Assert.Contains("instruction file(s)", outputText);
+            Assert.DoesNotContain("instruction file(s)", outputText);
         }
         finally
         {
@@ -891,28 +876,13 @@ public class InitCommandTests
             Assert.True(File.Exists(reviewPrPath));
             Assert.False(File.Exists(Path.Combine(subDir, ".github", "prompts", "review-pr.prompt.md")));
 
-            var reviewPrInstr = Path.Combine(tempDir, ".github", "instructions", "review-pr.instructions.md");
-            Assert.True(File.Exists(reviewPrInstr));
-            Assert.False(File.Exists(Path.Combine(subDir, ".github", "instructions", "review-pr.instructions.md")));
+            Assert.False(Directory.Exists(Path.Combine(tempDir, ".github", "instructions")));
+            Assert.False(Directory.Exists(Path.Combine(subDir, ".github", "instructions")));
         }
         finally
         {
             Directory.Delete(tempDir, recursive: true);
         }
-    }
-
-    // -------------------------------------------------------------------------
-    // ToInstructionsFileName
-    // -------------------------------------------------------------------------
-
-    [Theory]
-    [InlineData("review-pr.prompt.md", "review-pr.instructions.md")]
-    [InlineData("self-review.prompt.md", "self-review.instructions.md")]
-    [InlineData("create-pr.md", "create-pr.instructions.md")]
-    public void ToInstructionsFileName_ConvertsCorrectly(string input, string expected)
-    {
-        var result = InitCommand.ToInstructionsFileName(input);
-        Assert.Equal(expected, result);
     }
 
     // -------------------------------------------------------------------------
@@ -925,10 +895,13 @@ public class InitCommandTests
         var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(Path.Combine(tempDir, ".git"));
 
-        var processRunnerCalled = false;
-        Func<string, CancellationToken, Task<(int, string, string)>> processRunner = (_, _) =>
+        var scmAuthCalled = false;
+        Func<string, CancellationToken, Task<(int, string, string)>> processRunner = (args, _) =>
         {
-            processRunnerCalled = true;
+            // Only flag Azure-CLI-specific auth calls — Copilot step (feature 012) legitimately
+            // invokes gh-related args regardless of --pat.
+            if (args.Contains("get-access-token") || args.Contains("az login") || args == "install-az-cli")
+                scmAuthCalled = true;
             return Task.FromResult((0, "", ""));
         };
 
@@ -940,7 +913,7 @@ public class InitCommandTests
             var exitCode = await command.ExecuteAsync();
 
             Assert.Equal(0, exitCode);
-            Assert.False(processRunnerCalled);
+            Assert.False(scmAuthCalled);
         }
         finally
         {
@@ -956,13 +929,18 @@ public class InitCommandTests
 
         var expiresOn = DateTime.UtcNow.AddHours(1);
         var tokenJson = $"{{\"accessToken\":\"existing-token\",\"expiresOn\":\"{expiresOn:O}\"}}";
+        var azBrowserText = false;
         Func<string, CancellationToken, Task<(int, string, string)>> processRunner = (args, _) =>
         {
             if (args == "--version")
                 return Task.FromResult((0, "azure-cli 2.60.0", ""));
             if (args.Contains("get-access-token"))
                 return Task.FromResult((0, tokenJson, ""));
-            return Task.FromResult((-1, "", "should not be called"));
+            // Feature 012 Copilot step probes — keep the Az session assertions clean by
+            // returning a "happy path / already installed" state so the step runs silently.
+            if (args.Contains("auth status")) return Task.FromResult((0, "Logged in", ""));
+            if (args.Contains("extension list")) return Task.FromResult((0, "github/gh-copilot", ""));
+            return Task.FromResult((0, "", ""));
         };
 
         try
@@ -974,7 +952,10 @@ public class InitCommandTests
 
             Assert.Equal(0, exitCode);
             Assert.Contains("Using existing login session", output.ToString());
-            Assert.DoesNotContain("browser window", output.ToString());
+            // The Az CLI path must not trigger an Az browser login message.
+            // (A non-Az "browser" mention from the Copilot step would be scoped to GitHub CLI.)
+            Assert.DoesNotContain("Attempting Azure CLI login", output.ToString());
+            _ = azBrowserText;
         }
         finally
         {
@@ -1249,14 +1230,20 @@ public class InitCommandTests
                 return Task.FromResult((0, "azure-cli 2.60.0", ""));
             if (args.Contains("get-access-token") && callCount <= 2)
                 return Task.FromResult((-1, "", "not logged in"));
-            if (args.Contains("login"))
+            // Match Az-specific "login" only, not "gh auth login --web" from Copilot step (feature 012).
+            // Also capture only the first login so later Copilot-step login calls don't overwrite it.
+            if (args.Contains("login") && !args.Contains("auth login"))
             {
-                capturedLoginArgs = args;
+                if (string.IsNullOrEmpty(capturedLoginArgs))
+                    capturedLoginArgs = args;
                 return Task.FromResult((0, "", ""));
             }
             if (args.Contains("get-access-token"))
                 return Task.FromResult((0, tokenJson, ""));
-            return Task.FromResult((-1, "", "unexpected"));
+            // Copilot step probes — pretend everything is already set up so the step runs silently.
+            if (args.Contains("auth status")) return Task.FromResult((0, "Logged in", ""));
+            if (args.Contains("extension list")) return Task.FromResult((0, "github/gh-copilot", ""));
+            return Task.FromResult((0, "", ""));
         };
 
         try
@@ -1282,7 +1269,7 @@ public class InitCommandTests
 
         var configExistedDuringLogin = false;
         var promptsExistedDuringLogin = false;
-        var instructionsExistedDuringLogin = false;
+        var instructionsDirCreatedDuringLogin = false;
         Func<string, CancellationToken, Task<(int, string, string)>> processRunner = (args, _) =>
         {
             if (args == "--version")
@@ -1292,7 +1279,7 @@ public class InitCommandTests
                 configExistedDuringLogin = File.Exists(Path.Combine(tempDir, ".vscode", "mcp.json"))
                     || File.Exists(Path.Combine(tempDir, ".vs", "mcp.json"));
                 promptsExistedDuringLogin = Directory.Exists(Path.Combine(tempDir, ".github", "prompts"));
-                instructionsExistedDuringLogin = Directory.Exists(Path.Combine(tempDir, ".github", "instructions"));
+                instructionsDirCreatedDuringLogin = Directory.Exists(Path.Combine(tempDir, ".github", "instructions"));
                 return Task.FromResult((-1, "", "not logged in"));
             }
             if (args.Contains("login"))
@@ -1310,7 +1297,7 @@ public class InitCommandTests
             Assert.Equal(0, exitCode);
             Assert.True(configExistedDuringLogin, "MCP config should be written before az login is attempted");
             Assert.True(promptsExistedDuringLogin, "Prompt files should be copied before az login is attempted");
-            Assert.True(instructionsExistedDuringLogin, "Instruction files should be copied before az login is attempted");
+            Assert.False(instructionsDirCreatedDuringLogin, "init must not create .github/instructions/");
         }
         finally
         {
@@ -1481,10 +1468,13 @@ public class InitCommandTests
         var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(Path.Combine(tempDir, ".git"));
 
-        var processRunnerCalled = false;
-        Func<string, CancellationToken, Task<(int, string, string)>> processRunner = (_, _) =>
+        var scmAuthCalled = false;
+        Func<string, CancellationToken, Task<(int, string, string)>> processRunner = (args, _) =>
         {
-            processRunnerCalled = true;
+            // Only flag GitHub-CLI auth-specific calls — Copilot step (feature 012) legitimately
+            // invokes `gh --version`, `gh auth status`, `gh extension list` regardless of --pat.
+            if (args.Contains("auth token") || args.Contains("auth login") || args == "install-gh-cli")
+                scmAuthCalled = true;
             return Task.FromResult((0, "", ""));
         };
 
@@ -1497,7 +1487,7 @@ public class InitCommandTests
             var exitCode = await command.ExecuteAsync();
 
             Assert.Equal(0, exitCode);
-            Assert.False(processRunnerCalled);
+            Assert.False(scmAuthCalled);
         }
         finally
         {
@@ -1549,7 +1539,7 @@ public class InitCommandTests
 
         var configExistedDuringLogin = false;
         var promptsExistedDuringLogin = false;
-        var instructionsExistedDuringLogin = false;
+        var instructionsDirCreatedDuringLogin = false;
         Func<string, CancellationToken, Task<(int, string, string)>> processRunner = (args, _) =>
         {
             if (args == "--version")
@@ -1559,7 +1549,7 @@ public class InitCommandTests
                 configExistedDuringLogin = File.Exists(Path.Combine(tempDir, ".vscode", "mcp.json"))
                     || File.Exists(Path.Combine(tempDir, ".vs", "mcp.json"));
                 promptsExistedDuringLogin = Directory.Exists(Path.Combine(tempDir, ".github", "prompts"));
-                instructionsExistedDuringLogin = Directory.Exists(Path.Combine(tempDir, ".github", "instructions"));
+                instructionsDirCreatedDuringLogin = Directory.Exists(Path.Combine(tempDir, ".github", "instructions"));
                 return Task.FromResult((-1, "", "not logged in"));
             }
             if (args == "auth login --web")
@@ -1578,7 +1568,7 @@ public class InitCommandTests
             Assert.Equal(0, exitCode);
             Assert.True(configExistedDuringLogin, "MCP config should be written before gh login is attempted");
             Assert.True(promptsExistedDuringLogin, "Prompt files should be copied before gh login is attempted");
-            Assert.True(instructionsExistedDuringLogin, "Instruction files should be copied before gh login is attempted");
+            Assert.False(instructionsDirCreatedDuringLogin, "init must not create .github/instructions/");
         }
         finally
         {
@@ -1604,6 +1594,7 @@ public class InitCommandTests
 
         Assert.True(File.Exists(ctx.GlobalVsConfig), $"Expected global VS config at {ctx.GlobalVsConfig}");
         Assert.True(File.Exists(ctx.GlobalVsCodeConfig), $"Expected global VS Code config at {ctx.GlobalVsCodeConfig}");
+        Assert.True(File.Exists(ctx.GlobalCopilotCliConfig), $"Expected global Copilot CLI config at {ctx.GlobalCopilotCliConfig}");
 
         var content = await File.ReadAllTextAsync(ctx.GlobalVsConfig);
         Assert.Contains("REBUSS.Pure", content);
@@ -1675,18 +1666,20 @@ public class InitCommandTests
     }
 
     [Fact]
-    public void ResolveGlobalConfigTargets_ReturnsBothGlobalTargets()
+    public void ResolveGlobalConfigTargets_ReturnsAllGlobalTargets()
     {
         var targets = InitCommand.ResolveGlobalConfigTargets();
 
-        Assert.Equal(2, targets.Count);
+        Assert.Equal(3, targets.Count);
         Assert.Contains(targets, t => t.IdeName == "Visual Studio (global)");
         Assert.Contains(targets, t => t.IdeName == "VS Code (global)");
+        Assert.Contains(targets, t => t.IdeName == "Copilot CLI (global)");
 
         var userHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var appData  = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
         Assert.Contains(targets, t => t.ConfigPath == Path.Combine(userHome, ".mcp.json"));
         Assert.Contains(targets, t => t.ConfigPath == Path.Combine(appData, "Code", "User", "mcp.json"));
+        Assert.Contains(targets, t => t.ConfigPath == Path.Combine(userHome, ".copilot", "mcp-config.json"));
     }
 
     // -------------------------------------------------------------------------
@@ -1867,6 +1860,152 @@ public class InitCommandTests
         }
     }
 
+    // -------------------------------------------------------------------------
+    // Feature 012 — Copilot CLI setup step integration scenarios
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task ExecuteAsync_GitHubRepo_CopilotStepDetectsExistingAuth_OnlyPromptsForExtension()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(Path.Combine(tempDir, ".git"));
+
+        var extensionInstallCalls = 0;
+        Func<string, CancellationToken, Task<(int, string, string)>> processRunner = (args, _) =>
+        {
+            // gh already installed + authenticated with existing token
+            if (args == "--version") return Task.FromResult((0, "gh 2.0", ""));
+            if (args.Contains("auth token")) return Task.FromResult((0, "{\"token\":\"t\"}", ""));
+            if (args.Contains("auth status")) return Task.FromResult((0, "Logged in", ""));
+            // Copilot not available initially, succeeds after extension install
+            if (args.Contains("copilot --version")) return Task.FromResult(extensionInstallCalls > 0
+                ? (0, "copilot 1.0", "") : (-1, "", "not found"));
+            if (args.Contains("extension install"))
+            {
+                extensionInstallCalls++;
+                return Task.FromResult((0, "", ""));
+            }
+            return Task.FromResult((0, "", ""));
+        };
+
+        try
+        {
+            var output = new StringWriter();
+            var command = CreateCommand(
+                output, tempDir, "rebuss-pure.exe", null, processRunner,
+                input: new StringReader("y\n"), detectedProvider: "GitHub");
+
+            var exitCode = await command.ExecuteAsync();
+
+            Assert.Equal(0, exitCode);
+            Assert.Equal(1, extensionInstallCalls);
+            Assert.True(File.Exists(Path.Combine(tempDir, ".vscode", "mcp.json")));
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_AdoRepo_CopilotStepInstallsGhAndExtension_EndToEnd()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(Path.Combine(tempDir, ".git"));
+
+        var azVersionCalled = false;
+        var ghInstalled = false;
+        var ghAuthed = false;
+        var extensionInstalled = false;
+        var expiresOn = DateTime.UtcNow.AddHours(1);
+        var tokenJson = $"{{\"accessToken\":\"tok\",\"expiresOn\":\"{expiresOn:O}\"}}";
+
+        Func<string, CancellationToken, Task<(int, string, string)>> processRunner = (args, _) =>
+        {
+            // Azure CLI path: already installed + existing session
+            if (args == "--version" && !azVersionCalled)
+            {
+                azVersionCalled = true;
+                return Task.FromResult((0, "azure-cli 2.60.0", ""));
+            }
+            if (args.Contains("get-access-token")) return Task.FromResult((0, tokenJson, ""));
+
+            // Copilot step: gh is missing until installed
+            if (args == "--version") return ghInstalled
+                ? Task.FromResult((0, "gh 2.0", ""))
+                : Task.FromResult((-1, "", "not found"));
+            if (args == "install-gh-cli") { ghInstalled = true; return Task.FromResult((0, "", "")); }
+            if (args.Contains("auth status")) return ghAuthed
+                ? Task.FromResult((0, "Logged in", ""))
+                : Task.FromResult((-1, "", "not authed"));
+            if (args.Contains("auth login")) { ghAuthed = true; return Task.FromResult((0, "", "")); }
+            if (args.Contains("extension install")) { extensionInstalled = true; return Task.FromResult((0, "", "")); }
+            if (args.Contains("copilot --version")) return Task.FromResult(extensionInstalled
+                ? (0, "copilot 1.0", "") : (-1, "", "not found"));
+            return Task.FromResult((0, "", ""));
+        };
+
+        try
+        {
+            var output = new StringWriter();
+            var command = CreateCommand(
+                output, tempDir, "rebuss-pure.exe", null, processRunner,
+                input: new StringReader("y\n"), detectedProvider: "AzureDevOps");
+
+            var exitCode = await command.ExecuteAsync();
+
+            Assert.Equal(0, exitCode);
+            Assert.True(ghInstalled);
+            Assert.True(ghAuthed);
+            Assert.True(extensionInstalled);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_CopilotStepDeclined_InitStillSucceedsAndConfigsWritten()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(Path.Combine(tempDir, ".git"));
+
+        var extensionInstallCalls = 0;
+        Func<string, CancellationToken, Task<(int, string, string)>> processRunner = (args, _) =>
+        {
+            if (args == "--version") return Task.FromResult((0, "gh 2.0", ""));
+            if (args.Contains("auth token")) return Task.FromResult((0, "{\"token\":\"t\"}", ""));
+            if (args.Contains("auth status")) return Task.FromResult((0, "Logged in", ""));
+            if (args.Contains("copilot --version")) return Task.FromResult((-1, "", "not found"));
+            if (args.Contains("extension install"))
+            {
+                extensionInstallCalls++;
+                return Task.FromResult((0, "", ""));
+            }
+            return Task.FromResult((0, "", ""));
+        };
+
+        try
+        {
+            var output = new StringWriter();
+            var command = CreateCommand(
+                output, tempDir, "rebuss-pure.exe", null, processRunner,
+                input: new StringReader("N\n"), detectedProvider: "GitHub");
+
+            var exitCode = await command.ExecuteAsync();
+
+            Assert.Equal(0, exitCode);
+            Assert.Equal(0, extensionInstallCalls); // user declined
+            Assert.True(File.Exists(Path.Combine(tempDir, ".vscode", "mcp.json")));
+            Assert.Contains("GITHUB COPILOT CLI NOT CONFIGURED", output.ToString());
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
     /// <summary>
     /// Disposable context for global-mode tests: creates a temp Git repository and a
     /// separate temp directory simulating user-level VS / VS Code config locations.
@@ -1877,6 +2016,7 @@ public class InitCommandTests
         public string GlobalDir { get; }
         public string GlobalVsConfig { get; }
         public string GlobalVsCodeConfig { get; }
+        public string GlobalCopilotCliConfig { get; }
         public List<McpConfigTarget> GlobalTargets { get; }
 
         public GlobalTestContext()
@@ -1888,10 +2028,13 @@ public class InitCommandTests
             GlobalVsConfig = Path.Combine(GlobalDir, ".mcp.json");
             var globalVsCodeDir = Path.Combine(GlobalDir, "Code", "User");
             GlobalVsCodeConfig = Path.Combine(globalVsCodeDir, "mcp.json");
+            var globalCopilotCliDir = Path.Combine(GlobalDir, ".copilot");
+            GlobalCopilotCliConfig = Path.Combine(globalCopilotCliDir, "mcp-config.json");
             GlobalTargets =
             [
                 new McpConfigTarget("Visual Studio (global)", GlobalDir, GlobalVsConfig),
-                new McpConfigTarget("VS Code (global)", globalVsCodeDir, GlobalVsCodeConfig)
+                new McpConfigTarget("VS Code (global)", globalVsCodeDir, GlobalVsCodeConfig),
+                new McpConfigTarget("Copilot CLI (global)", globalCopilotCliDir, GlobalCopilotCliConfig)
             ];
         }
 

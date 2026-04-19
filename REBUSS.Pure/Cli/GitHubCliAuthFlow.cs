@@ -14,6 +14,14 @@ internal sealed class GitHubCliAuthFlow : ICliAuthFlow
     private readonly Func<string, CancellationToken, Task<(int ExitCode, string StdOut, string StdErr)>>? _processRunner;
     private string? _ghCliPathOverride;
 
+    /// <summary>
+    /// The resolved <c>gh.exe</c> path discovered after a fresh install when the current
+    /// process PATH has not yet refreshed. <c>null</c> when <c>gh</c> is on PATH or was
+    /// not installed by this flow. Exposed so that <see cref="CopilotCliSetupStep"/> can
+    /// reuse the same override and avoid re-probing in the same <c>init</c> session.
+    /// </summary>
+    internal string? GhCliPathOverride => _ghCliPathOverride;
+
     public GitHubCliAuthFlow(
         TextWriter output,
         TextReader input,

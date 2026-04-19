@@ -245,7 +245,8 @@ namespace REBUSS.Pure.Services
 
             while (dir is not null)
             {
-                if (Directory.Exists(Path.Combine(dir.FullName, ".git")))
+                var gitPath = Path.Combine(dir.FullName, ".git");
+                if (Directory.Exists(gitPath) || File.Exists(gitPath))
                     return dir.FullName;
 
                 dir = dir.Parent;
