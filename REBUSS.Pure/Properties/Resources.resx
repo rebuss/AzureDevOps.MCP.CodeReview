@@ -261,19 +261,7 @@
     <value>REBUSS.Pure can cooperate with GitHub Copilot CLI to provide a review flow that is resilient to IDE conversation summarization. This is optional — existing review tools work without it.</value>
   </data>
   <data name="CopilotSetup_PromptInstallGhAndContinue" xml:space="preserve">
-    <value>Install GitHub CLI (prerequisite) and set up GitHub Copilot CLI? [y/N]: </value>
-  </data>
-  <data name="CopilotSetup_PromptInstallExtension" xml:space="preserve">
-    <value>Install the GitHub Copilot CLI extension now? [y/N]: </value>
-  </data>
-  <data name="CopilotSetup_AlreadyInstalled" xml:space="preserve">
-    <value>GitHub Copilot CLI: already installed.</value>
-  </data>
-  <data name="CopilotSetup_InstallSuccess" xml:space="preserve">
-    <value>GitHub Copilot CLI installed successfully.</value>
-  </data>
-  <data name="CopilotSetup_InstallFailed" xml:space="preserve">
-    <value>GitHub Copilot CLI installation failed.</value>
+    <value>Install GitHub CLI to enable Copilot-powered review? [y/N]: </value>
   </data>
   <data name="CopilotSetup_DeclineBannerTitle" xml:space="preserve">
     <value>  GITHUB COPILOT CLI NOT CONFIGURED</value>
@@ -281,12 +269,15 @@
   <data name="CopilotSetup_DeclineBannerBody" xml:space="preserve">
     <value>Existing REBUSS.Pure review tools are unaffected and will continue to work.
 The optional GitHub Copilot-powered review flow (resilient to IDE conversation
-summarization) will not be available until the Copilot CLI is installed.</value>
+summarization) will not be available until GitHub CLI is installed and
+authenticated with the Copilot scope.</value>
   </data>
   <data name="CopilotSetup_ManualInstallHint" xml:space="preserve">
-    <value>To enable it later, run:
+    <value>To enable it later, install GitHub CLI (https://cli.github.com) and run:
 
-  gh extension install github/gh-copilot
+  gh auth login --web -s copilot
+
+Or set REBUSS_COPILOT_TOKEN to a Copilot-entitled GitHub token.
 </value>
   </data>
   <data name="LogCopilotClientStarting" xml:space="preserve">

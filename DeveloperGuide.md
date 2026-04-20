@@ -31,22 +31,24 @@ rebuss-pure init -g
 2. Authenticates (Azure CLI or PAT)
 3. Detects IDEs and writes `mcp.json` to the appropriate directory
 4. Copies prompt files to `.github/prompts/`
-5. **(Optional)** Offers to set up GitHub Copilot CLI (`gh copilot` extension) for the
-   summarization-resilient Copilot-powered review flow. This step runs regardless of SCM
-   provider or whether `--pat` was supplied, and is fully optional — declining, failure, or
-   a non-interactive session never changes `init`'s exit code. State is detected fresh on
-   every run, so a previous decline does not suppress the prompt on the next run. When
-   `gh` itself is missing, the first prompt is framed as Copilot setup and declining there
-   skips the entire chain (no separate extension prompt follows). To enable later without
-   re-running `init`, use: `gh extension install github/gh-copilot`.
+5. **(Optional)** Ensures GitHub CLI is installed and authenticated with the Copilot
+   scope so the summarization-resilient Copilot-powered review flow can use the bundled
+   Copilot CLI. This step runs regardless of SCM provider or whether `--pat` was supplied,
+   and is fully optional — declining, failure, or a non-interactive session never changes
+   `init`'s exit code. State is detected fresh on every run, so a previous decline does
+   not suppress the prompt on the next run. When `gh` itself is missing, the first prompt
+   is framed as Copilot setup and declining there skips the entire chain. To enable later
+   without re-running `init`, install GitHub CLI and run: `gh auth login --web -s copilot`
+   — or set `REBUSS_COPILOT_TOKEN` to a Copilot-entitled GitHub token.
 
-### Copilot Review Layer (feature 013)
+### Copilot Review Layer
 
-When the `GitHub.Copilot.SDK` package is installed and `gh copilot` is available on the
-machine (set up via feature 012), the MCP server can perform PR reviews **server-side**
-by sending every page of enriched content to GitHub Copilot in parallel and returning
-compact review summaries to the IDE agent. This eliminates the "IDE conversation
-summarization drops earlier findings" problem on large PRs.
+When the standalone Copilot CLI (bundled with REBUSS.Pure under `runtimes/<rid>/native/`,
+or pointed at via `REBUSS_COPILOT_CLI_PATH`) is reachable and `gh` is authenticated with
+the Copilot scope, the MCP server can perform PR reviews **server-side** by sending every
+page of enriched content to GitHub Copilot in parallel and returning compact review
+summaries to the IDE agent. This eliminates the "IDE conversation summarization drops
+earlier findings" problem on large PRs.
 
 **Two modes**: every `get_pr_content` response carries a mode indicator in its first block:
 

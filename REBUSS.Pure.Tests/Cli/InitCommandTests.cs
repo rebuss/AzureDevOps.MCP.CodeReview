@@ -1861,11 +1861,11 @@ public class InitCommandTests
     }
 
     // -------------------------------------------------------------------------
-    // Feature 012 — Copilot CLI setup step integration scenarios
+    // Copilot CLI setup step integration scenarios
     // -------------------------------------------------------------------------
 
     [Fact]
-    public async Task ExecuteAsync_GitHubRepo_CopilotStepDetectsExistingAuth_OnlyPromptsForExtension()
+    public async Task ExecuteAsync_GitHubRepo_GhInstalledAndAuthed_InitSucceedsWithoutExtensionInstall()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(Path.Combine(tempDir, ".git"));
@@ -1873,13 +1873,11 @@ public class InitCommandTests
         var extensionInstallCalls = 0;
         Func<string, CancellationToken, Task<(int, string, string)>> processRunner = (args, _) =>
         {
-            // gh already installed + authenticated with existing token
-            if (args == "--version") return Task.FromResult((0, "gh 2.0", ""));
+            if (args == "--version") return Task.FromResult((0, "gh 2.89", ""));
             if (args.Contains("auth token")) return Task.FromResult((0, "{\"token\":\"t\"}", ""));
             if (args.Contains("auth status")) return Task.FromResult((0, "Logged in", ""));
-            // Copilot not available initially, succeeds after extension install
-            if (args.Contains("copilot --version")) return Task.FromResult(extensionInstallCalls > 0
-                ? (0, "copilot 1.0", "") : (-1, "", "not found"));
+            // Any stray extension-install call would bump this — the simplified flow
+            // no longer invokes `gh extension install github/gh-copilot`.
             if (args.Contains("extension install"))
             {
                 extensionInstallCalls++;
@@ -1898,7 +1896,7 @@ public class InitCommandTests
             var exitCode = await command.ExecuteAsync();
 
             Assert.Equal(0, exitCode);
-            Assert.Equal(1, extensionInstallCalls);
+            Assert.Equal(0, extensionInstallCalls);
             Assert.True(File.Exists(Path.Combine(tempDir, ".vscode", "mcp.json")));
         }
         finally
@@ -1908,7 +1906,7 @@ public class InitCommandTests
     }
 
     [Fact]
-    public async Task ExecuteAsync_AdoRepo_CopilotStepInstallsGhAndExtension_EndToEnd()
+    public async Task ExecuteAsync_AdoRepo_CopilotStepInstallsGhAndAuthenticates_EndToEnd()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(Path.Combine(tempDir, ".git"));
@@ -1916,7 +1914,7 @@ public class InitCommandTests
         var azVersionCalled = false;
         var ghInstalled = false;
         var ghAuthed = false;
-        var extensionInstalled = false;
+        var extensionInstallCalls = 0;
         var expiresOn = DateTime.UtcNow.AddHours(1);
         var tokenJson = $"{{\"accessToken\":\"tok\",\"expiresOn\":\"{expiresOn:O}\"}}";
 
@@ -1932,16 +1930,19 @@ public class InitCommandTests
 
             // Copilot step: gh is missing until installed
             if (args == "--version") return ghInstalled
-                ? Task.FromResult((0, "gh 2.0", ""))
+                ? Task.FromResult((0, "gh 2.89", ""))
                 : Task.FromResult((-1, "", "not found"));
             if (args == "install-gh-cli") { ghInstalled = true; return Task.FromResult((0, "", "")); }
             if (args.Contains("auth status")) return ghAuthed
                 ? Task.FromResult((0, "Logged in", ""))
                 : Task.FromResult((-1, "", "not authed"));
             if (args.Contains("auth login")) { ghAuthed = true; return Task.FromResult((0, "", "")); }
-            if (args.Contains("extension install")) { extensionInstalled = true; return Task.FromResult((0, "", "")); }
-            if (args.Contains("copilot --version")) return Task.FromResult(extensionInstalled
-                ? (0, "copilot 1.0", "") : (-1, "", "not found"));
+            // Extension install must not be invoked in the simplified flow.
+            if (args.Contains("extension install"))
+            {
+                extensionInstallCalls++;
+                return Task.FromResult((0, "", ""));
+            }
             return Task.FromResult((0, "", ""));
         };
 
@@ -1957,7 +1958,7 @@ public class InitCommandTests
             Assert.Equal(0, exitCode);
             Assert.True(ghInstalled);
             Assert.True(ghAuthed);
-            Assert.True(extensionInstalled);
+            Assert.Equal(0, extensionInstallCalls);
         }
         finally
         {
@@ -1971,16 +1972,14 @@ public class InitCommandTests
         var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(Path.Combine(tempDir, ".git"));
 
-        var extensionInstallCalls = 0;
+        var ghInstallCalls = 0;
         Func<string, CancellationToken, Task<(int, string, string)>> processRunner = (args, _) =>
         {
-            if (args == "--version") return Task.FromResult((0, "gh 2.0", ""));
-            if (args.Contains("auth token")) return Task.FromResult((0, "{\"token\":\"t\"}", ""));
-            if (args.Contains("auth status")) return Task.FromResult((0, "Logged in", ""));
-            if (args.Contains("copilot --version")) return Task.FromResult((-1, "", "not found"));
-            if (args.Contains("extension install"))
+            // gh is missing — the entry prompt will be shown.
+            if (args == "--version") return Task.FromResult((-1, "", "not found"));
+            if (args == "install-gh-cli")
             {
-                extensionInstallCalls++;
+                ghInstallCalls++;
                 return Task.FromResult((0, "", ""));
             }
             return Task.FromResult((0, "", ""));
@@ -1996,7 +1995,7 @@ public class InitCommandTests
             var exitCode = await command.ExecuteAsync();
 
             Assert.Equal(0, exitCode);
-            Assert.Equal(0, extensionInstallCalls); // user declined
+            Assert.Equal(0, ghInstallCalls); // user declined the entry prompt
             Assert.True(File.Exists(Path.Combine(tempDir, ".vscode", "mcp.json")));
             Assert.Contains("GITHUB COPILOT CLI NOT CONFIGURED", output.ToString());
         }

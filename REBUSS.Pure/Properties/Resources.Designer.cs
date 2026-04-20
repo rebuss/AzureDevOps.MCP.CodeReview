@@ -662,22 +662,6 @@ namespace REBUSS.Pure.Properties {
             get { return ResourceManager.GetString("CopilotSetup_PromptInstallGhAndContinue", resourceCulture)!; }
         }
 
-        internal static string CopilotSetup_PromptInstallExtension {
-            get { return ResourceManager.GetString("CopilotSetup_PromptInstallExtension", resourceCulture)!; }
-        }
-
-        internal static string CopilotSetup_AlreadyInstalled {
-            get { return ResourceManager.GetString("CopilotSetup_AlreadyInstalled", resourceCulture)!; }
-        }
-
-        internal static string CopilotSetup_InstallSuccess {
-            get { return ResourceManager.GetString("CopilotSetup_InstallSuccess", resourceCulture)!; }
-        }
-
-        internal static string CopilotSetup_InstallFailed {
-            get { return ResourceManager.GetString("CopilotSetup_InstallFailed", resourceCulture)!; }
-        }
-
         internal static string CopilotSetup_DeclineBannerTitle {
             get { return ResourceManager.GetString("CopilotSetup_DeclineBannerTitle", resourceCulture)!; }
         }
