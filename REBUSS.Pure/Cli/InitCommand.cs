@@ -34,9 +34,13 @@ public class InitCommand : ICliCommand
 {
     private const string VsCodeDir = ".vscode";
     private const string VisualStudioDir = ".vs";
+    private const string ClaudeCodeDir = ".claude";
+    private const string ClaudeCodeMarkerFile = "CLAUDE.md";
     private const string McpConfigFileName = "mcp.json";
     private const string VsGlobalMcpConfigFileName = ".mcp.json";
     private const string CopilotCliMcpConfigFileName = "mcp-config.json";
+    private const string ClaudeCodeMcpConfigFileName = ".mcp.json";
+    private const string ClaudeCodeGlobalConfigFileName = ".claude.json";
     private const string ResourcePrefix = AppConstants.ServerName + ".Cli.Prompts.";
 
     private static readonly string[] PromptFileNames =
@@ -58,6 +62,7 @@ public class InitCommand : ICliCommand
     private readonly string? _pat;
     private readonly bool _isGlobal;
     private readonly string? _ide;
+    private readonly string? _agent;
     private readonly string? _detectedProvider;
     private readonly Func<string, CancellationToken, Task<(int ExitCode, string StdOut, string StdErr)>>? _processRunner;
     private readonly ILocalConfigStore? _localConfigStore;
@@ -66,13 +71,13 @@ public class InitCommand : ICliCommand
 
     public string Name => "init";
 
-    public InitCommand(TextWriter output, string workingDirectory, string executablePath, string? pat = null, bool isGlobal = false, string? ide = null)
-        : this(output, Console.In, workingDirectory, executablePath, pat, isGlobal, ide, detectedProvider: null, processRunner: null, localConfigStore: null, gitHubConfigStore: null)
+    public InitCommand(TextWriter output, string workingDirectory, string executablePath, string? pat = null, bool isGlobal = false, string? ide = null, string? agent = null)
+        : this(output, Console.In, workingDirectory, executablePath, pat, isGlobal, ide, agent, detectedProvider: null, processRunner: null, localConfigStore: null, gitHubConfigStore: null)
     {
     }
 
-    public InitCommand(TextWriter output, TextReader input, string workingDirectory, string executablePath, string? pat = null, bool isGlobal = false, string? ide = null, string? detectedProvider = null)
-        : this(output, input, workingDirectory, executablePath, pat, isGlobal, ide, detectedProvider, processRunner: null, localConfigStore: null, gitHubConfigStore: null)
+    public InitCommand(TextWriter output, TextReader input, string workingDirectory, string executablePath, string? pat = null, bool isGlobal = false, string? ide = null, string? agent = null, string? detectedProvider = null)
+        : this(output, input, workingDirectory, executablePath, pat, isGlobal, ide, agent, detectedProvider, processRunner: null, localConfigStore: null, gitHubConfigStore: null)
     {
     }
 
@@ -87,6 +92,7 @@ public class InitCommand : ICliCommand
         string? pat,
         bool isGlobal,
         string? ide,
+        string? agent,
         string? detectedProvider,
         Func<string, CancellationToken, Task<(int ExitCode, string StdOut, string StdErr)>>? processRunner,
         ILocalConfigStore? localConfigStore = null,
@@ -100,6 +106,7 @@ public class InitCommand : ICliCommand
         _pat = pat;
         _isGlobal = isGlobal;
         _ide = ide;
+        _agent = agent;
         _detectedProvider = detectedProvider;
         _processRunner = processRunner;
         _localConfigStore = localConfigStore;
@@ -116,12 +123,17 @@ public class InitCommand : ICliCommand
             return 1;
         }
 
+        // Resolve which AI agent to wire up. Explicit --agent flag wins; otherwise
+        // prompt the user interactively. Default (empty input) is GitHub Copilot
+        // to preserve prior behaviour for users upgrading without re-reading docs.
+        var effectiveAgent = _agent ?? await PromptForAgentAsync();
+
         // Create MCP config files and copy prompts FIRST — before any potentially
         // interactive or long-running Azure CLI steps. This ensures files are written
         // even if the user cancels during az install or az login.
         var targets = _isGlobal
-            ? (_globalConfigTargetsResolver?.Invoke() ?? ResolveGlobalConfigTargets())
-            : ResolveConfigTargets(gitRoot, _ide);
+            ? (_globalConfigTargetsResolver?.Invoke() ?? ResolveGlobalConfigTargets(effectiveAgent))
+            : ResolveConfigTargets(gitRoot, _ide, effectiveAgent);
 
         var normalizedExePath = _executablePath.Replace("\\", "\\\\");
         var normalizedRepoPath = gitRoot.Replace("\\", "\\\\");
@@ -131,22 +143,47 @@ public class InitCommand : ICliCommand
             Directory.CreateDirectory(target.Directory);
 
             string newContent;
-            if (File.Exists(target.ConfigPath))
+            bool fileExisted = File.Exists(target.ConfigPath);
+            if (fileExisted)
             {
                 var existing = await File.ReadAllTextAsync(target.ConfigPath, cancellationToken);
-                newContent = MergeConfigContent(existing, _executablePath, gitRoot, _pat);
-                await File.WriteAllTextAsync(target.ConfigPath, newContent, cancellationToken);
-                await _output.WriteLineAsync(string.Format(Resources.MsgUpdatedMcpConfiguration, target.IdeName, target.ConfigPath));
+                newContent = MergeConfigContent(existing, _executablePath, gitRoot, _pat, target.UseMcpServersKey, effectiveAgent);
+
+                // Backup before overwriting: the Claude Code ~/.claude.json file in
+                // particular contains unrelated user state, so preserve the pre-merge
+                // copy in case our merge mangles something.
+                try
+                {
+                    var backupPath = target.ConfigPath + ".bak";
+                    File.Copy(target.ConfigPath, backupPath, overwrite: true);
+                    await _output.WriteLineAsync(string.Format(Resources.MsgBackedUpMcpConfiguration, backupPath));
+                }
+                catch { /* non-fatal: missing .bak is acceptable */ }
             }
             else
             {
-                newContent = BuildConfigContent(normalizedExePath, normalizedRepoPath, _pat);
-                await File.WriteAllTextAsync(target.ConfigPath, newContent, cancellationToken);
-                await _output.WriteLineAsync(string.Format(Resources.MsgCreatedMcpConfiguration, target.IdeName, target.ConfigPath));
+                newContent = BuildConfigContent(normalizedExePath, normalizedRepoPath, _pat, target.UseMcpServersKey, effectiveAgent);
             }
+
+            try
+            {
+                await File.WriteAllTextAsync(target.ConfigPath, newContent, cancellationToken);
+            }
+            catch (IOException ex)
+            {
+                // File likely held open by a running MCP client (Claude Code keeps
+                // ~/.claude.json open). Surface a clear, actionable error and continue
+                // with the next target rather than aborting the whole init.
+                await _output.WriteLineAsync(string.Format(Resources.ErrMcpConfigLocked, target.IdeName, target.ConfigPath, ex.Message));
+                continue;
+            }
+
+            await _output.WriteLineAsync(string.Format(
+                fileExisted ? Resources.MsgUpdatedMcpConfiguration : Resources.MsgCreatedMcpConfiguration,
+                target.IdeName, target.ConfigPath));
         }
 
-        await CopyPromptFilesAsync(gitRoot, cancellationToken);
+        await CopyPromptFilesAsync(gitRoot, effectiveAgent, cancellationToken);
 
         // Clear provider caches so the next server start detects fresh config from the new repo
         _localConfigStore?.Clear();
@@ -162,12 +199,38 @@ public class InitCommand : ICliCommand
                 ghCliPathOverride = ghFlow.GhCliPathOverride;
         }
 
-        // GitHub Copilot CLI setup (feature 012) — runs regardless of SCM provider or --pat.
-        // This step is intentionally non-fatal: any failure or decline is soft, and the init
+        // Agent-specific setup step — either GitHub Copilot CLI or Claude Code CLI.
+        // Both are intentionally non-fatal: any failure or decline is soft, and the init
         // exit code is not affected (FR-011).
-        // Feature 018 T032: also build a narrow throwaway service provider that exposes
-        // ICopilotVerificationProbe so the setup step can verify the session and print
-        // the remediation banner (FR-017). Probe construction failures are soft-exited.
+        if (string.Equals(effectiveAgent, CliArgumentParser.AgentClaude, StringComparison.OrdinalIgnoreCase))
+        {
+            await RunClaudeSetupStepAsync(cancellationToken);
+        }
+        else
+        {
+            await RunCopilotSetupStepAsync(ghCliPathOverride, cancellationToken);
+        }
+
+        await _output.WriteLineAsync();
+        await _output.WriteLineAsync(Resources.MsgMcpServerRepoHint);
+        await _output.WriteLineAsync(Resources.MsgRestartIdeHint);
+
+        return 0;
+    }
+
+    /// <summary>
+    /// Feature 018 T032: builds a narrow, throwaway service provider that registers
+    /// only the types needed by <see cref="ICopilotVerificationProbe"/> — this init
+    /// flow runs outside of the MCP host DI graph. The provider is disposed as soon
+    /// as <see cref="CopilotCliSetupStep.RunAsync"/> returns.
+    /// </summary>
+    /// <summary>
+    /// Runs the GitHub Copilot CLI setup step — install/auth/verification — with a
+    /// narrow throwaway DI container that exposes only <see cref="ICopilotVerificationProbe"/>.
+    /// Any failure is soft-exited.
+    /// </summary>
+    private async Task RunCopilotSetupStepAsync(string? ghCliPathOverride, CancellationToken cancellationToken)
+    {
         ServiceProvider? copilotProbeServices = null;
         ICopilotVerificationProbe? verificationProbe = null;
         try
@@ -179,7 +242,6 @@ public class InitCommand : ICliCommand
         {
             await _output.WriteLineAsync(
                 $"Warning: could not construct Copilot verification probe ({ex.Message}). Skipping verification step.");
-            verificationProbe = null;
         }
 
         try
@@ -197,20 +259,39 @@ public class InitCommand : ICliCommand
         {
             copilotProbeServices?.Dispose();
         }
-
-        await _output.WriteLineAsync();
-        await _output.WriteLineAsync(Resources.MsgMcpServerRepoHint);
-        await _output.WriteLineAsync(Resources.MsgRestartIdeHint);
-
-        return 0;
     }
 
     /// <summary>
-    /// Feature 018 T032: builds a narrow, throwaway service provider that registers
-    /// only the types needed by <see cref="ICopilotVerificationProbe"/> — this init
-    /// flow runs outside of the MCP host DI graph. The provider is disposed as soon
-    /// as <see cref="CopilotCliSetupStep.RunAsync"/> returns.
+    /// Runs the Claude Code CLI setup step — install/auth/verification. The Claude
+    /// probe does not need SDK-level DI; it shells out to <c>claude -p</c> directly.
+    /// Any failure is soft-exited.
     /// </summary>
+    private async Task RunClaudeSetupStepAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            // Convert the 2-arg _processRunner (takes full command string) into a 3-arg
+            // signature (exe, args) the Claude step prefers for cross-tool install calls.
+            Func<string, string, CancellationToken, Task<(int ExitCode, string StdOut, string StdErr)>>? runner = null;
+            if (_processRunner is not null)
+                runner = (_, args, ct) => _processRunner(args, ct);
+
+            var probe = new Services.ClaudeCode.ClaudeVerificationRunner(
+                logger: null,
+                processRunner: _processRunner);
+
+            var claudeStep = new ClaudeCliSetupStep(
+                _output, _input,
+                processRunner: runner,
+                verificationProbe: probe);
+            await claudeStep.RunAsync(cancellationToken);
+        }
+        catch
+        {
+            // Defense in depth — ClaudeCliSetupStep is already catch-all internally.
+        }
+    }
+
     private static ServiceProvider BuildCopilotProbeServices()
     {
         var configuration = new ConfigurationBuilder()
@@ -368,14 +449,25 @@ public class InitCommand : ICliCommand
 
     /// <summary>
     /// Detects which IDE(s) are in use and returns the list of config file targets to write.
-    /// When <paramref name="ide"/> is provided (<c>"vscode"</c> or <c>"vs"</c>), only that
-    /// IDE's target is returned — no auto-detection is performed.
-    /// Otherwise, selection is based on which IDE folders physically exist:
-    /// only <c>.vscode</c> → VS Code only; only <c>.vs</c> → Visual Studio only;
-    /// both or neither → both targets.
+    /// When <paramref name="agent"/> is <c>"claude"</c>, returns the single Claude Code target
+    /// (<c>.mcp.json</c> at repo root with the <c>mcpServers</c> top-level key). When
+    /// <paramref name="ide"/> is provided (<c>"vscode"</c> or <c>"vs"</c>), only that IDE's
+    /// target is returned — no auto-detection is performed. Otherwise selection is based on
+    /// which IDE folders physically exist: only <c>.vscode</c> → VS Code; only <c>.vs</c>
+    /// → Visual Studio; both or neither → both targets.
     /// </summary>
-    internal static List<McpConfigTarget> ResolveConfigTargets(string gitRoot, string? ide = null)
+    internal static List<McpConfigTarget> ResolveConfigTargets(string gitRoot, string? ide = null, string? agent = null)
     {
+        if (string.Equals(agent, CliArgumentParser.AgentClaude, StringComparison.OrdinalIgnoreCase))
+            return
+            [
+                new McpConfigTarget(
+                    "Claude Code",
+                    gitRoot,
+                    Path.Combine(gitRoot, ClaudeCodeMcpConfigFileName),
+                    UseMcpServersKey: true)
+            ];
+
         if (!string.IsNullOrWhiteSpace(ide))
         {
             if (string.Equals(ide, "vscode", StringComparison.OrdinalIgnoreCase))
@@ -397,15 +489,15 @@ public class InitCommand : ICliCommand
                 ];
 
             throw new ArgumentException($"Unrecognized --ide value '{ide}'. Supported values: vscode, vs.");
-            }
+        }
 
-            var targets = new List<McpConfigTarget>();
+        var targets = new List<McpConfigTarget>();
 
-            bool hasVsCode = DetectsVsCode(gitRoot);
-            bool hasVisualStudio = DetectsVisualStudio(gitRoot);
+        bool hasVsCode = DetectsVsCode(gitRoot);
+        bool hasVisualStudio = DetectsVisualStudio(gitRoot);
 
-            bool writeVsCode = hasVsCode || !hasVisualStudio;
-            bool writeVisualStudio = hasVisualStudio || !hasVsCode;
+        bool writeVsCode = hasVsCode || !hasVisualStudio;
+        bool writeVisualStudio = hasVisualStudio || !hasVsCode;
 
         if (writeVsCode)
             targets.Add(new McpConfigTarget(
@@ -423,17 +515,36 @@ public class InitCommand : ICliCommand
     }
 
     /// <summary>
-    /// Returns global (user-level) MCP configuration targets.
-    /// Visual Studio reads <c>~/.mcp.json</c> directly from the user's home directory.
-    /// VS Code reads <c>%APPDATA%/Code/User/mcp.json</c> on Windows
-    /// (<c>~/.config/Code/User/mcp.json</c> on Linux).
-    /// Copilot CLI reads <c>~/.copilot/mcp-config.json</c>.
-    /// Writing to all ensures every workspace picks up the configuration.
+    /// Returns true if the repository shows signs of being used with Claude Code
+    /// (<c>.claude/</c> directory or <c>CLAUDE.md</c> marker file in the root).
+    /// Used only as a heuristic hint — the agent choice itself is driven by
+    /// the <c>--agent</c> flag or the interactive prompt.
     /// </summary>
-    internal static List<McpConfigTarget> ResolveGlobalConfigTargets()
+    internal static bool DetectsClaudeCode(string gitRoot) =>
+        Directory.Exists(Path.Combine(gitRoot, ClaudeCodeDir)) ||
+        File.Exists(Path.Combine(gitRoot, ClaudeCodeMarkerFile));
+
+    /// <summary>
+    /// Returns global (user-level) MCP configuration targets. Branch on <paramref name="agent"/>:
+    /// <list type="bullet">
+    ///   <item><c>"claude"</c> → single <c>~/.claude.json</c> target with <c>mcpServers</c> key.</item>
+    ///   <item><c>"copilot"</c> / <c>null</c> → VS <c>~/.mcp.json</c> + VS Code <c>%APPDATA%/Code/User/mcp.json</c> + Copilot CLI <c>~/.copilot/mcp-config.json</c>.</item>
+    /// </list>
+    /// </summary>
+    internal static List<McpConfigTarget> ResolveGlobalConfigTargets(string? agent = null)
     {
         var userHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var appData  = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+
+        if (string.Equals(agent, CliArgumentParser.AgentClaude, StringComparison.OrdinalIgnoreCase))
+            return
+            [
+                new McpConfigTarget(
+                    "Claude Code (global)",
+                    userHome,
+                    Path.Combine(userHome, ClaudeCodeGlobalConfigFileName),
+                    UseMcpServersKey: true)
+            ];
 
         return
         [
@@ -462,13 +573,22 @@ public class InitCommand : ICliCommand
         Directory.Exists(Path.Combine(gitRoot, VisualStudioDir)) ||
         Directory.EnumerateFiles(gitRoot, "*.sln", SearchOption.TopDirectoryOnly).Any();
 
-    internal static string BuildConfigContent(string normalizedExePath, string normalizedRepoPath, string? pat = null)
+    internal static string BuildConfigContent(
+        string normalizedExePath,
+        string normalizedRepoPath,
+        string? pat = null,
+        bool useMcpServersKey = false,
+        string? agent = null)
     {
         var patArgs = string.IsNullOrWhiteSpace(pat)
             ? string.Empty
             : $", \"--pat\", {System.Text.Json.JsonSerializer.Serialize(pat)}";
 
-        var serversKey = "servers";
+        var agentArgs = string.IsNullOrWhiteSpace(agent)
+            ? string.Empty
+            : $", \"--agent\", \"{agent}\"";
+
+        var serversKey = useMcpServersKey ? "mcpServers" : "servers";
 
         return $$"""
             {
@@ -476,7 +596,7 @@ public class InitCommand : ICliCommand
                 "REBUSS.Pure": {
                   "type": "stdio",
                   "command": "{{normalizedExePath}}",
-                  "args": ["--repo", "{{normalizedRepoPath}}"{{patArgs}}]
+                  "args": ["--repo", "{{normalizedRepoPath}}"{{patArgs}}{{agentArgs}}]
                 }
               }
             }
@@ -493,9 +613,11 @@ public class InitCommand : ICliCommand
         string existingJson,
         string rawExePath,
         string rawRepoPath,
-        string? pat = null)
+        string? pat = null,
+        bool useMcpServersKey = false,
+        string? agent = null)
     {
-        var serversKey = "servers";
+        var serversKey = useMcpServersKey ? "mcpServers" : "servers";
 
         try
         {
@@ -548,6 +670,11 @@ public class InitCommand : ICliCommand
                     writer.WriteStringValue("--pat");
                     writer.WriteStringValue(effectivePat);
                 }
+                if (!string.IsNullOrWhiteSpace(agent))
+                {
+                    writer.WriteStringValue("--agent");
+                    writer.WriteStringValue(agent);
+                }
                 writer.WriteEndArray();
                 writer.WriteEndObject();
 
@@ -562,7 +689,7 @@ public class InitCommand : ICliCommand
             // Existing file is not valid JSON — replace it entirely
             var normalizedExePath = rawExePath.Replace("\\", "\\\\");
             var normalizedRepoPath = rawRepoPath.Replace("\\", "\\\\");
-            return BuildConfigContent(normalizedExePath, normalizedRepoPath, pat);
+            return BuildConfigContent(normalizedExePath, normalizedRepoPath, pat, useMcpServersKey, agent);
         }
     }
 
@@ -589,15 +716,24 @@ public class InitCommand : ICliCommand
         return null;
     }
 
-    private async Task CopyPromptFilesAsync(string gitRoot, CancellationToken cancellationToken)
+    private async Task CopyPromptFilesAsync(string gitRoot, string effectiveAgent, CancellationToken cancellationToken)
     {
         var promptsTargetDir = Path.Combine(gitRoot, ".github", "prompts");
         Directory.CreateDirectory(promptsTargetDir);
 
         await DeleteLegacyPromptFilesAsync(promptsTargetDir);
 
+        // When the user selected Claude Code, also write a copy of each prompt to
+        // .claude/commands/<name>.md — stripping ".prompt" so that review-pr.prompt.md
+        // becomes the /review-pr slash command inside the Claude CLI.
+        var writeClaudeCommands = string.Equals(effectiveAgent, CliArgumentParser.AgentClaude, StringComparison.OrdinalIgnoreCase);
+        var claudeCommandsDir = Path.Combine(gitRoot, ClaudeCodeDir, "commands");
+        if (writeClaudeCommands)
+            Directory.CreateDirectory(claudeCommandsDir);
+
         var assembly = Assembly.GetExecutingAssembly();
         var promptsWritten = 0;
+        var claudeCommandsWritten = 0;
 
         foreach (var promptFileName in PromptFileNames)
         {
@@ -617,10 +753,23 @@ public class InitCommand : ICliCommand
             var promptPath = Path.Combine(promptsTargetDir, promptFileName);
             await File.WriteAllTextAsync(promptPath, content, cancellationToken);
             promptsWritten++;
+
+            if (writeClaudeCommands)
+            {
+                var commandFileName = promptFileName.EndsWith(".prompt.md", StringComparison.OrdinalIgnoreCase)
+                    ? promptFileName[..^".prompt.md".Length] + ".md"
+                    : promptFileName;
+                var commandPath = Path.Combine(claudeCommandsDir, commandFileName);
+                await File.WriteAllTextAsync(commandPath, content, cancellationToken);
+                claudeCommandsWritten++;
+            }
         }
 
         if (promptsWritten > 0)
             await _output.WriteLineAsync(string.Format(Resources.MsgCopiedPrompts, promptsWritten, promptsTargetDir));
+
+        if (claudeCommandsWritten > 0)
+            await _output.WriteLineAsync(string.Format(Resources.MsgCopiedPrompts, claudeCommandsWritten, claudeCommandsDir));
     }
 
     private async Task DeleteLegacyPromptFilesAsync(string promptsTargetDir)
@@ -656,6 +805,30 @@ public class InitCommand : ICliCommand
         return null;
     }
 
+    /// <summary>
+    /// Prompts the user to pick the AI agent to wire up. Returns
+    /// <see cref="CliArgumentParser.AgentCopilot"/> on empty input (default)
+    /// or <see cref="CliArgumentParser.AgentClaude"/> on <c>2</c>/<c>claude</c>.
+    /// Never throws — on any I/O failure returns the safe default.
+    /// </summary>
+    internal async Task<string> PromptForAgentAsync()
+    {
+        await _output.WriteLineAsync();
+        await _output.WriteLineAsync(Resources.MsgChooseAgentPrompt);
+        await _output.WriteAsync(Resources.MsgChooseAgentPromptInline);
+
+        string? answer;
+        try { answer = _input.ReadLine(); }
+        catch { return CliArgumentParser.AgentCopilot; }
+
+        var normalized = (answer ?? string.Empty).Trim().ToLowerInvariant();
+        return normalized switch
+        {
+            "2" or "claude" or "claude-code" => CliArgumentParser.AgentClaude,
+            _ => CliArgumentParser.AgentCopilot
+        };
+    }
+
     private static string? FindGitRepositoryRoot(string startDirectory)
     {
         var dir = new DirectoryInfo(startDirectory);
@@ -675,5 +848,7 @@ public class InitCommand : ICliCommand
 
 /// <summary>
 /// Describes a single MCP configuration file target to be written by <see cref="InitCommand"/>.
+/// <paramref name="UseMcpServersKey"/> controls which top-level key is used in the JSON output:
+/// <c>"servers"</c> (VS / VS Code) when <c>false</c>, <c>"mcpServers"</c> (Claude Code) when <c>true</c>.
 /// </summary>
-internal sealed record McpConfigTarget(string IdeName, string Directory, string ConfigPath);
+internal sealed record McpConfigTarget(string IdeName, string Directory, string ConfigPath, bool UseMcpServersKey = false);

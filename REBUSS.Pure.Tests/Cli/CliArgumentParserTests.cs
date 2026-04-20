@@ -333,4 +333,66 @@ public class CliArgumentParserTests
         Assert.True(result.IsGlobal);
     }
 
+    // --- Agent argument ---
+
+    [Fact]
+    public void Parse_InitWithAgentCopilot_ReturnsAgentCopilot()
+    {
+        var result = CliArgumentParser.Parse(["init", "--agent", "copilot"]);
+
+        Assert.False(result.IsServerMode);
+        Assert.Equal("init", result.CommandName);
+        Assert.Equal("copilot", result.Agent);
+    }
+
+    [Fact]
+    public void Parse_InitWithAgentClaude_ReturnsAgentClaude()
+    {
+        var result = CliArgumentParser.Parse(["init", "--agent", "claude"]);
+
+        Assert.False(result.IsServerMode);
+        Assert.Equal("init", result.CommandName);
+        Assert.Equal("claude", result.Agent);
+    }
+
+    [Fact]
+    public void Parse_InitWithAgentCaseInsensitive_ReturnsNormalizedValue()
+    {
+        var result = CliArgumentParser.Parse(["init", "--agent", "CLAUDE"]);
+
+        Assert.Equal("claude", result.Agent);
+    }
+
+    [Fact]
+    public void Parse_InitWithoutAgent_ReturnsNullAgent()
+    {
+        var result = CliArgumentParser.Parse(["init"]);
+
+        Assert.Null(result.Agent);
+    }
+
+    [Fact]
+    public void Parse_InitWithUnknownAgent_Throws()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            CliArgumentParser.Parse(["init", "--agent", "gemini"]));
+    }
+
+    [Fact]
+    public void Parse_ServerModeWithAgent_ReturnsAgent()
+    {
+        var result = CliArgumentParser.Parse(["--repo", "C:\\repo", "--agent", "claude"]);
+
+        Assert.True(result.IsServerMode);
+        Assert.Equal("claude", result.Agent);
+    }
+
+    [Fact]
+    public void Parse_ServerModeWithoutAgent_ReturnsNullAgent()
+    {
+        var result = CliArgumentParser.Parse(["--repo", "C:\\repo"]);
+
+        Assert.True(result.IsServerMode);
+        Assert.Null(result.Agent);
+    }
 }

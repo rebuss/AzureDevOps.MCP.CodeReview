@@ -257,6 +257,67 @@
   <data name="WarnEmbeddedPromptResourceNotFound" xml:space="preserve">
     <value>Warning: Embedded prompt resource not found: {0}</value>
   </data>
+  <data name="MsgChooseAgentPrompt" xml:space="preserve">
+    <value>Which AI agent will you use with REBUSS.Pure?
+  [1] GitHub Copilot  (default)
+  [2] Claude Code</value>
+  </data>
+  <data name="MsgChooseAgentPromptInline" xml:space="preserve">
+    <value>Enter 1 or 2 [1]: </value>
+  </data>
+  <data name="MsgBackedUpMcpConfiguration" xml:space="preserve">
+    <value>Backed up existing MCP configuration to: {0}</value>
+  </data>
+  <data name="ErrMcpConfigLocked" xml:space="preserve">
+    <value>Could not write MCP configuration ({0}) at {1}: the file is locked, likely because the MCP client (e.g. Claude Code) is currently running. Close the client and rerun 'rebuss-pure init'. Underlying error: {2}</value>
+  </data>
+  <data name="ClaudeSetup_ExplainBenefit" xml:space="preserve">
+    <value>Claude Code CLI is not installed. REBUSS.Pure needs it to invoke Claude for review and self-review workflows.</value>
+  </data>
+  <data name="ClaudeSetup_PromptInstall" xml:space="preserve">
+    <value>Install Claude Code CLI now? [y/N]: </value>
+  </data>
+  <data name="ClaudeSetup_InstallingViaWinget" xml:space="preserve">
+    <value>Installing Claude Code via winget (native standalone binary, no Node.js required)...</value>
+  </data>
+  <data name="ClaudeSetup_InstallingViaBrew" xml:space="preserve">
+    <value>Installing Claude Code via Homebrew (native standalone binary, no Node.js required)...</value>
+  </data>
+  <data name="ClaudeSetup_InstallingViaNativeScript" xml:space="preserve">
+    <value>Installing Claude Code via the official Anthropic install script (native standalone binary, no Node.js required)...</value>
+  </data>
+  <data name="ClaudeSetup_NoNpmManualHint" xml:space="preserve">
+    <value>Automatic install failed and 'npm' is not available for a fallback install. Install manually from https://docs.claude.com/en/docs/claude-code/overview and rerun 'rebuss-pure init'.</value>
+  </data>
+  <data name="ClaudeSetup_PromptNpmFallback" xml:space="preserve">
+    <value>Native install failed. Fall back to 'npm install -g @anthropic-ai/claude-code' (requires Node.js, which you already have)? [y/N]: </value>
+  </data>
+  <data name="ClaudeSetup_InstallOk" xml:space="preserve">
+    <value>Claude Code CLI installed successfully.</value>
+  </data>
+  <data name="ClaudeSetup_AuthInstructions" xml:space="preserve">
+    <value>Claude Code is installed but not authenticated. The next step launches 'claude' interactively so you can complete the built-in /login flow (opens a browser for your subscription or API key).</value>
+  </data>
+  <data name="ClaudeSetup_PromptLaunchAuth" xml:space="preserve">
+    <value>Launch Claude Code now to authenticate? [y/N]: </value>
+  </data>
+  <data name="ClaudeSetup_VerifiedOk" xml:space="preserve">
+    <value>Claude Code CLI verified and authenticated.</value>
+  </data>
+  <data name="ClaudeSetup_DeclineBannerTitle" xml:space="preserve">
+    <value>CLAUDE CODE NOT CONFIGURED</value>
+  </data>
+  <data name="ClaudeSetup_DeclineBannerBody" xml:space="preserve">
+    <value>Review and self-review workflows will not be available until Claude Code CLI is installed and authenticated.
+Install manually from https://docs.claude.com/en/docs/claude-code/overview and rerun 'rebuss-pure init'.</value>
+  </data>
+  <data name="ClaudeSetup_AuthFailureBannerTitle" xml:space="preserve">
+    <value>CLAUDE CODE AUTHENTICATION NOT VERIFIED</value>
+  </data>
+  <data name="ClaudeSetup_AuthFailureBannerBody" xml:space="preserve">
+    <value>Reason: {0}
+{1}</value>
+  </data>
   <data name="CopilotSetup_ExplainBenefit" xml:space="preserve">
     <value>REBUSS.Pure can cooperate with GitHub Copilot CLI to provide a review flow that is resilient to IDE conversation summarization. This is optional — existing review tools work without it.</value>
   </data>

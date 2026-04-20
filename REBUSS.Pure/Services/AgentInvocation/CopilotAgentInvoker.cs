@@ -1,0 +1,84 @@
+using System.Text;
+using GitHub.Copilot.SDK;
+using Microsoft.Extensions.Logging;
+using REBUSS.Pure.Core.Services.AgentInvocation;
+using REBUSS.Pure.Core.Services.CopilotReview;
+
+namespace REBUSS.Pure.Services.AgentInvocation;
+
+/// <summary>
+/// <see cref="IAgentInvoker"/> implementation that wraps
+/// <see cref="ICopilotSessionFactory"/> — creates a fresh session per call,
+/// subscribes to assistant-message/idle/error events, sends the prompt, and
+/// returns the accumulated response text. Session lifetime is bounded to the call.
+/// </summary>
+/// <remarks>
+/// Extracted from the previously inlined session+events block in
+/// <c>CopilotPageReviewer</c> / <c>FindingValidator</c> so the same one-shot
+/// contract can be served by either GitHub Copilot or Claude Code CLI.
+/// </remarks>
+public sealed class CopilotAgentInvoker : IAgentInvoker
+{
+    private readonly ICopilotSessionFactory _sessionFactory;
+    private readonly ILogger<CopilotAgentInvoker>? _logger;
+
+    public CopilotAgentInvoker(
+        ICopilotSessionFactory sessionFactory,
+        ILogger<CopilotAgentInvoker>? logger = null)
+    {
+        _sessionFactory = sessionFactory;
+        _logger = logger;
+    }
+
+    public async Task<string> InvokeAsync(string prompt, string? model, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(prompt);
+        if (string.IsNullOrWhiteSpace(model))
+            throw new ArgumentException("Copilot invoker requires a non-empty model", nameof(model));
+
+        ICopilotSessionHandle? handle = null;
+        try
+        {
+            handle = await _sessionFactory.CreateSessionAsync(model, cancellationToken).ConfigureAwait(false);
+
+            var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var contentBuilder = new StringBuilder();
+
+            using var subscription = handle.On(evt =>
+            {
+                switch (evt)
+                {
+                    case AssistantMessageEvent msg:
+                        // Phased-output models emit multiple chunks per session; accumulate
+                        // every non-null fragment (empty string is a legitimate stream chunk).
+                        var chunk = msg.Data?.Content;
+                        if (chunk is not null)
+                            contentBuilder.Append(chunk);
+                        break;
+                    case SessionErrorEvent err:
+                        tcs.TrySetException(new InvalidOperationException(
+                            err.Data?.Message ?? "session error (no message)"));
+                        break;
+                    case SessionIdleEvent:
+                        var captured = contentBuilder.ToString();
+                        if (!string.IsNullOrWhiteSpace(captured))
+                            tcs.TrySetResult(captured);
+                        else
+                            tcs.TrySetException(new InvalidOperationException(
+                                "session idle without assistant message content"));
+                        break;
+                }
+            });
+
+            await handle.SendAsync(prompt, cancellationToken).ConfigureAwait(false);
+            return await tcs.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            if (handle is not null)
+            {
+                try { await handle.DisposeAsync().ConfigureAwait(false); } catch { /* swallow */ }
+            }
+        }
+    }
+}

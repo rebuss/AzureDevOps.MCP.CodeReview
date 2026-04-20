@@ -654,6 +654,82 @@ namespace REBUSS.Pure.Properties {
             }
         }
 
+        internal static string MsgChooseAgentPrompt {
+            get { return ResourceManager.GetString("MsgChooseAgentPrompt", resourceCulture)!; }
+        }
+
+        internal static string MsgChooseAgentPromptInline {
+            get { return ResourceManager.GetString("MsgChooseAgentPromptInline", resourceCulture)!; }
+        }
+
+        internal static string MsgBackedUpMcpConfiguration {
+            get { return ResourceManager.GetString("MsgBackedUpMcpConfiguration", resourceCulture)!; }
+        }
+
+        internal static string ErrMcpConfigLocked {
+            get { return ResourceManager.GetString("ErrMcpConfigLocked", resourceCulture)!; }
+        }
+
+        internal static string ClaudeSetup_ExplainBenefit {
+            get { return ResourceManager.GetString("ClaudeSetup_ExplainBenefit", resourceCulture)!; }
+        }
+
+        internal static string ClaudeSetup_PromptInstall {
+            get { return ResourceManager.GetString("ClaudeSetup_PromptInstall", resourceCulture)!; }
+        }
+
+        internal static string ClaudeSetup_InstallingViaWinget {
+            get { return ResourceManager.GetString("ClaudeSetup_InstallingViaWinget", resourceCulture)!; }
+        }
+
+        internal static string ClaudeSetup_InstallingViaBrew {
+            get { return ResourceManager.GetString("ClaudeSetup_InstallingViaBrew", resourceCulture)!; }
+        }
+
+        internal static string ClaudeSetup_InstallingViaNativeScript {
+            get { return ResourceManager.GetString("ClaudeSetup_InstallingViaNativeScript", resourceCulture)!; }
+        }
+
+        internal static string ClaudeSetup_NoNpmManualHint {
+            get { return ResourceManager.GetString("ClaudeSetup_NoNpmManualHint", resourceCulture)!; }
+        }
+
+        internal static string ClaudeSetup_PromptNpmFallback {
+            get { return ResourceManager.GetString("ClaudeSetup_PromptNpmFallback", resourceCulture)!; }
+        }
+
+        internal static string ClaudeSetup_InstallOk {
+            get { return ResourceManager.GetString("ClaudeSetup_InstallOk", resourceCulture)!; }
+        }
+
+        internal static string ClaudeSetup_AuthInstructions {
+            get { return ResourceManager.GetString("ClaudeSetup_AuthInstructions", resourceCulture)!; }
+        }
+
+        internal static string ClaudeSetup_PromptLaunchAuth {
+            get { return ResourceManager.GetString("ClaudeSetup_PromptLaunchAuth", resourceCulture)!; }
+        }
+
+        internal static string ClaudeSetup_VerifiedOk {
+            get { return ResourceManager.GetString("ClaudeSetup_VerifiedOk", resourceCulture)!; }
+        }
+
+        internal static string ClaudeSetup_DeclineBannerTitle {
+            get { return ResourceManager.GetString("ClaudeSetup_DeclineBannerTitle", resourceCulture)!; }
+        }
+
+        internal static string ClaudeSetup_DeclineBannerBody {
+            get { return ResourceManager.GetString("ClaudeSetup_DeclineBannerBody", resourceCulture)!; }
+        }
+
+        internal static string ClaudeSetup_AuthFailureBannerTitle {
+            get { return ResourceManager.GetString("ClaudeSetup_AuthFailureBannerTitle", resourceCulture)!; }
+        }
+
+        internal static string ClaudeSetup_AuthFailureBannerBody {
+            get { return ResourceManager.GetString("ClaudeSetup_AuthFailureBannerBody", resourceCulture)!; }
+        }
+
         internal static string CopilotSetup_ExplainBenefit {
             get { return ResourceManager.GetString("CopilotSetup_ExplainBenefit", resourceCulture)!; }
         }

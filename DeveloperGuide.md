@@ -7,8 +7,12 @@
 Initializes MCP configuration in the current Git repository.
 
 ```bash
-# Default — auto-detects provider from Git remote
+# Default — auto-detects provider from Git remote, prompts for AI agent
 rebuss-pure init
+
+# Pre-select the AI agent (skips the interactive prompt)
+rebuss-pure init --agent copilot
+rebuss-pure init --agent claude
 
 # With a Personal Access Token
 rebuss-pure init --pat <your-pat>
@@ -17,29 +21,31 @@ rebuss-pure init --pat <your-pat>
 rebuss-pure init --provider github
 rebuss-pure init --provider azuredevops
 
-# Force specific IDE target (skips auto-detection)
+# Force specific IDE target (skips auto-detection; only relevant when --agent copilot)
 rebuss-pure init --ide vscode
 rebuss-pure init --ide vs
 
-# Global mode — writes user-level config (~\.mcp.json, %APPDATA%\Code\User\mcp.json & ~\.copilot\mcp-config.json)
+# Global mode — writes user-level config
+#   --agent copilot → ~\.mcp.json, %APPDATA%\Code\User\mcp.json, ~\.copilot\mcp-config.json
+#   --agent claude  → ~\.claude.json (merged into the existing mcpServers key)
 rebuss-pure init -g
 ```
 
 **What it does:**
 
 1. Finds the Git repository root
-2. Authenticates (Azure CLI or PAT)
-3. Detects IDEs and writes `mcp.json` to the appropriate directory
-4. Copies prompt files to `.github/prompts/`
-5. **(Optional)** Ensures GitHub CLI is installed and authenticated with the Copilot
-   scope so the summarization-resilient Copilot-powered review flow can use the bundled
-   Copilot CLI. This step runs regardless of SCM provider or whether `--pat` was supplied,
-   and is fully optional — declining, failure, or a non-interactive session never changes
-   `init`'s exit code. State is detected fresh on every run, so a previous decline does
-   not suppress the prompt on the next run. When `gh` itself is missing, the first prompt
-   is framed as Copilot setup and declining there skips the entire chain. To enable later
-   without re-running `init`, install GitHub CLI and run: `gh auth login --web -s copilot`
-   — or set `REBUSS_COPILOT_TOKEN` to a Copilot-entitled GitHub token.
+2. Asks which AI agent to wire up (GitHub Copilot or Claude Code) — skipped when `--agent` is supplied
+3. Authenticates with the SCM provider (Azure CLI or `gh auth login --web` or `--pat`)
+4. Writes `mcp.json` with the server entry:
+   - **Copilot**: `.vscode/mcp.json` and/or `.vs/mcp.json` (auto-detected from `.vscode/` / `.vs/` / `*.code-workspace` / `*.sln` markers) using the `servers` top-level key
+   - **Claude Code**: `.mcp.json` at the repo root using the `mcpServers` top-level key; in global mode, merges into `~/.claude.json` preserving any unrelated top-level settings and creating a `.bak` backup
+   - The agent choice is persisted via a `--agent <name>` entry in the server's `args`, so the MCP server knows at runtime which invoker to use
+5. Copies review prompts to `.github/prompts/`. When agent=claude, also mirrors them to `.claude/commands/<name>.md` (stripping `.prompt`) so `/review-pr` and `/self-review` become invocable as slash commands inside Claude Code
+6. **(Optional, agent-specific)** Runs the agent's own install-and-verify step:
+   - **Copilot**: ensures GitHub CLI is installed and authenticated with the Copilot scope so the bundled Copilot CLI can be used. Declining, failure, or a non-interactive session never changes init's exit code. To enable later without re-running `init`: install GitHub CLI and run `gh auth login --web -s copilot`, or set `REBUSS_COPILOT_TOKEN` to a Copilot-entitled GitHub token.
+   - **Claude Code**: installs Claude Code CLI via the platform's native installer (winget on Windows, brew on macOS, `curl | sh` elsewhere — **no Node.js required**), then launches `claude` interactively so its built-in `/login` flow can open a browser for OAuth consent. Falls back to `npm install -g @anthropic-ai/claude-code` only when npm is already on PATH and the native path failed, with a separate y/N prompt. Declining or any failure is a soft exit. To enable later without re-running `init`: install per https://claude.ai/install.ps1 (Windows) or https://claude.ai/install.sh (macOS/Linux), then run `claude` once to authenticate.
+
+> **Agent-specific note**: the `--ide` flag is ignored when `--agent claude` is selected — Claude Code uses a single project-scoped `.mcp.json` at the repo root, so IDE-level targeting does not apply.
 
 ### Copilot Review Layer
 

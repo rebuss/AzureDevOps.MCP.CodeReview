@@ -3,14 +3,20 @@ namespace REBUSS.Pure.Cli;
 /// <summary>
 /// Parses command-line arguments to determine the application run mode
 /// and extract options like <c>--repo</c>, <c>--pat</c>, <c>--org</c>,
-/// <c>--project</c>, <c>--repository</c>, <c>--provider</c>, and <c>--owner</c>.
+/// <c>--project</c>, <c>--repository</c>, <c>--provider</c>, <c>--owner</c>,
+/// and <c>--agent</c>.
 /// </summary>
 public class CliArgumentParser
 {
+    /// <summary>Supported values for <c>--agent</c>.</summary>
+    public const string AgentCopilot = "copilot";
+    public const string AgentClaude = "claude";
+
     /// <summary>
     /// Parses the command-line arguments.
     /// Returns a <see cref="CliParseResult"/> describing the intended run mode and options.
     /// </summary>
+    /// <exception cref="ArgumentException">Thrown when <c>--agent</c> has an unrecognized value.</exception>
     public static CliParseResult Parse(string[] args)
     {
         if (args.Length == 0)
@@ -23,6 +29,7 @@ public class CliArgumentParser
             string? initPat = null;
             bool isGlobal = false;
             string? ide = null;
+            string? initAgent = null;
             for (int i = 1; i < args.Length; i++)
             {
                 if (string.Equals(args[i], "--pat", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
@@ -40,8 +47,13 @@ public class CliArgumentParser
                     ide = args[i + 1];
                     i++;
                 }
+                else if (string.Equals(args[i], "--agent", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
+                {
+                    initAgent = NormalizeAgent(args[i + 1]);
+                    i++;
+                }
             }
-            return CliParseResult.CliMode("init", initPat, isGlobal, ide);
+            return CliParseResult.CliMode("init", initPat, isGlobal, ide, initAgent);
         }
 
         string? repoPath = null;
@@ -51,6 +63,7 @@ public class CliArgumentParser
         string? repository = null;
         string? provider = null;
         string? owner = null;
+        string? agent = null;
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -89,9 +102,25 @@ public class CliArgumentParser
                 owner = args[i + 1];
                 i++;
             }
+            else if (string.Equals(args[i], "--agent", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
+            {
+                agent = NormalizeAgent(args[i + 1]);
+                i++;
+            }
         }
 
-        return CliParseResult.ServerMode(repoPath, pat, organization, project, repository, provider, owner);
+        return CliParseResult.ServerMode(repoPath, pat, organization, project, repository, provider, owner, agent);
+    }
+
+    private static string NormalizeAgent(string raw)
+    {
+        var normalized = raw.Trim().ToLowerInvariant();
+        return normalized switch
+        {
+            AgentCopilot => AgentCopilot,
+            AgentClaude => AgentClaude,
+            _ => throw new ArgumentException($"Unrecognized --agent value '{raw}'. Supported values: {AgentCopilot}, {AgentClaude}.")
+        };
     }
 }
 
@@ -154,7 +183,8 @@ public sealed class CliParseResult
         string? project = null,
         string? repository = null,
         string? provider = null,
-        string? owner = null) => new()
+        string? owner = null,
+        string? agent = null) => new()
     {
         IsServerMode = true,
         CommandName = null,
@@ -164,7 +194,8 @@ public sealed class CliParseResult
         Project = project,
         Repository = repository,
         Provider = provider,
-        Owner = owner
+        Owner = owner,
+        Agent = agent
     };
 
     /// <summary>
@@ -178,13 +209,21 @@ public sealed class CliParseResult
     /// </summary>
     public string? Ide { get; private init; }
 
-    public static CliParseResult CliMode(string commandName, string? pat = null, bool isGlobal = false, string? ide = null) => new()
+    /// <summary>
+    /// The AI agent provided via <c>--agent</c> (<c>"copilot"</c> or <c>"claude"</c>).
+    /// <c>null</c> when not specified — in <c>init</c> the user is prompted interactively;
+    /// in server mode the default is GitHub Copilot.
+    /// </summary>
+    public string? Agent { get; private init; }
+
+    public static CliParseResult CliMode(string commandName, string? pat = null, bool isGlobal = false, string? ide = null, string? agent = null) => new()
     {
         IsServerMode = false,
         CommandName = commandName,
         Pat = pat,
         RepoPath = null,
         IsGlobal = isGlobal,
-        Ide = ide
+        Ide = ide,
+        Agent = agent
     };
 }

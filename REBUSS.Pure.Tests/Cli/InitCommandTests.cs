@@ -15,16 +15,19 @@ public class InitCommandTests
     /// <summary>
     /// Creates an InitCommand with a mock process runner (Azure CLI unavailable by default).
     /// The input reader defaults to "n" (decline install prompt).
+    /// Defaults <paramref name="agent"/> to "copilot" so the interactive agent prompt is
+    /// skipped — individual tests that exercise the prompt pass <c>agent: null</c> explicitly.
     /// </summary>
     private static InitCommand CreateCommand(
         TextWriter output, string workingDirectory, string executablePath, string? pat = null,
         Func<string, CancellationToken, Task<(int ExitCode, string StdOut, string StdErr)>>? processRunner = null,
         TextReader? input = null, string? detectedProvider = null, bool isGlobal = false, string? ide = null,
         ILocalConfigStore? localConfigStore = null, IGitHubConfigStore? gitHubConfigStore = null,
-        Func<List<McpConfigTarget>>? globalConfigTargetsResolver = null)
+        Func<List<McpConfigTarget>>? globalConfigTargetsResolver = null,
+        string? agent = "copilot")
     {
         return new InitCommand(output, input ?? new StringReader("n"), workingDirectory, executablePath, pat,
-            isGlobal, ide, detectedProvider ?? "AzureDevOps", processRunner ?? AzCliNotInstalled,
+            isGlobal, ide, agent, detectedProvider ?? "AzureDevOps", processRunner ?? AzCliNotInstalled,
             localConfigStore, gitHubConfigStore, globalConfigTargetsResolver);
     }
     // -------------------------------------------------------------------------
@@ -2044,6 +2047,363 @@ public class InitCommandTests
             if (Directory.Exists(GlobalDir))
                 Directory.Delete(GlobalDir, recursive: true);
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // Agent selection prompt (Step 2)
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task PromptForAgentAsync_EmptyInput_ReturnsCopilotDefault()
+    {
+        var output = new StringWriter();
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var command = CreateCommand(output, tempDir, "rebuss-pure.exe",
+                input: new StringReader("\n"), agent: null);
+
+            var result = await command.PromptForAgentAsync();
+
+            Assert.Equal(CliArgumentParser.AgentCopilot, result);
+        }
+        finally { Directory.Delete(tempDir, recursive: true); }
+    }
+
+    [Theory]
+    [InlineData("1")]
+    [InlineData("copilot")]
+    [InlineData("COPILOT")]
+    [InlineData("gibberish")]
+    public async Task PromptForAgentAsync_KnownOrUnknownInputsMappingToCopilot_ReturnCopilot(string input)
+    {
+        var output = new StringWriter();
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var command = CreateCommand(output, tempDir, "rebuss-pure.exe",
+                input: new StringReader(input + "\n"), agent: null);
+
+            var result = await command.PromptForAgentAsync();
+
+            Assert.Equal(CliArgumentParser.AgentCopilot, result);
+        }
+        finally { Directory.Delete(tempDir, recursive: true); }
+    }
+
+    [Theory]
+    [InlineData("2")]
+    [InlineData("claude")]
+    [InlineData("CLAUDE")]
+    [InlineData("claude-code")]
+    public async Task PromptForAgentAsync_ClaudeInputs_ReturnClaude(string input)
+    {
+        var output = new StringWriter();
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var command = CreateCommand(output, tempDir, "rebuss-pure.exe",
+                input: new StringReader(input + "\n"), agent: null);
+
+            var result = await command.PromptForAgentAsync();
+
+            Assert.Equal(CliArgumentParser.AgentClaude, result);
+        }
+        finally { Directory.Delete(tempDir, recursive: true); }
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WithAgentFlag_SkipsInteractivePrompt()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(Path.Combine(tempDir, ".git"));
+        try
+        {
+            var output = new StringWriter();
+            var command = CreateCommand(output, tempDir, "rebuss-pure.exe",
+                input: new StringReader("n\n"), agent: "copilot");
+
+            var exitCode = await command.ExecuteAsync();
+
+            Assert.Equal(0, exitCode);
+            // Prompt text must not appear in captured output when --agent was supplied.
+            Assert.DoesNotContain("Which AI agent", output.ToString());
+        }
+        finally { Directory.Delete(tempDir, recursive: true); }
+    }
+
+    // -------------------------------------------------------------------------
+    // Claude Code config targets (Step 3)
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public void ResolveConfigTargets_AgentClaude_ReturnsSingleClaudeTarget()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var targets = InitCommand.ResolveConfigTargets(tempDir, ide: null, agent: "claude");
+
+            Assert.Single(targets);
+            Assert.Equal("Claude Code", targets[0].IdeName);
+            Assert.Equal(Path.Combine(tempDir, ".mcp.json"), targets[0].ConfigPath);
+            Assert.True(targets[0].UseMcpServersKey);
+        }
+        finally { Directory.Delete(tempDir, recursive: true); }
+    }
+
+    [Fact]
+    public void ResolveConfigTargets_AgentCopilot_DoesNotIncludeClaudeTarget()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(Path.Combine(tempDir, ".vscode"));
+        try
+        {
+            var targets = InitCommand.ResolveConfigTargets(tempDir, ide: null, agent: "copilot");
+
+            Assert.DoesNotContain(targets, t => t.IdeName == "Claude Code");
+            Assert.All(targets, t => Assert.False(t.UseMcpServersKey));
+        }
+        finally { Directory.Delete(tempDir, recursive: true); }
+    }
+
+    [Fact]
+    public void ResolveGlobalConfigTargets_AgentClaude_ReturnsOnlyClaudeGlobal()
+    {
+        var targets = InitCommand.ResolveGlobalConfigTargets(agent: "claude");
+
+        Assert.Single(targets);
+        Assert.Equal("Claude Code (global)", targets[0].IdeName);
+        Assert.True(targets[0].UseMcpServersKey);
+        var userHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        Assert.Equal(Path.Combine(userHome, ".claude.json"), targets[0].ConfigPath);
+    }
+
+    [Fact]
+    public void ResolveGlobalConfigTargets_AgentCopilot_ReturnsVsVsCodeAndCopilotCli()
+    {
+        var targets = InitCommand.ResolveGlobalConfigTargets(agent: "copilot");
+
+        Assert.Equal(3, targets.Count);
+        Assert.Contains(targets, t => t.IdeName == "Visual Studio (global)");
+        Assert.Contains(targets, t => t.IdeName == "VS Code (global)");
+        Assert.Contains(targets, t => t.IdeName == "Copilot CLI (global)");
+        Assert.DoesNotContain(targets, t => t.IdeName == "Claude Code (global)");
+    }
+
+    [Fact]
+    public void BuildConfigContent_UseMcpServersKey_EmitsMcpServers()
+    {
+        var content = InitCommand.BuildConfigContent("exe", @"C:\\repo", null, useMcpServersKey: true, agent: "claude");
+
+        Assert.Contains("\"mcpServers\"", content);
+        Assert.DoesNotContain("\"servers\":", content);
+        Assert.Contains("\"--agent\", \"claude\"", content);
+    }
+
+    [Fact]
+    public void BuildConfigContent_DefaultKeyIsServers()
+    {
+        var content = InitCommand.BuildConfigContent("exe", @"C:\\repo", null);
+
+        Assert.Contains("\"servers\"", content);
+        Assert.DoesNotContain("\"mcpServers\"", content);
+    }
+
+    [Fact]
+    public void MergeConfigContent_ClaudeMcpServers_PreservesUnknownTopLevelKeys()
+    {
+        const string existing = """
+            {
+              "someUserSetting": "preserve me",
+              "mcpServers": {
+                "OtherServer": { "type": "stdio", "command": "other.exe" }
+              }
+            }
+            """;
+
+        var merged = InitCommand.MergeConfigContent(existing, "exe", @"C:\repo",
+            pat: null, useMcpServersKey: true, agent: "claude");
+
+        Assert.Contains("\"someUserSetting\"", merged);
+        Assert.Contains("\"OtherServer\"", merged);
+        Assert.Contains("\"REBUSS.Pure\"", merged);
+        Assert.Contains("\"--agent\"", merged);
+        Assert.Contains("\"claude\"", merged);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_AgentClaude_WritesMcpJsonWithMcpServersKeyAndAgentArg()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(Path.Combine(tempDir, ".git"));
+        try
+        {
+            var output = new StringWriter();
+            var command = CreateCommand(output, tempDir, "rebuss-pure.exe", agent: "claude");
+
+            var exitCode = await command.ExecuteAsync();
+
+            Assert.Equal(0, exitCode);
+            var claudeConfig = Path.Combine(tempDir, ".mcp.json");
+            Assert.True(File.Exists(claudeConfig), $"Expected Claude Code config at {claudeConfig}");
+            // When --agent claude is chosen, VS/VS Code configs must NOT be written
+            Assert.False(File.Exists(Path.Combine(tempDir, ".vscode", "mcp.json")));
+            Assert.False(File.Exists(Path.Combine(tempDir, ".vs", "mcp.json")));
+
+            var content = await File.ReadAllTextAsync(claudeConfig);
+            Assert.Contains("\"mcpServers\"", content);
+            Assert.Contains("\"--agent\"", content);
+            Assert.Contains("\"claude\"", content);
+        }
+        finally { Directory.Delete(tempDir, recursive: true); }
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_AgentClaude_CreatesBackupFileWhenOverwritingExistingConfig()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(Path.Combine(tempDir, ".git"));
+        var claudeConfig = Path.Combine(tempDir, ".mcp.json");
+        const string originalContent = """
+            {
+              "someUserSetting": "preserve me",
+              "mcpServers": {
+                "OtherServer": { "type": "stdio", "command": "other.exe" }
+              }
+            }
+            """;
+        await File.WriteAllTextAsync(claudeConfig, originalContent);
+
+        try
+        {
+            var output = new StringWriter();
+            var command = CreateCommand(output, tempDir, "rebuss-pure.exe", agent: "claude");
+
+            var exitCode = await command.ExecuteAsync();
+
+            Assert.Equal(0, exitCode);
+            var backupPath = claudeConfig + ".bak";
+            Assert.True(File.Exists(backupPath), "Expected backup file with .bak suffix");
+            Assert.Equal(originalContent, await File.ReadAllTextAsync(backupPath));
+
+            var merged = await File.ReadAllTextAsync(claudeConfig);
+            Assert.Contains("\"someUserSetting\"", merged);
+            Assert.Contains("\"OtherServer\"", merged);
+            Assert.Contains("\"REBUSS.Pure\"", merged);
+            Assert.Contains("Backed up", output.ToString());
+        }
+        finally { Directory.Delete(tempDir, recursive: true); }
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_AgentCopilot_WritesAgentArgInVsCodeMcpJson()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(Path.Combine(tempDir, ".git"));
+        Directory.CreateDirectory(Path.Combine(tempDir, ".vscode"));
+        try
+        {
+            var output = new StringWriter();
+            var command = CreateCommand(output, tempDir, "rebuss-pure.exe", agent: "copilot");
+
+            var exitCode = await command.ExecuteAsync();
+
+            Assert.Equal(0, exitCode);
+            var vsCodeConfig = Path.Combine(tempDir, ".vscode", "mcp.json");
+            Assert.True(File.Exists(vsCodeConfig));
+            var content = await File.ReadAllTextAsync(vsCodeConfig);
+            Assert.Contains("\"servers\"", content);
+            Assert.DoesNotContain("\"mcpServers\"", content);
+            Assert.Contains("\"--agent\"", content);
+            Assert.Contains("\"copilot\"", content);
+        }
+        finally { Directory.Delete(tempDir, recursive: true); }
+    }
+
+    [Fact]
+    public void DetectsClaudeCode_ClaudeDirPresent_ReturnsTrue()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(Path.Combine(tempDir, ".claude"));
+        try
+        {
+            Assert.True(InitCommand.DetectsClaudeCode(tempDir));
+        }
+        finally { Directory.Delete(tempDir, recursive: true); }
+    }
+
+    [Fact]
+    public void DetectsClaudeCode_ClaudeMdPresent_ReturnsTrue()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(tempDir);
+        File.WriteAllText(Path.Combine(tempDir, "CLAUDE.md"), "# notes");
+        try
+        {
+            Assert.True(InitCommand.DetectsClaudeCode(tempDir));
+        }
+        finally { Directory.Delete(tempDir, recursive: true); }
+    }
+
+    [Fact]
+    public void DetectsClaudeCode_NoMarkers_ReturnsFalse()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            Assert.False(InitCommand.DetectsClaudeCode(tempDir));
+        }
+        finally { Directory.Delete(tempDir, recursive: true); }
+    }
+
+    // -------------------------------------------------------------------------
+    // Slash command prompts for Claude Code (Step 4)
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task ExecuteAsync_AgentClaude_CopiesPromptsToClaudeCommandsDir()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(Path.Combine(tempDir, ".git"));
+        try
+        {
+            var output = new StringWriter();
+            var command = CreateCommand(output, tempDir, "rebuss-pure.exe", agent: "claude");
+
+            var exitCode = await command.ExecuteAsync();
+
+            Assert.Equal(0, exitCode);
+            // .prompt.md → .md so the command is /review-pr (not /review-pr.prompt).
+            Assert.True(File.Exists(Path.Combine(tempDir, ".claude", "commands", "review-pr.md")));
+            Assert.True(File.Exists(Path.Combine(tempDir, ".claude", "commands", "self-review.md")));
+            // Originals in .github/prompts/ are still written (shared across agents).
+            Assert.True(File.Exists(Path.Combine(tempDir, ".github", "prompts", "review-pr.prompt.md")));
+        }
+        finally { Directory.Delete(tempDir, recursive: true); }
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_AgentCopilot_DoesNotCreateClaudeCommandsDir()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(Path.Combine(tempDir, ".git"));
+        try
+        {
+            var output = new StringWriter();
+            var command = CreateCommand(output, tempDir, "rebuss-pure.exe", agent: "copilot");
+
+            var exitCode = await command.ExecuteAsync();
+
+            Assert.Equal(0, exitCode);
+            Assert.False(Directory.Exists(Path.Combine(tempDir, ".claude", "commands")));
+        }
+        finally { Directory.Delete(tempDir, recursive: true); }
     }
 }
 

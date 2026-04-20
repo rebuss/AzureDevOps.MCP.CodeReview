@@ -51,6 +51,7 @@ namespace REBUSS.Pure
                     parseResult.Pat,
                     parseResult.IsGlobal,
                     parseResult.Ide,
+                    parseResult.Agent,
                     detectedProvider: null,
                     processRunner: null,
                     localConfigStore: new AzureDevOps.Configuration.LocalConfigStore(NullLogger<AzureDevOps.Configuration.LocalConfigStore>.Instance),
@@ -113,7 +114,7 @@ namespace REBUSS.Pure
                 builder.Logging.AddProvider(new FileLoggerProvider(GetLogDirectory()));
 
                 // Register business services (providers, algorithms, shared services)
-                ConfigureBusinessServices(builder.Services, configuration, parseResult.RepoPath);
+                ConfigureBusinessServices(builder.Services, configuration, parseResult.RepoPath, parseResult.Agent);
 
                 // Add MCP server with stdio transport and tool discovery
                 builder.Services
@@ -152,7 +153,7 @@ namespace REBUSS.Pure
             }
         }
 
-        private static void ConfigureBusinessServices(IServiceCollection services, IConfiguration configuration, string? repoPath = null)
+        private static void ConfigureBusinessServices(IServiceCollection services, IConfiguration configuration, string? repoPath = null, string? agent = null)
         {
             // Workspace root provider: resolves repository path from CLI --repo, MCP roots, or localRepoPath
             services.AddSingleton<IWorkspaceRootProvider, McpWorkspaceRootProvider>();
@@ -191,6 +192,25 @@ namespace REBUSS.Pure
             services.AddHostedService(sp => sp.GetRequiredService<CopilotClientProvider>());
             services.AddSingleton<CopilotRequestThrottle>();
             services.AddSingleton<ICopilotSessionFactory, CopilotSessionFactory>();
+
+            // IAgentInvoker — one-shot prompt→text abstraction over Copilot SDK or Claude CLI.
+            // Selection is driven by --agent on the command line (carried through mcp.json args);
+            // when the flag is absent, Copilot is the default to preserve existing behavior.
+            // TODO (follow-up): thread IAgentInvoker through CopilotPageReviewer and
+            // FindingValidator so the Claude path can actually drive the review orchestrator
+            // at runtime. Without that wiring, selecting --agent claude currently only affects
+            // init-time config and setup — runtime review still uses the Copilot code path.
+            if (string.Equals(agent, CliArgumentParser.AgentClaude, StringComparison.OrdinalIgnoreCase))
+            {
+                services.AddSingleton<REBUSS.Pure.Core.Services.AgentInvocation.IAgentInvoker,
+                    REBUSS.Pure.Services.AgentInvocation.ClaudeCliAgentInvoker>();
+            }
+            else
+            {
+                services.AddSingleton<REBUSS.Pure.Core.Services.AgentInvocation.IAgentInvoker,
+                    REBUSS.Pure.Services.AgentInvocation.CopilotAgentInvoker>();
+            }
+
             services.AddSingleton<ICopilotAvailabilityDetector, CopilotAvailabilityDetector>();
             services.AddSingleton<ICopilotPageReviewer, CopilotPageReviewer>();
 
