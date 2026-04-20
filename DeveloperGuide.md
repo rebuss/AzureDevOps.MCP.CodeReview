@@ -624,6 +624,44 @@ The server automatically invalidates stale tokens and retries via GitHub CLI. If
 gh auth login
 ```
 
+### "COPILOT SESSION NOT AUTHENTICATED" banner after `rebuss-pure init`
+
+Copilot requires an OAuth session that carries the `copilot` scope — the
+scope that standard `gh auth login` does **not** grant by default. The
+`init` command always requests it (`gh auth login --web -s copilot`) and
+will self-heal a pre-existing `gh` session by running
+`gh auth refresh -h github.com -s copilot` before giving up. If you still
+see the banner:
+
+1. Re-run the refresh manually (opens a browser for consent):
+
+   ```bash
+   gh auth refresh -h github.com -s copilot
+   ```
+
+2. Verify the scope landed:
+
+   ```bash
+   gh auth status
+   ```
+
+   The `Token scopes:` line must include `'copilot'`.
+
+3. Confirm your GitHub account has an active Copilot subscription
+   (<https://github.com/settings/copilot>) — a session without entitlement
+   will still fail verification even with the scope granted.
+
+4. For CI / headless environments, export a pre-minted Copilot-entitled
+   OAuth token and skip the gh session altogether:
+
+   ```bash
+   export REBUSS_COPILOT_TOKEN=<token>      # Linux/macOS
+   set REBUSS_COPILOT_TOKEN=<token>         # Windows
+   ```
+
+   Classic personal access tokens are **not** valid here — they don't
+   carry the `copilot` scope regardless of their permissions.
+
 ---
 
 ## Known Limitations

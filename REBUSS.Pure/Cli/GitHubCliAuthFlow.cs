@@ -251,13 +251,19 @@ internal sealed class GitHubCliAuthFlow : ICliAuthFlow
 
     private async Task<int> RunGhAuthLoginInteractiveAsync(CancellationToken cancellationToken)
     {
+        // `-s copilot` adds the Copilot OAuth scope on top of gh's default scopes
+        // (gist, read:org, repo, workflow) so the minted token is Copilot-entitled.
+        // Without it, the runtime Copilot SDK verification fails with NotAuthenticated
+        // even though PR-review endpoints work fine.
+        const string authLoginArgs = "auth login --web -s copilot";
+
         if (_processRunner is not null)
         {
-            var result = await _processRunner("auth login --web", cancellationToken);
+            var result = await _processRunner(authLoginArgs, cancellationToken);
             return result.ExitCode;
         }
 
-        var (fileName, args) = GitHubCliProcessHelper.GetProcessStartArgs("auth login --web", _ghCliPathOverride);
+        var (fileName, args) = GitHubCliProcessHelper.GetProcessStartArgs(authLoginArgs, _ghCliPathOverride);
         return await InitCommand.RunInteractiveProcessAsync(fileName, args, cancellationToken);
     }
 }

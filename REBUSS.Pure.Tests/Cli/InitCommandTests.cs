@@ -1355,7 +1355,7 @@ public class InitCommandTests
                 return Task.FromResult((0, "gh version 2.50.0", ""));
             if (args == "auth token" && callCount <= 2)
                 return Task.FromResult((-1, "", "not logged in"));
-            if (args == "auth login --web")
+            if (args == "auth login --web -s copilot")
                 return Task.FromResult((0, "", ""));
             if (args == "auth token")
                 return Task.FromResult((0, "ghp_new-token", ""));
@@ -1433,7 +1433,7 @@ public class InitCommandTests
                 return Task.FromResult((0, "gh version 2.50.0", ""));
             if (args == "auth token" && callLog.Count(a => a == "auth token") <= 1)
                 return Task.FromResult((-1, "", "not logged in"));
-            if (args == "auth login --web")
+            if (args == "auth login --web -s copilot")
                 return Task.FromResult((0, "", ""));
             if (args == "auth token")
                 return Task.FromResult((0, "ghp_new-token", ""));
@@ -1552,7 +1552,7 @@ public class InitCommandTests
                 instructionsDirCreatedDuringLogin = Directory.Exists(Path.Combine(tempDir, ".github", "instructions"));
                 return Task.FromResult((-1, "", "not logged in"));
             }
-            if (args == "auth login --web")
+            if (args == "auth login --web -s copilot")
                 return Task.FromResult((-1, "", "login failed"));
             return Task.FromResult((-1, "", "unexpected"));
         };

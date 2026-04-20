@@ -157,7 +157,7 @@ The Copilot review layer has its OWN token resolution chain, separate from the G
 
 1. `REBUSS_COPILOT_TOKEN` environment variable (for CI / headless / containerised deployments).
 2. `CopilotReview:GitHubToken` in `appsettings.json` / `appsettings.Local.json`.
-3. Default fallback: the SDK uses `UseLoggedInUser = true` and reads the OAuth session stored by `gh auth login`.
+3. Default fallback: the SDK uses `UseLoggedInUser = true` and reads the OAuth session stored by `gh auth login`. `rebuss-pure init` always runs `gh auth login --web -s copilot` so the session it creates is Copilot-entitled, and the init-time `VerifyCopilotSessionAsync` step self-heals pre-existing sessions that lack the scope by invoking `gh auth refresh -h github.com -s copilot` once before falling back to the remediation banner.
 
 The order is **deliberately the opposite** of `GitHubChainedAuthenticationProvider` (which puts explicit config above env vars). CI operators expect to inject secrets via environment variables without editing shipped config files.
 

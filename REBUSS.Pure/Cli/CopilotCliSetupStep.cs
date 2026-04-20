@@ -109,7 +109,7 @@ internal sealed class CopilotCliSetupStep
             if (!await IsGhAuthenticatedAsync(cancellationToken))
             {
                 await _output.WriteLineAsync("A browser window will open to authenticate GitHub CLI.");
-                var loginExit = await RunGhInteractiveAsync("auth login --web", cancellationToken);
+                var loginExit = await RunGhInteractiveAsync("auth login --web -s copilot", cancellationToken);
                 if (loginExit != 0 || !await IsGhAuthenticatedAsync(cancellationToken))
                 {
                     await WriteDeclineBannerAsync();
@@ -218,19 +218,24 @@ internal sealed class CopilotCliSetupStep
             return;
         }
 
-        CopilotVerdict verdict;
-        try
+        var verdict = await TryProbeAsync(cancellationToken).ConfigureAwait(false);
+        if (verdict is null) return;
+
+        // Recovery: when the gh CLI session exists but lacks the Copilot scope, the
+        // SDK reports NotAuthenticated even though `gh auth status` is fine. Try
+        // `gh auth refresh -s copilot` once to add the scope, then re-probe. Only
+        // applies to the LoggedInUser source — override tokens cannot be refreshed
+        // via gh.
+        if (!verdict.IsAvailable
+            && verdict.Reason == CopilotAuthReason.NotAuthenticated
+            && verdict.TokenSource == CopilotTokenSource.LoggedInUser)
         {
-            verdict = await _verificationProbe.ProbeAsync(cancellationToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            _logger?.LogWarning(ex, "copilot-setup: verification probe threw — skipping");
-            return;
+            var refreshed = await TryRefreshCopilotScopeAsync(cancellationToken).ConfigureAwait(false);
+            if (refreshed)
+            {
+                var retry = await TryProbeAsync(cancellationToken).ConfigureAwait(false);
+                if (retry is not null) verdict = retry;
+            }
         }
 
         if (verdict.IsAvailable)
@@ -247,6 +252,63 @@ internal sealed class CopilotCliSetupStep
         // Graceful degradation: print the banner but do NOT fail the init step.
         await WriteCopilotAuthFailureBannerAsync(verdict);
         _logger?.LogInformation("copilot-setup: verification-failed: {Reason}", verdict.Reason);
+    }
+
+    private async Task<CopilotVerdict?> TryProbeAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _verificationProbe!.ProbeAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "copilot-setup: verification probe threw — skipping");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Adds the Copilot OAuth scope to the existing <c>gh</c> session via
+    /// <c>gh auth refresh -h github.com -s copilot</c>. Runs interactively so
+    /// the user can complete the browser consent. Returns <c>true</c> only when
+    /// the refresh command exits successfully.
+    /// </summary>
+    private async Task<bool> TryRefreshCopilotScopeAsync(CancellationToken cancellationToken)
+    {
+        await _output.WriteLineAsync();
+        await _output.WriteLineAsync(
+            "Copilot verification failed — the existing GitHub CLI session is missing the 'copilot' scope.");
+        await _output.WriteLineAsync(
+            "A browser window will open to grant the Copilot scope to your existing session.");
+
+        int exitCode;
+        try
+        {
+            exitCode = await RunGhInteractiveAsync(
+                "auth refresh -h github.com -s copilot", cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "copilot-setup: auth refresh threw — skipping recovery");
+            return false;
+        }
+
+        if (exitCode != 0)
+        {
+            _logger?.LogWarning("copilot-setup: auth refresh exited {Exit}", exitCode);
+            return false;
+        }
+
+        _logger?.LogInformation("copilot-setup: copilot scope granted via auth refresh");
+        return true;
     }
 
     private async Task WriteCopilotAuthFailureBannerAsync(CopilotVerdict verdict)
@@ -284,7 +346,10 @@ internal sealed class CopilotCliSetupStep
         }
 
         await _output.WriteLineAsync();
-        var loginExit = await RunGhInteractiveAsync("auth login --web", cancellationToken);
+        // `-s copilot` grants the Copilot OAuth scope alongside gh's default scopes,
+        // so the resulting session is Copilot-entitled and the SDK verification at the
+        // end of init can succeed without a second manual step.
+        var loginExit = await RunGhInteractiveAsync("auth login --web -s copilot", cancellationToken);
         if (loginExit != 0 || !await IsGhAuthenticatedAsync(cancellationToken))
         {
             await WriteDeclineBannerAsync();

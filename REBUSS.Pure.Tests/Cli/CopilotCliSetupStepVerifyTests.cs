@@ -170,4 +170,108 @@ public class CopilotCliSetupStepVerifyTests
         Assert.DoesNotContain("COPILOT SESSION NOT AUTHENTICATED", text);
         Assert.DoesNotContain("Copilot session verified", text);
     }
+
+    // ─── Recovery flow: NotAuthenticated + LoggedInUser → gh auth refresh -s copilot ───
+
+    private static Func<string, CancellationToken, Task<(int ExitCode, string StdOut, string StdErr)>>
+        HappyPathWithRefreshTracking(Action<string> onArgs, int refreshExitCode = 0) => (args, _) =>
+        {
+            onArgs(args);
+            if (args.Contains("auth refresh"))
+                return Task.FromResult((refreshExitCode, string.Empty, string.Empty));
+            if (args.Contains("--version") && !args.Contains("copilot"))
+                return Task.FromResult((0, "gh 2.0", string.Empty));
+            if (args.Contains("auth status"))
+                return Task.FromResult((0, "Logged in", string.Empty));
+            if (args.Contains("copilot --version"))
+                return Task.FromResult((0, "copilot 1.0", string.Empty));
+            return Task.FromResult((0, string.Empty, string.Empty));
+        };
+
+    [Fact]
+    public async Task VerifyCopilotSession_NotAuthLoggedInUser_RefreshSucceedsThenOk_PrintsConfirmation()
+    {
+        var output = new StringWriter();
+        var capturedArgs = new List<string>();
+        var runner = HappyPathWithRefreshTracking(capturedArgs.Add, refreshExitCode: 0);
+
+        var probe = Substitute.For<ICopilotVerificationProbe>();
+        probe.ProbeAsync(Arg.Any<CancellationToken>())
+            .Returns(NotAuthenticatedVerdict(), OkVerdict());
+
+        var step = new CopilotCliSetupStep(output, new StringReader(""), runner, verificationProbe: probe);
+        await step.RunAsync();
+
+        Assert.Contains(capturedArgs, a => a.Contains("auth refresh") && a.Contains("-s copilot"));
+        await probe.Received(2).ProbeAsync(Arg.Any<CancellationToken>());
+        var text = output.ToString();
+        Assert.Contains("Copilot session verified", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("COPILOT SESSION NOT AUTHENTICATED", text);
+    }
+
+    [Fact]
+    public async Task VerifyCopilotSession_NotAuthLoggedInUser_RefreshSucceedsButStillNotAuth_PrintsBanner()
+    {
+        var output = new StringWriter();
+        var capturedArgs = new List<string>();
+        var runner = HappyPathWithRefreshTracking(capturedArgs.Add, refreshExitCode: 0);
+
+        var probe = Substitute.For<ICopilotVerificationProbe>();
+        probe.ProbeAsync(Arg.Any<CancellationToken>())
+            .Returns(NotAuthenticatedVerdict(), NotAuthenticatedVerdict());
+
+        var step = new CopilotCliSetupStep(output, new StringReader(""), runner, verificationProbe: probe);
+        await step.RunAsync();
+
+        Assert.Contains(capturedArgs, a => a.Contains("auth refresh") && a.Contains("-s copilot"));
+        await probe.Received(2).ProbeAsync(Arg.Any<CancellationToken>());
+        Assert.Contains("COPILOT SESSION NOT AUTHENTICATED", output.ToString());
+    }
+
+    [Fact]
+    public async Task VerifyCopilotSession_NotAuthLoggedInUser_RefreshFails_PrintsBannerAfterSingleProbe()
+    {
+        var output = new StringWriter();
+        var capturedArgs = new List<string>();
+        var runner = HappyPathWithRefreshTracking(capturedArgs.Add, refreshExitCode: 1);
+
+        var probe = Substitute.For<ICopilotVerificationProbe>();
+        probe.ProbeAsync(Arg.Any<CancellationToken>())
+            .Returns(NotAuthenticatedVerdict());
+
+        var step = new CopilotCliSetupStep(output, new StringReader(""), runner, verificationProbe: probe);
+        await step.RunAsync();
+
+        Assert.Contains(capturedArgs, a => a.Contains("auth refresh"));
+        await probe.Received(1).ProbeAsync(Arg.Any<CancellationToken>());
+        Assert.Contains("COPILOT SESSION NOT AUTHENTICATED", output.ToString());
+    }
+
+    [Fact]
+    public async Task VerifyCopilotSession_NotAuthEnvOverrideToken_DoesNotAttemptRefresh()
+    {
+        var output = new StringWriter();
+        var capturedArgs = new List<string>();
+        var runner = HappyPathWithRefreshTracking(capturedArgs.Add);
+
+        var overrideVerdict = new CopilotVerdict(
+            IsAvailable: false,
+            Reason: CopilotAuthReason.NotAuthenticated,
+            TokenSource: CopilotTokenSource.EnvironmentOverride,
+            ConfiguredModel: "claude-sonnet-4.6",
+            EntitledModels: Array.Empty<string>(),
+            Login: null,
+            Host: null,
+            Remediation: "Override token rejected — classic PATs do not grant Copilot scope.");
+
+        var probe = Substitute.For<ICopilotVerificationProbe>();
+        probe.ProbeAsync(Arg.Any<CancellationToken>()).Returns(overrideVerdict);
+
+        var step = new CopilotCliSetupStep(output, new StringReader(""), runner, verificationProbe: probe);
+        await step.RunAsync();
+
+        Assert.DoesNotContain(capturedArgs, a => a.Contains("auth refresh"));
+        await probe.Received(1).ProbeAsync(Arg.Any<CancellationToken>());
+        Assert.Contains("COPILOT SESSION NOT AUTHENTICATED", output.ToString());
+    }
 }
