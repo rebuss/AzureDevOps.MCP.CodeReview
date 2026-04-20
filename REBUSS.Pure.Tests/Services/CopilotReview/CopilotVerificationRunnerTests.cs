@@ -345,4 +345,106 @@ public class CopilotVerificationRunnerTests
         };
         Assert.False(CopilotVerificationRunner.LooksLikeFreeTier(snapshots));
     }
+
+    // --- CliPath override (bundled-CLI fallback for missing/broken SDK package) ---
+
+    private static (CopilotVerificationRunner Runner, StubOps Ops, List<CopilotClientOptions> Captured)
+        CreateRunnerCapturingOptions(
+            CopilotReviewOptions options,
+            Func<string, string?>? envReader = null,
+            Action<StubOps>? configure = null)
+    {
+        var ops = new StubOps
+        {
+            OnAuth = _ => Task.FromResult(Authenticated()),
+            OnModels = _ => Task.FromResult<IReadOnlyList<string>>(new[] { options.Model }),
+        };
+        configure?.Invoke(ops);
+        var captured = new List<CopilotClientOptions>();
+        var resolver = Substitute.For<ICopilotTokenResolver>();
+        resolver.Resolve().Returns((null, CopilotTokenSource.LoggedInUser));
+        var runner = new CopilotVerificationRunner(
+            Options.Create(options),
+            resolver,
+            NullLoggerFactory.Instance,
+            NullLogger<CopilotVerificationRunner>.Instance,
+            opts => { captured.Add(opts); return ops; },
+            envReader ?? (_ => null));
+        return (runner, ops, captured);
+    }
+
+    [Fact]
+    public async Task BuildAndVerifyAsync_NoCliPathOverride_LeavesClientOptionsCliPathNull()
+    {
+        var (runner, _, captured) = CreateRunnerCapturingOptions(
+            new CopilotReviewOptions { Model = "claude-sonnet-4.6" });
+
+        await runner.BuildAndVerifyAsync(CancellationToken.None);
+
+        Assert.Single(captured);
+        Assert.Null(captured[0].CliPath);
+    }
+
+    [Fact]
+    public async Task BuildAndVerifyAsync_ConfigCliPath_PropagatedToClientOptions()
+    {
+        var (runner, _, captured) = CreateRunnerCapturingOptions(
+            new CopilotReviewOptions
+            {
+                Model = "claude-sonnet-4.6",
+                CopilotCliPath = @"C:\tools\copilot.exe",
+            });
+
+        await runner.BuildAndVerifyAsync(CancellationToken.None);
+
+        Assert.Equal(@"C:\tools\copilot.exe", captured[0].CliPath);
+    }
+
+    [Fact]
+    public async Task BuildAndVerifyAsync_EnvCliPath_OverridesConfigCliPath()
+    {
+        var (runner, _, captured) = CreateRunnerCapturingOptions(
+            new CopilotReviewOptions
+            {
+                Model = "claude-sonnet-4.6",
+                CopilotCliPath = @"C:\from-config\copilot.exe",
+            },
+            envReader: name => name == CopilotReviewOptions.CopilotCliPathEnvironmentVariable
+                ? @"C:\from-env\copilot.exe"
+                : null);
+
+        await runner.BuildAndVerifyAsync(CancellationToken.None);
+
+        Assert.Equal(@"C:\from-env\copilot.exe", captured[0].CliPath);
+    }
+
+    [Fact]
+    public async Task BuildAndVerifyAsync_BlankEnvCliPath_FallsBackToConfigValue()
+    {
+        var (runner, _, captured) = CreateRunnerCapturingOptions(
+            new CopilotReviewOptions
+            {
+                Model = "claude-sonnet-4.6",
+                CopilotCliPath = @"C:\from-config\copilot.exe",
+            },
+            envReader: name => name == CopilotReviewOptions.CopilotCliPathEnvironmentVariable
+                ? "   "
+                : null);
+
+        await runner.BuildAndVerifyAsync(CancellationToken.None);
+
+        Assert.Equal(@"C:\from-config\copilot.exe", captured[0].CliPath);
+    }
+
+    [Fact]
+    public async Task BuildAndVerifyAsync_BlankConfigAndEnv_LeavesClientOptionsCliPathNull()
+    {
+        var (runner, _, captured) = CreateRunnerCapturingOptions(
+            new CopilotReviewOptions { Model = "claude-sonnet-4.6", CopilotCliPath = "  " },
+            envReader: _ => "");
+
+        await runner.BuildAndVerifyAsync(CancellationToken.None);
+
+        Assert.Null(captured[0].CliPath);
+    }
 }

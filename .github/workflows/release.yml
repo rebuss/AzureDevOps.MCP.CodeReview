@@ -29,10 +29,16 @@ jobs:
           --filter "Category!=ContractAdo & Category!=ContractGitHub"
 
       - name: Pack
+        # CopilotBundleAllRids=true so the pack step downloads the Copilot CLI binary
+        # for every supported RID (win/linux/osx × x64/arm64) and packs them all
+        # under tools/<tfm>/any/runtimes/<rid>/native/. Without this the nupkg only
+        # contains the binary for this runner's RID (linux-x64) and the tool fails
+        # at startup on every other platform with 'Copilot CLI not found'.
         run: >
           dotnet pack REBUSS.Pure/REBUSS.Pure.csproj
           --configuration Release
           -p:Version=${{ steps.version.outputs.VERSION }}
+          -p:CopilotBundleAllRids=true
           --output ./artifacts
 
       - name: Create GitHub Release

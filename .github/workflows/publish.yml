@@ -25,7 +25,12 @@ jobs:
         run: dotnet restore
 
       - name: Build
-        run: dotnet build --configuration Release --no-restore
+        # CopilotBundleAllRids=true so the pack step downloads the Copilot CLI binary
+        # for every supported RID (win/linux/osx × x64/arm64) and packs them all
+        # under tools/<tfm>/any/runtimes/<rid>/native/. Without this the nupkg only
+        # contains the binary for this runner's RID (linux-x64) and the tool fails
+        # at startup on every other platform with 'Copilot CLI not found'.
+        run: dotnet build --configuration Release --no-restore -p:CopilotBundleAllRids=true
 
       - name: Test
         run: >

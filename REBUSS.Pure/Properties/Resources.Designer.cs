@@ -746,6 +746,10 @@ namespace REBUSS.Pure.Properties {
             get { return ResourceManager.GetString("ErrorCopilotRequired", resourceCulture)!; }
         }
 
+        internal static string ErrorCopilotUnavailable {
+            get { return ResourceManager.GetString("ErrorCopilotUnavailable", resourceCulture)!; }
+        }
+
         internal static string LogCopilotReviewUnavailable {
             get { return ResourceManager.GetString("LogCopilotReviewUnavailable", resourceCulture)!; }
         }

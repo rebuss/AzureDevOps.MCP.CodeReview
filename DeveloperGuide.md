@@ -65,6 +65,7 @@ summarization drops earlier findings" problem on large PRs.
 | `Model` | `"claude-sonnet-4.6"` | Copilot model passed to `SessionConfig.Model`. If the SDK rejects this string, check `client.ListModelsAsync()` output. |
 | `MaxConcurrentPages` | `6` | Upper bound on how many pages the orchestrator dispatches to Copilot in parallel per batch. Values `< 1` are clamped to `1`. Raise cautiously — the Copilot backend silently re-queues fan-outs above its per-client limit, which can double wall-clock time. |
 | `MinRequestIntervalSeconds` | `3` | Minimum spacing between successive outbound Copilot SDK calls (`CreateSessionAsync` / `SendAsync`), enforced by a process-wide gate. Combines with `MaxConcurrentPages` to shape throughput: the batch size controls fan-out width, this interval controls request rate. Set to `0` to disable (tests only). |
+| `CopilotCliPath` | _(unset)_ | Absolute path to a standalone Copilot CLI binary (the `@github/copilot` npm package's `copilot.exe` / `copilot`, **not** the `gh copilot` extension). When set, forwarded to `CopilotClientOptions.CliPath` so the SDK spawns this binary instead of searching for the bundled one under its NuGet `runtimes/` folder. Use this when the SDK package is missing its native payload for your OS/architecture and the server logs `Copilot CLI not found at '…\runtimes\<rid>\native\copilot.exe'`. Environment override: `REBUSS_COPILOT_CLI_PATH` (takes precedence when non-blank). |
 
 **How to set them — `mcp.json` (recommended)**
 
@@ -661,6 +662,27 @@ see the banner:
 
    Classic personal access tokens are **not** valid here — they don't
    carry the `copilot` scope regardless of their permissions.
+
+### "Copilot review layer unavailable (StartFailure)" / "Copilot CLI not found at …\runtimes\<rid>\native\copilot(.exe)"
+
+The Copilot SDK spawns a standalone `copilot` CLI binary (from the `@github/copilot` npm package — **not** the `gh copilot` extension) that ships under the tool's `runtimes/<rid>/native/` folder.
+
+REBUSS.Pure bundles this CLI for **win-x64, linux-x64, and osx-arm64** out of the box — if you are on one of those platforms and still see this error, the installed tool is likely an old version published before the bundling was added; run `dotnet tool update -g CodeReview.MCP` and retry.
+
+For **other RIDs (win-arm64, linux-arm64, osx-x64)** the CLI is not bundled because each binary is ~130 MB and including all six RIDs would push the nupkg over NuGet.org's size limit. Use the workaround below.
+
+**Workaround / manual CLI override** — point the SDK at a system-installed Copilot CLI:
+
+1. Install the standalone Copilot CLI (`npm install -g @github/copilot`) or reuse one you already have.
+2. Note its absolute path (`where copilot.exe` on Windows / `which copilot` on Linux/macOS).
+3. Set **one** of:
+   - `CopilotReview:CopilotCliPath` in `appsettings.json` / `mcp.json` `env` (as `CopilotReview__CopilotCliPath`)
+   - The `REBUSS_COPILOT_CLI_PATH` environment variable (takes precedence over the config value)
+
+   to that absolute path.
+4. Restart the MCP server (reload the IDE).
+
+The error message includes this remediation inline; check server logs for the actual failure reason before assuming it is an auth problem.
 
 ---
 

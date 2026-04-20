@@ -137,19 +137,39 @@ internal sealed class CopilotVerificationRunner : ICopilotVerificationProbe
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger<CopilotVerificationRunner> _logger;
     private readonly Func<CopilotClientOptions, ICopilotSdkOps> _opsFactory;
+    private readonly Func<string, string?> _envReader;
 
     public CopilotVerificationRunner(
         IOptions<CopilotReviewOptions> options,
         ICopilotTokenResolver tokenResolver,
         ILoggerFactory loggerFactory,
         ILogger<CopilotVerificationRunner> logger,
-        Func<CopilotClientOptions, ICopilotSdkOps>? opsFactory = null)
+        Func<CopilotClientOptions, ICopilotSdkOps>? opsFactory = null,
+        Func<string, string?>? envReader = null)
     {
         _options = options;
         _tokenResolver = tokenResolver;
         _loggerFactory = loggerFactory;
         _logger = logger;
         _opsFactory = opsFactory ?? (opts => new CopilotSdkOps(opts));
+        _envReader = envReader ?? Environment.GetEnvironmentVariable;
+    }
+
+    /// <summary>
+    /// Resolves the optional absolute path to a Copilot CLI executable. Precedence
+    /// (highest first): <c>REBUSS_COPILOT_CLI_PATH</c> env var → <c>CopilotReview:CopilotCliPath</c>
+    /// config value → null (SDK falls back to its bundled native binary). Blank /
+    /// whitespace values are treated as unset so an empty env var in a shell profile
+    /// does not silently break the bundled lookup.
+    /// </summary>
+    private string? ResolveCliPathOverride(CopilotReviewOptions opts)
+    {
+        var envValue = _envReader(CopilotReviewOptions.CopilotCliPathEnvironmentVariable);
+        if (!string.IsNullOrWhiteSpace(envValue))
+            return envValue;
+        if (!string.IsNullOrWhiteSpace(opts.CopilotCliPath))
+            return opts.CopilotCliPath;
+        return null;
     }
 
     /// <summary>
@@ -171,6 +191,10 @@ internal sealed class CopilotVerificationRunner : ICopilotVerificationProbe
             UseLoggedInUser = token is null,
             AutoStart = true,
         };
+
+        var cliPathOverride = ResolveCliPathOverride(_options.Value);
+        if (cliPathOverride is not null)
+            clientOptions.CliPath = cliPathOverride;
 
         var ops = _opsFactory(clientOptions);
 

@@ -77,4 +77,7 @@
     <ProjectReference Include="..\REBUSS.Pure.RoslynProcessor\REBUSS.Pure.RoslynProcessor.csproj" />
   </ItemGroup>
 
+  <!-- Multi-RID Copilot CLI bundling: only runs when CopilotBundleAllRids=true (set by CI during pack). -->
+  <Import Project="Build\BundleCopilotCliAllRids.targets" />
+
 </Project>

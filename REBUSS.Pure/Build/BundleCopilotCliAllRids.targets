@@ -1,0 +1,159 @@
+<Project>
+
+  <!--
+    Multi-RID Copilot CLI bundling for the .NET global tool package.
+
+    Context:
+      The GitHub.Copilot.SDK package ships MSBuild targets that download a single
+      Copilot CLI binary at build time — for the build host's RID only
+      (resolved via $(NETCoreSdkPortableRuntimeIdentifier) when no RuntimeIdentifier
+      is set). Our CI packs on ubuntu-latest, so the resulting nupkg contains only
+      'runtimes/linux-x64/native/copilot'. When a Windows user installs the tool,
+      the SDK tries to spawn 'runtimes/win-x64/native/copilot.exe' — the file is
+      missing and the whole Copilot review layer fails at startup with
+      'Copilot CLI not found at ...'.
+
+    What this target does:
+      When CopilotBundleAllRids=true, downloads and extracts the official
+      @github/copilot-<platform> npm tarball for every supported RID and registers
+      each binary as ContentWithTargetPath with TargetPath="runtimes/<rid>/native/<binary>".
+      The standard PackAsTool pack step lays these items out under
+      tools/<tfm>/any/runtimes/<rid>/native/ inside the nupkg, producing a
+      multi-RID tool that runs on every supported platform regardless of where
+      the pack was built.
+
+      The SDK's own _DownloadCopilotCli / _RegisterCopilotCliForCopy targets still
+      run for the host RID — this target is additive; duplicate work for the host
+      RID is harmless (cache is shared; ContentWithTargetPath items for the host
+      RID would just collide on TargetPath, so we skip the host RID here).
+
+    Opt-in:
+      CopilotBundleAllRids=false (default) → local developer builds skip the
+      expensive multi-RID download. CI sets -p:CopilotBundleAllRids=true on
+      the build/pack invocations that produce the published nupkg.
+  -->
+
+  <PropertyGroup>
+    <CopilotBundleAllRids Condition="'$(CopilotBundleAllRids)' == ''">false</CopilotBundleAllRids>
+  </PropertyGroup>
+
+  <!-- Bundled RIDs. Kept intentionally smaller than the full set that GitHub.Copilot.SDK.targets
+       supports (win/linux/osx × x64/arm64 = 6 RIDs) because each copilot binary is ~130 MB
+       and the aggregated 6-RID nupkg exceeds ~340 MB, which trips NuGet.org's per-package
+       size ceiling and makes every 'dotnet tool install' download hundreds of megabytes of
+       binaries the user will never run.
+
+       The set below covers the three RIDs that account for the vast majority of .NET global
+       tool users:
+         - win-x64       Windows desktop / server
+         - linux-x64     Linux servers, CI runners, WSL
+         - osx-arm64     Apple Silicon Macs
+
+       Users on other RIDs (win-arm64, linux-arm64, osx-x64) point REBUSS.Pure at a
+       system-installed @github/copilot CLI via the REBUSS_COPILOT_CLI_PATH env var or
+       the CopilotReview:CopilotCliPath config key — see DeveloperGuide.md troubleshooting. -->
+  <ItemGroup Condition="'$(CopilotBundleAllRids)' == 'true'">
+    <_CopilotBundleRid Include="win-x64">
+      <Platform>win32-x64</Platform>
+      <Binary>copilot.exe</Binary>
+    </_CopilotBundleRid>
+    <_CopilotBundleRid Include="linux-x64">
+      <Platform>linux-x64</Platform>
+      <Binary>copilot</Binary>
+    </_CopilotBundleRid>
+    <_CopilotBundleRid Include="osx-arm64">
+      <Platform>darwin-arm64</Platform>
+      <Binary>copilot</Binary>
+    </_CopilotBundleRid>
+  </ItemGroup>
+
+  <!-- Step 1: Download + extract the @github/copilot-<platform> tarball for every supported RID.
+       Cache layout matches the SDK's (same $(IntermediateOutputPath)copilot-cli\<ver>\<platform>\)
+       so the host RID's tarball is shared with the SDK's own _DownloadCopilotCli target. -->
+  <Target Name="_DownloadCopilotCliAllRids"
+          BeforeTargets="BeforeBuild"
+          Condition="'$(CopilotBundleAllRids)' == 'true' And '$(CopilotSkipCliDownload)' != 'true'">
+
+    <Error Condition="'$(CopilotCliVersion)' == ''"
+           Text="CopilotCliVersion is not set. GitHub.Copilot.SDK.props must be imported before this target (add a PackageReference to GitHub.Copilot.SDK)." />
+
+    <PropertyGroup>
+      <_CopilotBundleRegistryUrl>$([System.String]::Copy('$(CopilotNpmRegistryUrl)').TrimEnd('/'))</_CopilotBundleRegistryUrl>
+      <_CopilotBundleRegistryUrl Condition="'$(_CopilotBundleRegistryUrl)' == ''">https://registry.npmjs.org</_CopilotBundleRegistryUrl>
+      <_CopilotBundleDownloadTimeoutSeconds Condition="'$(CopilotCliDownloadTimeout)' != ''">$(CopilotCliDownloadTimeout)</_CopilotBundleDownloadTimeoutSeconds>
+      <_CopilotBundleDownloadTimeoutSeconds Condition="'$(_CopilotBundleDownloadTimeoutSeconds)' == ''">600</_CopilotBundleDownloadTimeoutSeconds>
+      <_CopilotBundleDownloadTimeoutMs>$([System.Convert]::ToInt32($([MSBuild]::Multiply($(_CopilotBundleDownloadTimeoutSeconds), 1000))))</_CopilotBundleDownloadTimeoutMs>
+      <!-- Use Windows system tar explicitly when on Windows; Git-bash tar in PATH mishandles some tarballs. -->
+      <_CopilotBundleTarCommand Condition="$([MSBuild]::IsOSPlatform('Windows'))">$(SystemRoot)\System32\tar.exe</_CopilotBundleTarCommand>
+      <_CopilotBundleTarCommand Condition="'$(_CopilotBundleTarCommand)' == ''">tar</_CopilotBundleTarCommand>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <_CopilotBundleTask Include="@(_CopilotBundleRid)">
+        <CacheDir>$(IntermediateOutputPath)copilot-cli\$(CopilotCliVersion)\%(_CopilotBundleRid.Platform)</CacheDir>
+        <BinaryPath>$(IntermediateOutputPath)copilot-cli\$(CopilotCliVersion)\%(_CopilotBundleRid.Platform)\%(_CopilotBundleRid.Binary)</BinaryPath>
+        <ArchivePath>$(IntermediateOutputPath)copilot-cli\$(CopilotCliVersion)\%(_CopilotBundleRid.Platform)\copilot.tgz</ArchivePath>
+        <DownloadUrl>$(_CopilotBundleRegistryUrl)/@github/copilot-%(_CopilotBundleRid.Platform)/-/copilot-%(_CopilotBundleRid.Platform)-$(CopilotCliVersion).tgz</DownloadUrl>
+      </_CopilotBundleTask>
+    </ItemGroup>
+
+    <!-- Clean partial downloads so a half-extracted cache does not poison subsequent runs. -->
+    <Delete Files="%(_CopilotBundleTask.ArchivePath)"
+            Condition="!Exists('%(_CopilotBundleTask.BinaryPath)') And Exists('%(_CopilotBundleTask.ArchivePath)')" />
+
+    <MakeDir Directories="%(_CopilotBundleTask.CacheDir)"
+             Condition="!Exists('%(_CopilotBundleTask.BinaryPath)')" />
+
+    <Message Importance="high"
+             Text="Bundling Copilot CLI $(CopilotCliVersion) for %(_CopilotBundleTask.Identity) (%(_CopilotBundleTask.Platform))..."
+             Condition="!Exists('%(_CopilotBundleTask.BinaryPath)')" />
+
+    <DownloadFile SourceUrl="%(_CopilotBundleTask.DownloadUrl)"
+                  DestinationFolder="%(_CopilotBundleTask.CacheDir)"
+                  DestinationFileName="copilot.tgz"
+                  Timeout="$(_CopilotBundleDownloadTimeoutMs)"
+                  Condition="!Exists('%(_CopilotBundleTask.BinaryPath)')" />
+
+    <Exec Command="&quot;$(_CopilotBundleTarCommand)&quot; -xzf &quot;%(_CopilotBundleTask.ArchivePath)&quot; --strip-components=1 -C &quot;%(_CopilotBundleTask.CacheDir)&quot;"
+          Condition="!Exists('%(_CopilotBundleTask.BinaryPath)')" />
+
+    <Error Condition="!Exists('%(_CopilotBundleTask.BinaryPath)')"
+           Text="Failed to extract Copilot CLI binary for RID '%(_CopilotBundleTask.Identity)' — expected at %(_CopilotBundleTask.BinaryPath)." />
+  </Target>
+
+  <!-- Step 2: Register each RID's binary as ContentWithTargetPath so both the standard
+       build flow (CopyToOutputDirectory) and the PackAsTool pack step (_GetPackageFiles)
+       pick it up and lay it out under runtimes/<rid>/native/ (or, in the nupkg, under
+       tools/<tfm>/any/runtimes/<rid>/native/).
+
+       BeforeTargets list covers both:
+         - AssignTargetPaths / GetCopyToOutputDirectoryItems: regular build flow
+         - _GetPackageFiles / GenerateNuspec: pack flow (runs on 'dotnet pack', including
+           'dotnet pack' with the no-build option where BeforeBuild is skipped but pack
+           still needs these items to populate the nupkg from cached downloads).
+
+       Note: we intentionally include the host RID here too, not just the non-host ones.
+       The SDK's _RegisterCopilotCliForCopy only runs BeforeTargets="GetCopyToOutputDirectoryItems",
+       which is NOT triggered by 'dotnet pack' with the no-build option, so the host RID
+       would be missing from the nupkg in a two-step build-then-pack CI pipeline.
+       Registering it here covers both paths. Two ContentWithTargetPath entries with the
+       same TargetPath are de-duplicated by the pack step. -->
+  <Target Name="_RegisterCopilotCliAllRidsForPack"
+          BeforeTargets="AssignTargetPaths;GetCopyToOutputDirectoryItems;_GetPackageFiles;GenerateNuspec"
+          DependsOnTargets="_DownloadCopilotCliAllRids"
+          Condition="'$(CopilotBundleAllRids)' == 'true' And '$(CopilotSkipCliDownload)' != 'true'">
+
+    <ItemGroup>
+      <_CopilotBundleRegister Include="@(_CopilotBundleRid)">
+        <BinaryPath>$(IntermediateOutputPath)copilot-cli\$(CopilotCliVersion)\%(_CopilotBundleRid.Platform)\%(_CopilotBundleRid.Binary)</BinaryPath>
+      </_CopilotBundleRegister>
+    </ItemGroup>
+
+    <ItemGroup>
+      <ContentWithTargetPath Include="%(_CopilotBundleRegister.BinaryPath)"
+                             TargetPath="runtimes\%(_CopilotBundleRegister.Identity)\native\%(_CopilotBundleRegister.Binary)"
+                             CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
+
+</Project>

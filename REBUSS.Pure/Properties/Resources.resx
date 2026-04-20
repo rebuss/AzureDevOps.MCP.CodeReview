@@ -329,7 +329,10 @@ summarization) will not be available until the Copilot CLI is installed.</value>
     <value>[review-mode: copilot-assisted]</value>
   </data>
   <data name="ErrorCopilotRequired" xml:space="preserve">
-    <value>Copilot SDK is required for code review. Ensure gh copilot is installed and authenticated, and CopilotReview:Enabled is set to true.</value>
+    <value>Copilot SDK is required for code review. Set CopilotReview:Enabled to true in appsettings.json to enable it.</value>
+  </data>
+  <data name="ErrorCopilotUnavailable" xml:space="preserve">
+    <value>Copilot review layer unavailable ({0}). {1}</value>
   </data>
   <data name="LogCopilotReviewUnavailable" xml:space="preserve">
     <value>Copilot review layer unavailable: {Reason}. Remediation: {Remediation}. TokenSource={TokenSource}, ConfiguredModel={ConfiguredModel}, EntitledModels=[{EntitledModels}], Login={Login}, Host={Host}</value>
@@ -350,7 +353,7 @@ summarization) will not be available until the Copilot CLI is installed.</value>
     <value>Your Copilot session is not entitled to model '{0}'. Entitled models: [{1}]. Switch CopilotReview:Model in appsettings.json to one of the entitled models, or upgrade your Copilot subscription at https://github.com/settings/copilot.</value>
   </data>
   <data name="ErrorCopilotStartFailureRemediation" xml:space="preserve">
-    <value>Copilot SDK client failed to start: {0}. Verify that 'gh' CLI is installed and the 'github/gh-copilot' extension is available (run 'rebuss-pure init' to set them up). Classic GitHub Personal Access Tokens will not work as Copilot tokens.</value>
+    <value>Copilot SDK client failed to start: {0}. The SDK spawns the standalone Copilot CLI (from the '@github/copilot' npm package, NOT the 'gh copilot' extension). When the bundled native binary is missing from the SDK package, point the SDK at a system-installed copilot(.exe) by setting CopilotReview:CopilotCliPath (appsettings.json) or REBUSS_COPILOT_CLI_PATH (env var) to its absolute path, then restart the MCP server.</value>
   </data>
   <data name="ErrorCopilotVerificationTimeoutRemediation" xml:space="preserve">
     <value>Copilot verification exceeded its deadline. The SDK did not respond within the expected window. Retry by restarting the MCP server; if the problem persists, check 'gh copilot --version' and the output of 'gh auth status'.</value>

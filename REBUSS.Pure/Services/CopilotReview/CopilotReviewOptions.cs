@@ -62,6 +62,27 @@ public sealed class CopilotReviewOptions
     /// </summary>
     public const string GitHubTokenEnvironmentVariable = "REBUSS_COPILOT_TOKEN";
 
+    /// <summary>
+    /// Absolute path to a Copilot CLI executable (typically <c>copilot.exe</c>
+    /// on Windows, <c>copilot</c> elsewhere — the standalone
+    /// <c>@github/copilot</c> npm CLI, NOT the <c>gh copilot</c> extension).
+    /// When set, the value is forwarded to <c>CopilotClientOptions.CliPath</c>
+    /// so the SDK spawns this binary instead of searching for a bundled one
+    /// under its NuGet package's <c>runtimes/</c> folder. Use this to point at
+    /// a system-installed CLI when the SDK's bundled native payload is missing
+    /// (e.g. a pack-time RID packaging defect) or when you need to pin a
+    /// specific CLI version independent of the SDK. Lower priority than the
+    /// <see cref="CopilotCliPathEnvironmentVariable"/> environment variable.
+    /// Blank / whitespace values are treated as unset.
+    /// </summary>
+    public string? CopilotCliPath { get; set; }
+
+    /// <summary>
+    /// Environment variable name for the Copilot CLI path override. Highest
+    /// priority; overrides <see cref="CopilotCliPath"/> when non-empty.
+    /// </summary>
+    public const string CopilotCliPathEnvironmentVariable = "REBUSS_COPILOT_CLI_PATH";
+
     // ─── Feature 021: Finding validation ────────────────────────────────────
 
     /// <summary>

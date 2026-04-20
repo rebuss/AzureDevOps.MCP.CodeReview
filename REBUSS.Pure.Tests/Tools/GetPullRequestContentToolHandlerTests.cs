@@ -350,15 +350,44 @@ public class GetPullRequestContentToolHandlerTests
     // ─── Copilot not available — throws McpException ─────────────────────────
 
     [Fact]
-    public async Task ExecuteAsync_CopilotNotAvailable_ThrowsMcpException()
+    public async Task ExecuteAsync_CopilotDisabledByConfig_ThrowsWithEnabledGuidance()
     {
         _copilotAvailability.IsAvailableAsync(Arg.Any<CancellationToken>()).Returns(false);
+        _copilotAvailability.GetVerdictAsync(Arg.Any<CancellationToken>()).Returns(new CopilotVerdict(
+            IsAvailable: false,
+            Reason: CopilotAuthReason.DisabledByConfig,
+            TokenSource: CopilotTokenSource.None,
+            ConfiguredModel: null,
+            EntitledModels: Array.Empty<string>(),
+            Login: null,
+            Host: null,
+            Remediation: string.Empty));
 
         var ex = await Assert.ThrowsAsync<McpException>(
             () => _handler.ExecuteAsync(prNumber: 42, pageNumber: 1));
 
-        Assert.Contains("gh copilot", ex.Message);
         Assert.Contains("CopilotReview:Enabled", ex.Message);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_CopilotStartFailure_ThrowsWithReasonAndRemediation()
+    {
+        _copilotAvailability.IsAvailableAsync(Arg.Any<CancellationToken>()).Returns(false);
+        _copilotAvailability.GetVerdictAsync(Arg.Any<CancellationToken>()).Returns(new CopilotVerdict(
+            IsAvailable: false,
+            Reason: CopilotAuthReason.StartFailure,
+            TokenSource: CopilotTokenSource.LoggedInUser,
+            ConfiguredModel: "claude-sonnet-4.6",
+            EntitledModels: Array.Empty<string>(),
+            Login: null,
+            Host: null,
+            Remediation: "Copilot CLI not found. Set CopilotReview:CopilotCliPath to an absolute path."));
+
+        var ex = await Assert.ThrowsAsync<McpException>(
+            () => _handler.ExecuteAsync(prNumber: 42, pageNumber: 1));
+
+        Assert.Contains("StartFailure", ex.Message);
+        Assert.Contains("CopilotCliPath", ex.Message);
     }
 
     // ─── pageNumber ignored — copilot response returned ──────────────────────

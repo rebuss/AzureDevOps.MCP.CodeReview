@@ -126,7 +126,10 @@ namespace REBUSS.Pure.Tools
                 }
 
                 if (!copilotAvailable)
-                    throw new McpException(Resources.ErrorCopilotRequired);
+                {
+                    var verdict = await _copilotAvailability.GetVerdictAsync(cancellationToken);
+                    throw new McpException(Services.CopilotReview.CopilotUnavailableMessage.Format(verdict));
+                }
 
                 await _progressReporter.ReportAsync(progress, 3, null,
                     $"Copilot review started for local changes ({scopeString})", cancellationToken);
