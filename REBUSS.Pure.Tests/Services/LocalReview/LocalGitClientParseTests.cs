@@ -12,7 +12,7 @@ namespace REBUSS.Pure.Tests.Services.LocalReview;
 /// </summary>
 public class LocalGitClientParseTests
 {
-    // The static parsing helpers are internal — accessible via InternalsVisibleTo.
+    // The static parsing helpers are internal ï¿½ accessible via InternalsVisibleTo.
     // We exercise them by invoking GetChangedFilesAsync against a fake git result
     // through a subclass that overrides process execution.
 
@@ -146,6 +146,40 @@ public class LocalGitClientParseTests
         Assert.IsType<GitCommandException>(ex.InnerException);
     }
 
+    // --- BuildShowArgs (Feature 023 â€” git show args for staged/HEAD/branch reads) ---
+
+    [Fact]
+    public void BuildShowArgs_IndexRef_UsesBareColon()
+    {
+        // Stage-0 index content is read via `git show :<path>` (no ref name before the colon).
+        Assert.Equal("show :src/Foo.cs", InvokeBuildShowArgs("src/Foo.cs", LocalGitClient.IndexRef));
+    }
+
+    [Fact]
+    public void BuildShowArgs_IndexRef_CaseInsensitive()
+    {
+        // Sentinel comparison is OrdinalIgnoreCase; "index" must work as well as "INDEX".
+        Assert.Equal("show :src/Foo.cs", InvokeBuildShowArgs("src/Foo.cs", "index"));
+    }
+
+    [Fact]
+    public void BuildShowArgs_HeadRef_UsesHeadColonPath()
+    {
+        Assert.Equal("show HEAD:src/Foo.cs", InvokeBuildShowArgs("src/Foo.cs", "HEAD"));
+    }
+
+    [Fact]
+    public void BuildShowArgs_BranchRef_UsesBranchColonPath()
+    {
+        Assert.Equal("show feature/abc:src/Foo.cs", InvokeBuildShowArgs("src/Foo.cs", "feature/abc"));
+    }
+
+    [Fact]
+    public void BuildShowArgs_CommitShaRef_UsesShaColonPath()
+    {
+        Assert.Equal("show abc1234:src/Foo.cs", InvokeBuildShowArgs("src/Foo.cs", "abc1234"));
+    }
+
     // --- Helpers that invoke internal parsing via reflection ---
 
     private static IReadOnlyList<LocalFileStatus> InvokeParsePorcelain(string output)
@@ -162,6 +196,14 @@ public class LocalGitClientParseTests
             "ParseNameStatusOutput",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
         return (IReadOnlyList<LocalFileStatus>)method.Invoke(null, new object[] { output })!;
+    }
+
+    private static string InvokeBuildShowArgs(string normalizedPath, string gitRef)
+    {
+        var method = typeof(LocalGitClient).GetMethod(
+            "BuildShowArgs",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        return (string)method.Invoke(null, new object[] { normalizedPath, gitRef })!;
     }
 
     private static (string Args, string Mode) InvokeBuildStatusArgs(LocalReviewScope scope, bool hasHead)

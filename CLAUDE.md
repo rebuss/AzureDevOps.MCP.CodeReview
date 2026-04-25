@@ -119,3 +119,10 @@ After modifying or generating code:
 - If tests fail due to legitimate logic changes, update or extend them accordingly.
 - Add new unit tests when new functionality requires coverage.
 - Follow Clean Code principles and strictly adhere to SOLID design guidelines in all code you produce or modify.
+
+## Active Technologies
+- C# 14, .NET 10 (`net10.0`), nullable + implicit usings enabled (per Constitution §Technology). + `System.Text.Json`, `Microsoft.Extensions.Logging`, `Microsoft.Extensions.Options`. No new third-party packages. (023-local-review-finding-validation)
+- Filesystem reads via `ILocalGitClient` (git child process) for index/HEAD content, direct `File.ReadAllTextAsync` for working tree (already used inside `LocalGitClient.GetFileContentAtRefAsync`). (023-local-review-finding-validation)
+
+## Recent Changes
+- 023-local-review-finding-validation: Added C# 14, .NET 10 (`net10.0`), nullable + implicit usings enabled (per Constitution §Technology). + `System.Text.Json`, `Microsoft.Extensions.Logging`, `Microsoft.Extensions.Options`. No new third-party packages.

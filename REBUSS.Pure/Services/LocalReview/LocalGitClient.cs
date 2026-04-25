@@ -73,8 +73,7 @@ namespace REBUSS.Pure.Services.LocalReview
                 return await File.ReadAllTextAsync(fullPath, cancellationToken);
             }
 
-            // git show <ref>:<path> � works for HEAD, branch names, commit SHAs, and ":0" (index)
-            var args = $"show {gitRef}:{normalizedPath}";
+            var args = BuildShowArgs(normalizedPath, gitRef);
 
             _logger.LogDebug(Resources.LogLocalGitClientRunning, args, repositoryRoot);
 
@@ -96,6 +95,14 @@ namespace REBUSS.Pure.Services.LocalReview
         /// </summary>
         public const string WorkingTreeRef = "WORKING_TREE";
 
+        /// <summary>
+        /// Sentinel ref value that instructs <see cref="GetFileContentAtRefAsync"/> to read
+        /// the staged (stage-0 index) content via <c>git show :&lt;path&gt;</c>. Used by the
+        /// finding validator for <c>local:staged</c> reviews so that validation judges the
+        /// exact bytes the diff under review presented as the after-state.
+        /// </summary>
+        public const string IndexRef = "INDEX";
+
         public async Task<string?> GetCurrentBranchAsync(
             string repositoryRoot,
             CancellationToken cancellationToken = default)
@@ -115,6 +122,19 @@ namespace REBUSS.Pure.Services.LocalReview
                 return null;
             }
         }
+
+        // --- show args formatting -----------------------------------------------
+
+        /// <summary>
+        /// Builds the <c>git show</c> argument string for a given normalized path and
+        /// ref. <see cref="IndexRef"/> is translated to <c>show :&lt;path&gt;</c> (stage-0
+        /// index); any other ref is rendered as <c>show &lt;ref&gt;:&lt;path&gt;</c>.
+        /// Caller is responsible for normalizing path separators and stripping leading slashes.
+        /// </summary>
+        private static string BuildShowArgs(string normalizedPath, string gitRef) =>
+            string.Equals(gitRef, IndexRef, StringComparison.OrdinalIgnoreCase)
+                ? $"show :{normalizedPath}"
+                : $"show {gitRef}:{normalizedPath}";
 
         // --- Status parsing -------------------------------------------------------
 

@@ -373,7 +373,7 @@ internal sealed class AgentReviewOrchestrator : IAgentReviewOrchestrator, IAsync
         // Phase 2: resolve enclosing scopes for all findings at once.
         job.CurrentActivity = $"Resolving {allFindings.Count} scopes for validation";
         var withScopes = await _findingScopeResolver!.ResolveAsync(
-            allFindings, _options.Value.MaxScopeLines, ct).ConfigureAwait(false);
+            allFindings, job.ReviewKey, _options.Value.MaxScopeLines, ct).ConfigureAwait(false);
 
         // Phase 3: validate all findings (internal pagination by token budget).
         // The pageProgress callback surfaces intra-validation progress so the IDE

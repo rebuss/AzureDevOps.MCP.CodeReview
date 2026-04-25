@@ -241,6 +241,13 @@ namespace REBUSS.Pure
             // Registered unconditionally; AgentReviewOrchestrator short-circuits at
             // runtime based on CopilotReviewOptions.ValidateFindings (per Principle V
             // deferred resolution — the flag is read at first review, not at DI time).
+            // Feature 023 — review-mode-aware source resolution. Remote serves PR reviews
+            // (downloaded archive); Local serves local:* reviews (git ref via ILocalGitClient).
+            // Selector binds the per-review git ref and dedupes the workspace-root warning.
+            services.AddSingleton<REBUSS.Pure.Services.CopilotReview.Validation.RemoteArchiveSourceProvider>();
+            services.AddSingleton<REBUSS.Pure.Services.CopilotReview.Validation.LocalWorkspaceSourceProvider>();
+            services.AddSingleton<REBUSS.Pure.Core.IFindingSourceProviderSelector,
+                REBUSS.Pure.Services.CopilotReview.Validation.FindingSourceProviderSelector>();
             services.AddSingleton<REBUSS.Pure.Services.CopilotReview.Validation.FindingScopeResolver>();
             services.AddSingleton<REBUSS.Pure.Services.CopilotReview.Validation.FindingValidator>();
 

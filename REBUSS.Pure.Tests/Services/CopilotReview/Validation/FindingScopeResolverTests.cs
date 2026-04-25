@@ -6,18 +6,20 @@ using REBUSS.Pure.Services.CopilotReview.Validation;
 
 namespace REBUSS.Pure.Tests.Services.CopilotReview.Validation;
 
-/// <summary>Unit tests for <see cref="FindingScopeResolver"/>. Feature 021.</summary>
+/// <summary>Unit tests for <see cref="FindingScopeResolver"/>. Feature 021 + Feature 023.</summary>
 public class FindingScopeResolverTests : IDisposable
 {
-    private readonly IRepositoryDownloadOrchestrator _orchestrator = Substitute.For<IRepositoryDownloadOrchestrator>();
-    private readonly DiffSourceResolver _sourceResolver;
+    private const string TestReviewKey = "pr:test";
+
+    private readonly IFindingSourceProvider _sourceProvider = Substitute.For<IFindingSourceProvider>();
+    private readonly IFindingSourceProviderSelector _selector = Substitute.For<IFindingSourceProviderSelector>();
     private readonly FindingScopeResolver _resolver;
     private readonly string _tempDir;
 
     public FindingScopeResolverTests()
     {
-        _sourceResolver = new DiffSourceResolver(_orchestrator, NullLogger<DiffSourceResolver>.Instance);
-        _resolver = new FindingScopeResolver(_sourceResolver, NullLogger<FindingScopeResolver>.Instance);
+        _selector.SelectFor(Arg.Any<string>()).Returns(_sourceProvider);
+        _resolver = new FindingScopeResolver(_selector, NullLogger<FindingScopeResolver>.Instance);
         _tempDir = Path.Combine(Path.GetTempPath(), $"finding-scope-resolver-test-{Guid.NewGuid():N}");
     }
 
@@ -40,14 +42,16 @@ public class FindingScopeResolverTests : IDisposable
     public async Task ResolveAsync_EmptyInput_ReturnsEmpty()
     {
         var result = await _resolver.ResolveAsync(
-            Array.Empty<ParsedFinding>(), 150, CancellationToken.None);
+            Array.Empty<ParsedFinding>(), TestReviewKey, 150, CancellationToken.None);
 
         Assert.Empty(result);
     }
 
     [Fact]
-    public async Task ResolveAsync_NonCSharpFile_ReturnsNotCSharp()
+    public async Task ResolveAsync_NonCSharpFile_ReturnsNotCSharp_WithoutCallingProvider()
     {
+        // Spec FR-007 — non-C# files MUST short-circuit before any source-resolution
+        // attempt. We verify that by asserting the provider is never asked for content.
         var findings = new[]
         {
             MakeFinding("src/config.json", 5),
@@ -55,32 +59,45 @@ public class FindingScopeResolverTests : IDisposable
             MakeFinding("src/app.ts", 15),
         };
 
-        var result = await _resolver.ResolveAsync(findings, 150, CancellationToken.None);
+        var result = await _resolver.ResolveAsync(findings, TestReviewKey, 150, CancellationToken.None);
 
         Assert.All(result, r => Assert.Equal(ScopeResolutionFailure.NotCSharp, r.ResolutionFailure));
         Assert.All(result, r => Assert.Equal("", r.ScopeSource));
+        await _sourceProvider.DidNotReceiveWithAnyArgs().GetAfterCodeAsync(default!, default);
     }
 
     [Fact]
     public async Task ResolveAsync_SourceUnavailable_ReturnsSourceUnavailable()
     {
-        // orchestrator returns null => DiffSourceResolver returns null pair => SourceUnavailable.
-        _orchestrator.GetExtractedPathAsync(Arg.Any<CancellationToken>()).Returns((string?)null);
+        // Provider returns null → SourceUnavailable verdict per spec FR-004.
+        _sourceProvider.GetAfterCodeAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns((string?)null);
 
         var findings = new[] { MakeFinding("src/Missing.cs", 5) };
-        var result = await _resolver.ResolveAsync(findings, 150, CancellationToken.None);
+        var result = await _resolver.ResolveAsync(findings, TestReviewKey, 150, CancellationToken.None);
 
         var r = Assert.Single(result);
         Assert.Equal(ScopeResolutionFailure.SourceUnavailable, r.ResolutionFailure);
     }
 
     [Fact]
+    public async Task ResolveAsync_PassesReviewKeyToSelector()
+    {
+        // Feature 023 — the orchestrator's reviewKey must be forwarded to the selector
+        // verbatim so PR vs. local mode dispatch works.
+        const string localKey = "local:staged:C:\\Repo";
+        _sourceProvider.GetAfterCodeAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns((string?)null);
+
+        var findings = new[] { MakeFinding("src/Foo.cs", 5) };
+        await _resolver.ResolveAsync(findings, localKey, 150, CancellationToken.None);
+
+        _selector.Received(1).SelectFor(localKey);
+    }
+
+    [Fact]
     public async Task ResolveAsync_NoLineAndNoIdentifiers_FallsBackToWholeFile()
     {
-        // When Copilot gives neither a line number nor any backtick identifier that
-        // FindingLineResolver can match, the resolver should still send the file to
-        // validation using the whole-file fallback — ResolutionFailure.None, scope
-        // name marked as an entire-file anchor.
         SetupFileSource("Foo.cs", """
             namespace Test;
             public class Foo
@@ -91,7 +108,7 @@ public class FindingScopeResolverTests : IDisposable
 
         var findings = new[] { MakeFinding("Foo.cs", line: null) };
 
-        var result = await _resolver.ResolveAsync(findings, 150, CancellationToken.None);
+        var result = await _resolver.ResolveAsync(findings, TestReviewKey, 150, CancellationToken.None);
 
         var r = Assert.Single(result);
         Assert.Equal(ScopeResolutionFailure.None, r.ResolutionFailure);
@@ -102,10 +119,6 @@ public class FindingScopeResolverTests : IDisposable
     [Fact]
     public async Task ResolveAsync_NoLineButIdentifierInDescription_RecoversLineViaRoslyn()
     {
-        // Copilot omitted the line number but mentioned `Bar` in backticks — the
-        // FindingLineResolver should walk the syntax tree, find the method
-        // declaration, and feed its line into the scope extractor. Result: proper
-        // method-level scope, not whole-file fallback.
         SetupFileSource("Foo.cs", """
             namespace Test;
             public class Foo
@@ -127,7 +140,7 @@ public class FindingScopeResolverTests : IDisposable
             OriginalText = "...",
         };
 
-        var result = await _resolver.ResolveAsync(new[] { finding }, 150, CancellationToken.None);
+        var result = await _resolver.ResolveAsync(new[] { finding }, TestReviewKey, 150, CancellationToken.None);
 
         var r = Assert.Single(result);
         Assert.Equal(ScopeResolutionFailure.None, r.ResolutionFailure);
@@ -138,10 +151,6 @@ public class FindingScopeResolverTests : IDisposable
     [Fact]
     public async Task ResolveAsync_LineOutsideAnyMember_FallsBackViaIdentifier()
     {
-        // When Copilot's line points somewhere Roslyn cannot find an enclosing
-        // member (e.g. a `using` or `namespace` line), but the description cites
-        // an identifier, the resolver retries with the hint and recovers the
-        // correct scope.
         SetupFileSource("Foo.cs", """
             using System;
 
@@ -166,7 +175,7 @@ public class FindingScopeResolverTests : IDisposable
             OriginalText = "...",
         };
 
-        var result = await _resolver.ResolveAsync(new[] { finding }, 150, CancellationToken.None);
+        var result = await _resolver.ResolveAsync(new[] { finding }, TestReviewKey, 150, CancellationToken.None);
 
         var r = Assert.Single(result);
         Assert.Equal(ScopeResolutionFailure.None, r.ResolutionFailure);
@@ -191,7 +200,7 @@ public class FindingScopeResolverTests : IDisposable
         // Line 6 = "var x = 1;" inside Bar().
         var findings = new[] { MakeFinding("Foo.cs", line: 6) };
 
-        var result = await _resolver.ResolveAsync(findings, 150, CancellationToken.None);
+        var result = await _resolver.ResolveAsync(findings, TestReviewKey, 150, CancellationToken.None);
 
         var r = Assert.Single(result);
         Assert.Equal(ScopeResolutionFailure.None, r.ResolutionFailure);
@@ -219,13 +228,15 @@ public class FindingScopeResolverTests : IDisposable
             MakeFinding("Foo.cs", line: 6),
         };
 
-        var result = await _resolver.ResolveAsync(findings, 150, CancellationToken.None);
+        var result = await _resolver.ResolveAsync(findings, TestReviewKey, 150, CancellationToken.None);
 
         Assert.Equal(3, result.Count);
         Assert.All(result, r => Assert.Equal(ScopeResolutionFailure.None, r.ResolutionFailure));
         // Each finding resolves to its own enclosing method.
         var names = result.Select(r => r.ScopeName).ToHashSet();
         Assert.Equal(3, names.Count);
+        // Provider was called exactly once for the single distinct file.
+        await _sourceProvider.Received(1).GetAfterCodeAsync("Foo.cs", Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -246,7 +257,7 @@ public class FindingScopeResolverTests : IDisposable
             MakeFinding("Foo.cs", line: null),              // None (whole-file fallback)
         };
 
-        var result = await _resolver.ResolveAsync(findings, 150, CancellationToken.None);
+        var result = await _resolver.ResolveAsync(findings, TestReviewKey, 150, CancellationToken.None);
 
         Assert.Equal(ScopeResolutionFailure.NotCSharp, result[0].ResolutionFailure);
         Assert.Equal(ScopeResolutionFailure.None, result[1].ResolutionFailure);
@@ -258,11 +269,7 @@ public class FindingScopeResolverTests : IDisposable
 
     private void SetupFileSource(string relativePath, string content)
     {
-        var wrapperDir = Path.Combine(_tempDir, "repo");
-        Directory.CreateDirectory(wrapperDir);
-        var fullPath = Path.Combine(wrapperDir, relativePath);
-        Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
-        File.WriteAllText(fullPath, content);
-        _orchestrator.GetExtractedPathAsync(Arg.Any<CancellationToken>()).Returns(_tempDir);
+        _sourceProvider.GetAfterCodeAsync(relativePath, Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<string?>(content));
     }
 }

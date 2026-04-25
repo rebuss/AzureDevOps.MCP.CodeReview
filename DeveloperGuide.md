@@ -478,6 +478,12 @@ get_pr_content(prNumber, modelName)    ← returns the full Copilot-assisted rev
 get_local_content(scope, modelName)    ← computes pages internally and returns the full review in one call
 ```
 
+When `validateFindings` is enabled in `appsettings.json`, self-review (`local:staged`,
+`local:unstaged`, `local:branch:<branch>`) applies the same false-positive filter as
+PR review: each finding is re-checked against the file's diff-side source (the index
+for staged, the working tree for unstaged, the current branch HEAD for branch reviews)
+and obvious false positives are removed from the surfaced output.
+
 ---
 
 ## Prompts

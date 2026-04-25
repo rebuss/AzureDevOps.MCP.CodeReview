@@ -1,41 +1,46 @@
 using Microsoft.Extensions.Logging;
+using REBUSS.Pure.Core;
 using REBUSS.Pure.RoslynProcessor;
 
 namespace REBUSS.Pure.Services.CopilotReview.Validation;
 
 /// <summary>
 /// For each <see cref="ParsedFinding"/>, resolves the full source of its enclosing
-/// method/scope using <see cref="DiffSourceResolver"/> (to obtain the after-code for
-/// the file) and <see cref="FindingScopeExtractor"/> (to extract the enclosing member
-/// body via Roslyn). When scope extraction cannot produce a usable source block, the
-/// resolution failure reason is recorded so the validator can map it to the correct
-/// verdict (spec US3.1 / US3.2). Feature 021.
+/// method/scope using <see cref="IFindingSourceProviderSelector"/> (to obtain the
+/// after-code for the file in the correct review mode — PR archive or local git ref)
+/// and <see cref="FindingScopeExtractor"/> (to extract the enclosing member body via
+/// Roslyn). When scope extraction cannot produce a usable source block, the resolution
+/// failure reason is recorded so the validator can map it to the correct verdict
+/// (spec US3.1 / US3.2). Feature 021 + Feature 023 (review-mode-aware source).
 /// </summary>
 public sealed class FindingScopeResolver
 {
-    private readonly DiffSourceResolver _sourceResolver;
+    private readonly IFindingSourceProviderSelector _selector;
     private readonly ILogger<FindingScopeResolver> _logger;
 
     public FindingScopeResolver(
-        DiffSourceResolver sourceResolver,
+        IFindingSourceProviderSelector selector,
         ILogger<FindingScopeResolver> logger)
     {
-        _sourceResolver = sourceResolver;
+        _selector = selector;
         _logger = logger;
     }
 
     /// <summary>
-    /// Resolves scope for every finding. Groups lookups by file path to benefit from
-    /// <see cref="DiffSourceResolver"/>'s internal per-file cache — one resolve call
-    /// per distinct file regardless of finding count.
+    /// Resolves scope for every finding. Groups lookups by file path so each distinct
+    /// file is fetched once regardless of finding count. The <paramref name="reviewKey"/>
+    /// drives selection of the underlying source provider (PR archive vs. local git ref).
     /// </summary>
     public async Task<IReadOnlyList<FindingWithScope>> ResolveAsync(
         IReadOnlyList<ParsedFinding> findings,
+        string reviewKey,
         int maxScopeLines,
         CancellationToken ct)
     {
         if (findings.Count == 0)
             return Array.Empty<FindingWithScope>();
+
+        var provider = _selector.SelectFor(reviewKey);
 
         var results = new FindingWithScope[findings.Count];
         var byFile = findings
@@ -54,13 +59,11 @@ public sealed class FindingScopeResolver
                 continue;
             }
 
-            // (b) Resolve source once per file. The DiffSourceResolver caches internally,
-            // but we still synthesize a diff-like header so the resolver can parse the path.
-            var diffHeader = $"=== {filePath} (edit: +0 -0) ===\n@@ -1,1 +1,1 @@\n";
-            DiffSourcePair? pair;
+            // (b) Resolve after-code once per file via the selected provider.
+            string? afterCode;
             try
             {
-                pair = await _sourceResolver.ResolveAsync(diffHeader, ct).ConfigureAwait(false);
+                afterCode = await provider.GetAfterCodeAsync(filePath, ct).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
@@ -74,7 +77,7 @@ public sealed class FindingScopeResolver
                 continue;
             }
 
-            if (pair is null)
+            if (afterCode is null)
             {
                 foreach (var (f, idx) in group)
                     results[idx] = UnresolvedResult(f, ScopeResolutionFailure.SourceUnavailable);
@@ -92,12 +95,12 @@ public sealed class FindingScopeResolver
                 // parsed. See Feature 021 clarification: Copilot imprecision is validated
                 // and corrected using Roslyn before the scope is extracted.
                 var effectiveLine = f.LineNumber
-                    ?? FindingLineResolver.TryResolveLine(pair.AfterCode, f.Description, hintLine: null);
+                    ?? FindingLineResolver.TryResolveLine(afterCode, f.Description, hintLine: null);
 
                 if (effectiveLine is int line)
                 {
                     var (body, name, resolved) = FindingScopeExtractor.ExtractScopeBody(
-                        pair.AfterCode, line, maxScopeLines);
+                        afterCode, line, maxScopeLines);
 
                     if (resolved)
                     {
@@ -117,11 +120,11 @@ public sealed class FindingScopeResolver
                     // alone. Sometimes Copilot's line is off by a lot and the identifier
                     // lookup gives a cleaner anchor.
                     var fallbackLine = FindingLineResolver.TryResolveLine(
-                        pair.AfterCode, f.Description, hintLine: line);
+                        afterCode, f.Description, hintLine: line);
                     if (fallbackLine is int fl && fl != line)
                     {
                         var (body2, name2, resolved2) = FindingScopeExtractor.ExtractScopeBody(
-                            pair.AfterCode, fl, maxScopeLines);
+                            afterCode, fl, maxScopeLines);
                         if (resolved2)
                         {
                             results[idx] = new FindingWithScope
@@ -141,7 +144,7 @@ public sealed class FindingScopeResolver
                 // Copilot still gets a chance to reason about the issue. Budget is
                 // MaxScopeLines × 2 — modestly larger than method-level context because
                 // the validator may need more surrounding code to locate the issue.
-                var (fileBody, fileName) = BuildWholeFileFallback(pair.AfterCode, filePath, maxScopeLines);
+                var (fileBody, fileName) = BuildWholeFileFallback(afterCode, filePath, maxScopeLines);
                 results[idx] = new FindingWithScope
                 {
                     Finding = f,
