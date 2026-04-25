@@ -198,7 +198,14 @@ namespace REBUSS.Pure
             // when the flag is absent, Copilot is the default to preserve existing behavior.
             // Consumed by AgentPageReviewer and FindingValidator — both are agent-agnostic
             // since the refactor, so --agent claude actually drives the runtime review path.
-            if (string.Equals(agent, CliArgumentParser.AgentClaude, StringComparison.OrdinalIgnoreCase))
+            // AgentIdentity is registered alongside so tool handlers can label their
+            // responses with the actual agent name (e.g. "claude-assisted") instead of
+            // hardcoded "copilot-assisted" wording leaking to the wrong backend.
+            var isClaude = string.Equals(agent, CliArgumentParser.AgentClaude, StringComparison.OrdinalIgnoreCase);
+            services.AddSingleton(new REBUSS.Pure.Core.Services.AgentInvocation.AgentIdentity(
+                isClaude ? CliArgumentParser.AgentClaude : CliArgumentParser.AgentCopilot));
+
+            if (isClaude)
             {
                 services.AddSingleton<REBUSS.Pure.Core.Services.AgentInvocation.IAgentInvoker,
                     REBUSS.Pure.Services.AgentInvocation.ClaudeCliAgentInvoker>();

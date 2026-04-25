@@ -1,4 +1,4 @@
-# Pull Request Code Review (Copilot-Assisted)
+# Pull Request Code Review (AI-Assisted)
 
 You are invoked with a message that begins with a pull request number (digits before the first space).
 If missing, ask the user to provide a valid PR number and stop.
@@ -8,7 +8,7 @@ Extract:
 
 Use MCP server: REBUSS.Pure.
 
-Your job: organize and present the Copilot-assisted code review of the PR.
+Your job: organize and present the AI-assisted code review of the PR. The review is run server-side by the configured agent (Copilot or Claude — selected via `--agent` in `mcp.json`).
 
 ---
 
@@ -26,16 +26,16 @@ Use it to determine:
 Do NOT fetch any content before metadata.
 Always call get_pr_metadata — never infer PR scope, title, or content from conversation history or branch names.
 
-### Step 2 — Get Copilot review
+### Step 2 — Get the AI-assisted review
 
 Call:
 `get_pr_content(prNumber)`
 
-The server performs the review using GitHub Copilot and returns pre-reviewed summaries.
+The MCP server runs the review server-side using the configured AI agent and returns pre-reviewed summaries.
 
-**If the call succeeds**: the response contains `[review-mode: copilot-assisted]` followed by page review blocks (`=== Page N Review ===`).
+**If the call succeeds**: the response begins with a header line of the form `[review-mode: <agent>-assisted]` (where `<agent>` is `copilot` or `claude`), followed by page review blocks (`=== Page N Review ===`). Use the agent name only when reporting the review backend; otherwise treat the content uniformly.
 
-**If the call returns an error about Copilot SDK**: inform the user that Copilot must be installed and authenticated. Suggest running `gh copilot` setup. Do not attempt alternative review methods.
+**If the call returns an error**: surface the error message and the remediation text it contains verbatim — the server already tailors the remediation to the configured agent. Do **not** attempt alternative review methods, do **not** invent setup commands, and do **not** suggest `gh copilot` or `claude /login` unless the error message explicitly does.
 
 ### Step 3 — Organize findings
 
@@ -70,7 +70,7 @@ Ignore minor style issues unless they affect correctness or maintainability.
 ## Output Structure
 
 ### Verdict
-Overall summary and risk level.
+Overall summary and risk level. Include the review backend (copilot or claude — taken from the `[review-mode: …]` header).
 
 ### Critical Issues
 For each:
@@ -98,6 +98,7 @@ Total pages reviewed and any failed pages with reasons.
 - Prefer fewer strong findings over many weak ones.
 - Minimize context usage.
 - Do NOT ask the user to confirm between pages — all pages are reviewed in a single call.
+- When reporting a review failure, name the actual backend reported in the error message — never assume Copilot when Claude is configured (or vice versa).
 
 ## STRICT: No Repository Exploration
 You are **absolutely forbidden** from exploring, cloning, checking out, or browsing the repository in any way.

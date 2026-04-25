@@ -10,6 +10,7 @@ using REBUSS.Pure.Core.Models;
 using REBUSS.Pure.Core.Models.CopilotReview;
 using REBUSS.Pure.Core.Models.Pagination;
 using REBUSS.Pure.Core.Models.ResponsePacking;
+using REBUSS.Pure.Core.Services.AgentInvocation;
 using REBUSS.Pure.Core.Services.CopilotReview;
 using REBUSS.Pure.Core.Shared;
 using REBUSS.Pure.Services.CopilotReview;
@@ -115,6 +116,7 @@ public class GetLocalContentToolHandlerTests
             _copilotReviewOrchestrator,
             _copilotReviewWaiter,
             _progressReporter,
+            new AgentIdentity("copilot"),
             NullLogger<GetLocalContentToolHandler>.Instance);
     }
 
@@ -429,6 +431,7 @@ public class GetLocalContentToolHandlerTests
             _copilotReviewOrchestrator,
             waiter,
             _progressReporter,
+            new AgentIdentity("copilot"),
             NullLogger<GetLocalContentToolHandler>.Instance);
 
         var blocks = (await handler.ExecuteAsync(pageNumber: 1)).ToList();

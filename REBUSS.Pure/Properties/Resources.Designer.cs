@@ -798,16 +798,16 @@ namespace REBUSS.Pure.Properties {
             get { return ResourceManager.GetString("LogCopilotReviewFailed", resourceCulture)!; }
         }
 
-        internal static string CopilotReviewModeHeader {
-            get { return ResourceManager.GetString("CopilotReviewModeHeader", resourceCulture)!; }
+        internal static string AgentReviewModeHeader {
+            get { return ResourceManager.GetString("AgentReviewModeHeader", resourceCulture)!; }
         }
 
-        internal static string ErrorCopilotRequired {
-            get { return ResourceManager.GetString("ErrorCopilotRequired", resourceCulture)!; }
+        internal static string ErrorAgentReviewLayerRequired {
+            get { return ResourceManager.GetString("ErrorAgentReviewLayerRequired", resourceCulture)!; }
         }
 
-        internal static string ErrorCopilotUnavailable {
-            get { return ResourceManager.GetString("ErrorCopilotUnavailable", resourceCulture)!; }
+        internal static string ErrorAgentReviewLayerUnavailable {
+            get { return ResourceManager.GetString("ErrorAgentReviewLayerUnavailable", resourceCulture)!; }
         }
 
         internal static string LogCopilotReviewUnavailable {

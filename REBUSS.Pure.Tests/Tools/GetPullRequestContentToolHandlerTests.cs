@@ -9,6 +9,7 @@ using REBUSS.Pure.Core.Exceptions;
 using REBUSS.Pure.Core.Models;
 using REBUSS.Pure.Core.Models.Pagination;
 using REBUSS.Pure.Core.Models.ResponsePacking;
+using REBUSS.Pure.Core.Services.AgentInvocation;
 using REBUSS.Pure.Core.Services.CopilotReview;
 using REBUSS.Pure.Core.Shared;
 using REBUSS.Pure.Services.PrEnrichment;
@@ -121,6 +122,7 @@ public class GetPullRequestContentToolHandlerTests
             _copilotReviewOrchestrator,
             _copilotReviewWaiter,
             _progressReporter,
+            new AgentIdentity("copilot"),
             NullLogger<GetPullRequestContentToolHandler>.Instance);
     }
 
@@ -480,7 +482,7 @@ public class GetPullRequestContentToolHandlerTests
         await _handler.ExecuteAsync(prNumber: 42, pageNumber: 1);
 
         Assert.Contains(capturedMessages, m =>
-            m.Contains("Copilot review started", StringComparison.OrdinalIgnoreCase));
+            m.Contains("AI review started", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

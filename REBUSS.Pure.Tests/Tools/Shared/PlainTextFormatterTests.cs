@@ -79,13 +79,13 @@ public class PlainTextFormatterTests
             PlainTextFormatter.FormatFriendlyStatus(headline!, explanation!, suggested!));
     }
 
-    // ─── Feature 013 Copilot review formatter tests (T030) ───────────────────────
+    // ─── Feature 013 agent-assisted review formatter tests (T030) ────────────────
 
     [Fact]
-    public void FormatCopilotReviewHeader_ContainsModeAndCounts()
+    public void FormatAgentReviewHeader_ContainsModeAndCounts()
     {
-        var text = PlainTextFormatter.FormatCopilotReviewHeader(
-            prNumber: 42, totalPages: 5, succeeded: 4, failed: 1);
+        var text = PlainTextFormatter.FormatAgentReviewHeader(
+            agentName: "copilot", prNumber: 42, totalPages: 5, succeeded: 4, failed: 1);
 
         Assert.Contains("[review-mode: copilot-assisted]", text);
         Assert.Contains("PR #42", text);
@@ -95,12 +95,35 @@ public class PlainTextFormatterTests
     }
 
     [Fact]
-    public void FormatCopilotPageReviewBlock_Success_ContainsReviewText()
+    public void FormatAgentReviewHeader_ClaudeAgent_EmitsClaudeMarker()
+    {
+        // Regression guard: when --agent claude is wired, the response marker must
+        // say "claude-assisted", not "copilot-assisted". Otherwise a Claude review
+        // is reported back to the agent as if Copilot did the work.
+        var text = PlainTextFormatter.FormatAgentReviewHeader(
+            agentName: "claude", prNumber: 7, totalPages: 1, succeeded: 1, failed: 0);
+
+        Assert.Contains("[review-mode: claude-assisted]", text);
+        Assert.DoesNotContain("copilot", text);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData(null)]
+    public void FormatAgentReviewHeader_BlankAgentName_Throws(string? agentName)
+    {
+        Assert.ThrowsAny<ArgumentException>(() =>
+            PlainTextFormatter.FormatAgentReviewHeader(agentName!, 1, 1, 1, 0));
+    }
+
+    [Fact]
+    public void FormatAgentPageReviewBlock_Success_ContainsReviewText()
     {
         var result = AgentPageReviewResult.Success(
             pageNumber: 3, reviewText: "Found a null ref bug", attemptsMade: 1);
 
-        var text = PlainTextFormatter.FormatCopilotPageReviewBlock(result);
+        var text = PlainTextFormatter.FormatAgentPageReviewBlock(result);
 
         Assert.Contains("=== Page 3 Review ===", text);
         Assert.Contains("Found a null ref bug", text);
@@ -108,7 +131,7 @@ public class PlainTextFormatterTests
     }
 
     [Fact]
-    public void FormatCopilotPageReviewBlock_Failure_ContainsFailedFilePathsAndReason()
+    public void FormatAgentPageReviewBlock_Failure_ContainsFailedFilePathsAndReason()
     {
         var result = AgentPageReviewResult.Failure(
             pageNumber: 4,
@@ -116,7 +139,7 @@ public class PlainTextFormatterTests
             errorMessage: "network timeout",
             attemptsMade: 3);
 
-        var text = PlainTextFormatter.FormatCopilotPageReviewBlock(result);
+        var text = PlainTextFormatter.FormatAgentPageReviewBlock(result);
 
         Assert.Contains("=== Page 4 Review (FAILED) ===", text);
         Assert.Contains("src/A.cs", text);
@@ -124,12 +147,13 @@ public class PlainTextFormatterTests
         Assert.Contains("Reason: network timeout", text);
     }
 
-    // ─── T029: FormatCopilotReviewHeader string overload tests ──────────────────
+    // ─── T029: FormatAgentReviewHeader string overload tests ────────────────────
 
     [Fact]
-    public void FormatCopilotReviewHeader_StringOverload_ContainsModeAndCounts()
+    public void FormatAgentReviewHeader_StringOverload_ContainsModeAndCounts()
     {
-        var text = PlainTextFormatter.FormatCopilotReviewHeader(
+        var text = PlainTextFormatter.FormatAgentReviewHeader(
+            agentName: "copilot",
             reviewSubject: "Local changes (working-tree)",
             totalPages: 3, succeeded: 2, failed: 1);
 
@@ -141,9 +165,10 @@ public class PlainTextFormatterTests
     }
 
     [Fact]
-    public void FormatCopilotReviewHeader_StringOverload_AllSucceeded_ZeroFailed()
+    public void FormatAgentReviewHeader_StringOverload_AllSucceeded_ZeroFailed()
     {
-        var text = PlainTextFormatter.FormatCopilotReviewHeader(
+        var text = PlainTextFormatter.FormatAgentReviewHeader(
+            agentName: "copilot",
             reviewSubject: "Local changes (staged)",
             totalPages: 2, succeeded: 2, failed: 0);
 
@@ -154,9 +179,10 @@ public class PlainTextFormatterTests
     }
 
     [Fact]
-    public void FormatCopilotReviewHeader_StringOverload_DifferentSubjectThanPrNumber()
+    public void FormatAgentReviewHeader_StringOverload_DifferentSubjectThanPrNumber()
     {
-        var text = PlainTextFormatter.FormatCopilotReviewHeader(
+        var text = PlainTextFormatter.FormatAgentReviewHeader(
+            agentName: "copilot",
             reviewSubject: "Local changes (main)",
             totalPages: 1, succeeded: 1, failed: 0);
 
@@ -166,10 +192,10 @@ public class PlainTextFormatterTests
     }
 
     [Fact]
-    public void FormatCopilotReviewHeader_IntOverload_ContainsPrPrefix()
+    public void FormatAgentReviewHeader_IntOverload_ContainsPrPrefix()
     {
-        var text = PlainTextFormatter.FormatCopilotReviewHeader(
-            prNumber: 99, totalPages: 1, succeeded: 1, failed: 0);
+        var text = PlainTextFormatter.FormatAgentReviewHeader(
+            agentName: "copilot", prNumber: 99, totalPages: 1, succeeded: 1, failed: 0);
 
         Assert.Contains("PR #99", text);
     }

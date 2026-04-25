@@ -1,13 +1,20 @@
 using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using REBUSS.Pure.Services.AgentInvocation;
 
 namespace REBUSS.Pure.Services.ClaudeCode;
 
 /// <summary>
-/// Runs <c>claude -p "ping" --output-format json --bare</c> under a short timeout
-/// and parses the resulting JSON to decide whether the Claude Code CLI is wired up
+/// Runs <c>claude -p "ping" --output-format json</c> under a short timeout and
+/// parses the resulting JSON to decide whether the Claude Code CLI is wired up
 /// correctly. Does not retain any conversation state — the call is purely diagnostic.
+/// <para>
+/// Mirrors <see cref="ClaudeCliAgentInvoker"/>'s auth-mode selection so the probe
+/// exercises the same credential path the runtime invoker will use: <c>--bare</c>
+/// is appended only when <c>ANTHROPIC_API_KEY</c> is set, otherwise the persistent
+/// OAuth credential / <c>CLAUDE_CODE_OAUTH_TOKEN</c> is allowed to handle auth.
+/// </para>
 /// </summary>
 public sealed class ClaudeVerificationRunner : IClaudeVerificationProbe
 {
@@ -16,15 +23,18 @@ public sealed class ClaudeVerificationRunner : IClaudeVerificationProbe
     private readonly ILogger<ClaudeVerificationRunner>? _logger;
     private readonly Func<string, CancellationToken, Task<(int ExitCode, string StdOut, string StdErr)>>? _processRunner;
     private readonly string _claudeExe;
+    private readonly Func<string, string?> _envLookup;
 
     public ClaudeVerificationRunner(
         ILogger<ClaudeVerificationRunner>? logger = null,
         Func<string, CancellationToken, Task<(int ExitCode, string StdOut, string StdErr)>>? processRunner = null,
-        string? claudeCliPathOverride = null)
+        string? claudeCliPathOverride = null,
+        Func<string, string?>? environmentLookup = null)
     {
         _logger = logger;
         _processRunner = processRunner;
         _claudeExe = string.IsNullOrWhiteSpace(claudeCliPathOverride) ? "claude" : claudeCliPathOverride;
+        _envLookup = environmentLookup ?? Environment.GetEnvironmentVariable;
     }
 
     public async Task<ClaudeVerdict> ProbeAsync(CancellationToken cancellationToken)
@@ -32,12 +42,17 @@ public sealed class ClaudeVerificationRunner : IClaudeVerificationProbe
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(TimeSpan.FromSeconds(DefaultTimeoutSeconds));
 
+        var useBare = ClaudeCliAgentInvoker.ShouldUseBareMode(_envLookup);
+        var probeArgs = useBare
+            ? "-p \"ping\" --output-format json --bare"
+            : "-p \"ping\" --output-format json";
+
         (int ExitCode, string StdOut, string StdErr) r;
         try
         {
             r = _processRunner is not null
-                ? await _processRunner("-p \"ping\" --output-format json --bare", cts.Token)
-                : await RunAsync(_claudeExe, "-p \"ping\" --output-format json --bare", cts.Token);
+                ? await _processRunner(probeArgs, cts.Token)
+                : await RunAsync(_claudeExe, probeArgs, cts.Token);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -65,12 +80,15 @@ public sealed class ClaudeVerificationRunner : IClaudeVerificationProbe
 
         if (r.ExitCode != 0)
         {
-            var hint = LooksLikeAuthFailure(r.StdErr, r.StdOut)
-                ? "Not authenticated. Run `claude` interactively once to complete the /login flow."
+            var isAuth = LooksLikeAuthFailure(r.StdErr, r.StdOut);
+            var hint = isAuth
+                ? (useBare
+                    ? "Not authenticated. `ANTHROPIC_API_KEY` is set but rejected — verify the key is valid in the Claude Console."
+                    : "Not authenticated. Run `claude` interactively once to complete the /login flow, or set `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`).")
                 : $"`claude -p` exited {r.ExitCode}. stderr: {Truncate(r.StdErr, 400)}";
             return new ClaudeVerdict(
                 IsAvailable: false,
-                Reason: LooksLikeAuthFailure(r.StdErr, r.StdOut) ? "not-authenticated" : "error",
+                Reason: isAuth ? "not-authenticated" : "error",
                 Remediation: hint);
         }
 

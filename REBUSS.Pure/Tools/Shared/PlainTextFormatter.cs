@@ -246,30 +246,33 @@ internal static class PlainTextFormatter
         return sb.ToString();
     }
 
-    // ─── Copilot review layer (feature 013) ───────────────────────────────────────
+    // ─── Agent review layer (feature 013) ─────────────────────────────────────────
 
     /// <summary>
-    /// Formats the copilot-assisted mode indicator header. The first line MUST be the
-    /// <c>[review-mode: copilot-assisted]</c> string from <see cref="Resources.CopilotReviewModeHeader"/>
-    /// so the IDE prompt can detect the mode and adapt behavior (FR-004, FR-014).
+    /// Formats the AI-agent-assisted mode indicator header. The first line MUST be the
+    /// <c>[review-mode: {agent}-assisted]</c> string built from <see cref="Resources.AgentReviewModeHeader"/>
+    /// — the prompt detects the prefix and the user sees which backend (claude / copilot)
+    /// produced the review (FR-004, FR-014).
     /// </summary>
-    public static string FormatCopilotReviewHeader(int prNumber, int totalPages, int succeeded, int failed)
-        => FormatCopilotReviewHeader($"PR #{prNumber}", totalPages, succeeded, failed);
+    /// <param name="agentName">Lowercase agent identifier — <c>"claude"</c> or <c>"copilot"</c>.</param>
+    public static string FormatAgentReviewHeader(string agentName, int prNumber, int totalPages, int succeeded, int failed)
+        => FormatAgentReviewHeader(agentName, $"PR #{prNumber}", totalPages, succeeded, failed);
 
-    public static string FormatCopilotReviewHeader(string reviewSubject, int totalPages, int succeeded, int failed)
+    public static string FormatAgentReviewHeader(string agentName, string reviewSubject, int totalPages, int succeeded, int failed)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(agentName);
         var sb = new StringBuilder();
-        sb.AppendLine(Resources.CopilotReviewModeHeader);
+        sb.AppendLine(string.Format(Resources.AgentReviewModeHeader, agentName));
         sb.Append($"{reviewSubject} — Review completed ({totalPages} pages reviewed, {succeeded} succeeded, {failed} failed)");
         return sb.ToString();
     }
 
     /// <summary>
-    /// Formats a single page's Copilot review outcome. On success renders the review text;
+    /// Formats a single page's review outcome. On success renders the review text;
     /// on failure renders the list of file paths that were on the failed page plus the
     /// last-attempt reason (FR-007a, Clarification Q1).
     /// </summary>
-    public static string FormatCopilotPageReviewBlock(AgentPageReviewResult result)
+    public static string FormatAgentPageReviewBlock(AgentPageReviewResult result)
     {
         ArgumentNullException.ThrowIfNull(result);
         var sb = new StringBuilder();

@@ -5,9 +5,10 @@ namespace REBUSS.Pure.Services.CopilotReview;
 
 /// <summary>
 /// Builds the user-facing error message thrown by the tool handlers when the
-/// Copilot review layer is unavailable. Picks wording per <see cref="CopilotVerdict.Reason"/>
-/// so the operator sees the actual failure (e.g. <c>StartFailure</c> meaning the CLI
-/// subprocess could not launch) instead of a generic "re-authenticate" prompt.
+/// AI review layer is unavailable. Wording is agent-neutral — the underlying verdict
+/// type still wears <c>Copilot</c> in its name for legacy reasons, but the message
+/// the agent sees never mentions Copilot specifically; the verdict's own
+/// <see cref="CopilotVerdict.Remediation"/> carries any provider-specific guidance.
 /// </summary>
 internal static class CopilotUnavailableMessage
 {
@@ -16,11 +17,11 @@ internal static class CopilotUnavailableMessage
         // DisabledByConfig carries no remediation text (FR-016) — fall back to the
         // legacy enable-it message so the user gets actionable guidance.
         if (verdict.Reason == CopilotAuthReason.DisabledByConfig)
-            return Resources.ErrorCopilotRequired;
+            return Resources.ErrorAgentReviewLayerRequired;
 
         var remediation = string.IsNullOrWhiteSpace(verdict.Remediation)
             ? "See server logs for details."
             : verdict.Remediation;
-        return string.Format(Resources.ErrorCopilotUnavailable, verdict.Reason, remediation);
+        return string.Format(Resources.ErrorAgentReviewLayerUnavailable, verdict.Reason, remediation);
     }
 }

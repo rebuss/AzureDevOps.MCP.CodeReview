@@ -1,4 +1,4 @@
-# Self-Review of Local Changes (Copilot-Assisted)
+# Self-Review of Local Changes (AI-Assisted)
 
 Perform a professional self-review of **local git changes** using **only** MCP tools from the `REBUSS.Pure` server.
 
@@ -26,16 +26,16 @@ Do not infer scope from anywhere else.
 
 ## Workflow
 
-### Step 1 — Get Copilot review
+### Step 1 — Get the AI-assisted review
 
 Call:
 `get_local_content(scope: "<scope>")`
 
-The server performs the review using GitHub Copilot and returns pre-reviewed summaries.
+The MCP server runs the review server-side using the configured AI agent (Copilot or Claude) and returns pre-reviewed summaries.
 
-**If the call succeeds**: the response contains `[review-mode: copilot-assisted]` followed by page review blocks (`=== Page N Review ===`).
+**If the call succeeds**: the response begins with a header line of the form `[review-mode: <agent>-assisted]` (where `<agent>` is `copilot` or `claude` — whichever backend is wired up in `mcp.json` via `--agent`), followed by page review blocks (`=== Page N Review ===`). Use the agent name only when reporting the review backend; otherwise treat the content uniformly.
 
-**If the call returns an error about Copilot SDK**: inform the user that Copilot must be installed and authenticated. Suggest running `gh copilot` setup. Do not attempt alternative review methods.
+**If the call returns an error**: surface the error message and the remediation text it contains verbatim — the server already tailors the remediation to the configured agent (Copilot vs Claude). Do **not** attempt alternative review methods, do **not** invent setup commands, and do **not** suggest `gh copilot` or `claude /login` unless the error message explicitly does.
 
 ### Step 2 — Organize findings
 
@@ -77,6 +77,7 @@ Short summary including:
 - scope used
 - number of files reviewed
 - number of pages reviewed
+- review backend (copilot or claude — taken from the `[review-mode: …]` header)
 
 ### Critical Issues
 For each:
@@ -112,3 +113,4 @@ Include:
 - Prefer fewer, higher-value findings over many trivial comments.
 - If something is uncertain, label it as a potential risk.
 - Do NOT ask the user to confirm between pages — all pages are reviewed in a single call.
+- When reporting a review failure, name the actual backend reported in the error message — never assume Copilot when Claude is configured (or vice versa).

@@ -377,14 +377,14 @@ Or set REBUSS_COPILOT_TOKEN to a Copilot-entitled GitHub token.
   <data name="LogCopilotReviewFailed" xml:space="preserve">
     <value>PR {PrNumber} Copilot review failed: {Reason}</value>
   </data>
-  <data name="CopilotReviewModeHeader" xml:space="preserve">
-    <value>[review-mode: copilot-assisted]</value>
+  <data name="AgentReviewModeHeader" xml:space="preserve">
+    <value>[review-mode: {0}-assisted]</value>
   </data>
-  <data name="ErrorCopilotRequired" xml:space="preserve">
-    <value>Copilot SDK is required for code review. Set CopilotReview:Enabled to true in appsettings.json to enable it.</value>
+  <data name="ErrorAgentReviewLayerRequired" xml:space="preserve">
+    <value>The AI review layer is required for code review. Set CopilotReview:Enabled to true in appsettings.json to enable it.</value>
   </data>
-  <data name="ErrorCopilotUnavailable" xml:space="preserve">
-    <value>Copilot review layer unavailable ({0}). {1}</value>
+  <data name="ErrorAgentReviewLayerUnavailable" xml:space="preserve">
+    <value>AI review layer unavailable ({0}). {1}</value>
   </data>
   <data name="LogCopilotReviewUnavailable" xml:space="preserve">
     <value>Copilot review layer unavailable: {Reason}. Remediation: {Remediation}. TokenSource={TokenSource}, ConfiguredModel={ConfiguredModel}, EntitledModels=[{EntitledModels}], Login={Login}, Host={Host}</value>

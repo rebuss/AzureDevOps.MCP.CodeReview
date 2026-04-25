@@ -7,6 +7,7 @@ using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using REBUSS.Pure.Core;
 using REBUSS.Pure.Core.Exceptions;
+using REBUSS.Pure.Core.Services.AgentInvocation;
 using REBUSS.Pure.Core.Services.CopilotReview;
 using REBUSS.Pure.Core.Shared;
 using REBUSS.Pure.Properties;
@@ -16,9 +17,9 @@ using REBUSS.Pure.Tools.Shared;
 namespace REBUSS.Pure.Tools
 {
     /// <summary>
-    /// Handles the execution of the get_pr_content MCP tool. Triggers Copilot
-    /// review of the PR's enriched content and returns page review summaries.
-    /// Copilot SDK is required — there is no content-only fallback.
+    /// Handles the execution of the get_pr_content MCP tool. Triggers an
+    /// AI-assisted review of the PR's enriched content (via the configured agent —
+    /// Copilot or Claude) and returns page review summaries.
     /// </summary>
     [McpServerToolType]
     public class GetPullRequestContentToolHandler
@@ -31,6 +32,7 @@ namespace REBUSS.Pure.Tools
         private readonly IAgentReviewOrchestrator _copilotReviewOrchestrator;
         private readonly Services.CopilotReview.AgentReviewWaiter _copilotReviewWaiter;
         private readonly IProgressReporter _progressReporter;
+        private readonly AgentIdentity _agentIdentity;
         private readonly ILogger<GetPullRequestContentToolHandler> _logger;
 
         public GetPullRequestContentToolHandler(
@@ -42,6 +44,7 @@ namespace REBUSS.Pure.Tools
             IAgentReviewOrchestrator copilotReviewOrchestrator,
             Services.CopilotReview.AgentReviewWaiter copilotReviewWaiter,
             IProgressReporter progressReporter,
+            AgentIdentity agentIdentity,
             ILogger<GetPullRequestContentToolHandler> logger)
         {
             _metadataProvider = metadataProvider;
@@ -52,11 +55,12 @@ namespace REBUSS.Pure.Tools
             _copilotReviewOrchestrator = copilotReviewOrchestrator;
             _copilotReviewWaiter = copilotReviewWaiter;
             _progressReporter = progressReporter;
+            _agentIdentity = agentIdentity;
             _logger = logger;
         }
 
         [McpServerTool(Name = "get_pr_content"), Description(
-            "Returns Copilot-assisted review summaries for a pull request. " +
+            "Returns AI-assisted review summaries for a pull request. " +
             "Reuses background enrichment from a prior get_pr_metadata call when available. " +
             "If enrichment is still running and cannot complete within the internal timeout, " +
             "returns a friendly 'still preparing' status block — never a raw timeout error.")]
@@ -142,23 +146,23 @@ namespace REBUSS.Pure.Tools
                 }
 
                 await _progressReporter.ReportAsync(progress, 3, null,
-                    $"Copilot review started for PR #{prNumber}", cancellationToken);
+                    $"AI review started for PR #{prNumber}", cancellationToken);
 
                 var reviewKey = $"pr:{prNumber.Value}";
                 _copilotReviewOrchestrator.TriggerReview(reviewKey, result);
 
-                var copilotResult = await _copilotReviewWaiter.WaitWithProgressAsync(
+                var reviewResult = await _copilotReviewWaiter.WaitWithProgressAsync(
                     reviewKey, progress, 4, cancellationToken);
 
-                var copilotBlocks = BuildCopilotAssistedBlocks(prNumber.Value, copilotResult);
+                var blocks = BuildAgentAssistedBlocks(prNumber.Value, reviewResult, _agentIdentity.Name);
 
                 sw.Stop();
                 _logger.LogInformation(
-                    "PR {Pr} copilot-assisted content returned in {Ms}ms ({Pages} pages, {Succeeded} ok, {Failed} failed)",
-                    prNumber, sw.ElapsedMilliseconds,
-                    copilotResult.TotalPages, copilotResult.SucceededPages, copilotResult.FailedPages);
+                    "PR {Pr} agent-assisted content returned in {Ms}ms (agent '{Agent}', {Pages} pages, {Succeeded} ok, {Failed} failed)",
+                    prNumber, sw.ElapsedMilliseconds, _agentIdentity.Name,
+                    reviewResult.TotalPages, reviewResult.SucceededPages, reviewResult.FailedPages);
 
-                return copilotBlocks;
+                return blocks;
             }
             catch (PullRequestNotFoundException ex)
             {
@@ -173,25 +177,26 @@ namespace REBUSS.Pure.Tools
             }
         }
 
-        private static List<ContentBlock> BuildCopilotAssistedBlocks(
-            int prNumber, Core.Models.CopilotReview.AgentReviewResult copilotResult)
+        private static List<ContentBlock> BuildAgentAssistedBlocks(
+            int prNumber, Core.Models.CopilotReview.AgentReviewResult reviewResult, string agentName)
         {
-            var blocks = new List<ContentBlock>(copilotResult.PageReviews.Count + 1);
+            var blocks = new List<ContentBlock>(reviewResult.PageReviews.Count + 1);
 
             blocks.Add(new TextContentBlock
             {
-                Text = PlainTextFormatter.FormatCopilotReviewHeader(
+                Text = PlainTextFormatter.FormatAgentReviewHeader(
+                    agentName,
                     prNumber,
-                    copilotResult.TotalPages,
-                    copilotResult.SucceededPages,
-                    copilotResult.FailedPages)
+                    reviewResult.TotalPages,
+                    reviewResult.SucceededPages,
+                    reviewResult.FailedPages)
             });
 
-            foreach (var pageReview in copilotResult.PageReviews)
+            foreach (var pageReview in reviewResult.PageReviews)
             {
                 blocks.Add(new TextContentBlock
                 {
-                    Text = PlainTextFormatter.FormatCopilotPageReviewBlock(pageReview)
+                    Text = PlainTextFormatter.FormatAgentPageReviewBlock(pageReview)
                 });
             }
 

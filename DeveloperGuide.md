@@ -58,10 +58,14 @@ earlier findings" problem on large PRs.
 
 **Two modes**: every `get_pr_content` response carries a mode indicator in its first block:
 
-- `[review-mode: copilot-assisted]` — the MCP performed the review. The response contains
-  `=== Page N Review ===` blocks with free-form Copilot output (and `=== Page N Review (FAILED) ===`
-  blocks listing file paths when a page exhausts all 3 retry attempts). The IDE agent
-  organizes findings by severity and does NOT prompt the user page-by-page.
+- `[review-mode: <agent>-assisted]` — the MCP performed the review. `<agent>` is `copilot`
+  or `claude`, matching the `--agent` flag persisted in the server's `mcp.json`. The response
+  contains `=== Page N Review ===` blocks with free-form review output (and
+  `=== Page N Review (FAILED) ===` blocks listing file paths when a page exhausts all 3
+  retry attempts). The IDE agent organizes findings by severity and does NOT prompt the user
+  page-by-page. Prompts that look for the marker should match the `[review-mode: ` prefix
+  rather than hardcoding a specific agent name — both Copilot and Claude reviews surface
+  through this same shape.
 - `[review-mode: content-only]` — the existing enriched-diff flow. Unchanged behavior.
 
 **Configuration keys** — every key below lives under the `CopilotReview` section:
@@ -670,6 +674,32 @@ see the banner:
 
    Classic personal access tokens are **not** valid here — they don't
    carry the `copilot` scope regardless of their permissions.
+
+### Claude Code review failing with `claude -p exited 1` (no stderr) / "Not logged in"
+
+The MCP server shells out to `claude -p` for every review page. Auth-mode is selected from the environment at call time:
+
+| If…                              | Behavior                                                                                    | Required credential                                                  |
+| -------------------------------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `ANTHROPIC_API_KEY` is set       | Adds `--bare` (skips hooks/skills/MCP under `~/.claude`); bills the API console account     | A valid API key from <https://platform.claude.com>                   |
+| `ANTHROPIC_API_KEY` is **unset** | Omits `--bare`; uses the user's subscription credential                                     | Persistent OAuth from `claude /login` **or** `CLAUDE_CODE_OAUTH_TOKEN` from `claude setup-token` |
+
+**Why this matters**: bare mode refuses to read OAuth credentials. Setting `ANTHROPIC_API_KEY` to an invalid value (or to a Claude.ai *subscription* token by mistake) will fail with `"Not logged in"` even though `claude -p` works fine without `--bare`. Likewise, a subscription user who has not run `claude /login` will fail without an env var.
+
+**Diagnosis**:
+
+1. Reproduce the exact call the server makes:
+
+   ```bash
+   echo "ping" | claude -p --output-format json           # no API key set
+   echo "ping" | claude -p --output-format json --bare    # API key set
+   ```
+
+   Both should exit 0 with a JSON `result` field. The server log now includes both stdout *and* stderr in the failure message — most claude-cli auth errors arrive on stdout, not stderr.
+
+2. **For subscription users** (most common): unset `ANTHROPIC_API_KEY`, then run `claude` once to complete `/login`. Or, for headless / CI scenarios, mint a long-lived token with `claude setup-token` and export `CLAUDE_CODE_OAUTH_TOKEN`.
+
+3. **For API users**: confirm the key is from the Claude Console, not a copy of a subscription session token. Subscription quota cannot be consumed via `ANTHROPIC_API_KEY`.
 
 ### "Copilot review layer unavailable (StartFailure)" / "Copilot CLI not found at …\runtimes\<rid>\native\copilot(.exe)"
 
