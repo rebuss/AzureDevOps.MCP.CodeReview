@@ -1,8 +1,10 @@
 using System.Text;
 using GitHub.Copilot.SDK;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using REBUSS.Pure.Core.Services.AgentInvocation;
 using REBUSS.Pure.Core.Services.CopilotReview;
+using REBUSS.Pure.Services.CopilotReview;
 
 namespace REBUSS.Pure.Services.AgentInvocation;
 
@@ -20,26 +22,37 @@ namespace REBUSS.Pure.Services.AgentInvocation;
 public sealed class CopilotAgentInvoker : IAgentInvoker
 {
     private readonly ICopilotSessionFactory _sessionFactory;
+    private readonly IOptions<CopilotReviewOptions> _options;
     private readonly ILogger<CopilotAgentInvoker>? _logger;
 
     public CopilotAgentInvoker(
         ICopilotSessionFactory sessionFactory,
+        IOptions<CopilotReviewOptions> options,
         ILogger<CopilotAgentInvoker>? logger = null)
     {
         _sessionFactory = sessionFactory;
+        _options = options;
         _logger = logger;
     }
 
     public async Task<string> InvokeAsync(string prompt, string? model, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(prompt);
-        if (string.IsNullOrWhiteSpace(model))
-            throw new ArgumentException("Copilot invoker requires a non-empty model", nameof(model));
+
+        // IAgentInvoker documents `model` as an optional hint. The Copilot SDK requires a
+        // concrete model string, so fall back to the configured default
+        // (CopilotReviewOptions.Model) when the caller leaves it null/empty. The
+        // configuration default is non-empty out of the box; an empty fallback indicates
+        // the operator explicitly cleared it and is a configuration error.
+        var effectiveModel = string.IsNullOrWhiteSpace(model) ? _options.Value.Model : model;
+        if (string.IsNullOrWhiteSpace(effectiveModel))
+            throw new InvalidOperationException(
+                "Copilot model is not configured: CopilotReviewOptions.Model is empty and no model was passed to InvokeAsync.");
 
         ICopilotSessionHandle? handle = null;
         try
         {
-            handle = await _sessionFactory.CreateSessionAsync(model, cancellationToken).ConfigureAwait(false);
+            handle = await _sessionFactory.CreateSessionAsync(effectiveModel, cancellationToken).ConfigureAwait(false);
 
             var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
             var contentBuilder = new StringBuilder();

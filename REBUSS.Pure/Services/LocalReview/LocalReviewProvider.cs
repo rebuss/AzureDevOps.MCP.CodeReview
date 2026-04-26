@@ -32,6 +32,14 @@ namespace REBUSS.Pure.Services.LocalReview
         private readonly IFileClassifier _fileClassifier;
         private readonly ILogger<LocalReviewProvider> _logger;
 
+        // Short-lived snapshot of the last full unified-diff result, keyed by repo root + scope.
+        // Lets GetFileDiffAsync serve repeated single-file lookups in O(1) after a single
+        // GetAllFileDiffsAsync (typical orchestrator → per-file flow) without re-running git.
+        // The TTL bounds staleness because this provider is registered as a singleton and the
+        // working tree can change between calls; expired snapshots fall back to a fresh git diff.
+        private static readonly long CacheTtlMs = 5_000;
+        private DiffCacheSnapshot? _diffCache;
+
         public LocalReviewProvider(
             IWorkspaceRootProvider workspaceRootProvider,
             ILocalGitClient gitClient,
@@ -84,12 +92,43 @@ namespace REBUSS.Pure.Services.LocalReview
             };
         }
 
-        public async Task<PullRequestDiff> GetAllFileDiffsAsync(
+        public Task<PullRequestDiff> GetAllFileDiffsAsync(
+            LocalReviewScope scope,
+            CancellationToken cancellationToken = default)
+        {
+            var repoRoot = ResolveRepositoryRootOrThrow();
+            return LoadAllFileDiffsAsync(repoRoot, scope, cancellationToken);
+        }
+
+        public async Task<PullRequestDiff> GetFileDiffAsync(
+            string filePath,
             LocalReviewScope scope,
             CancellationToken cancellationToken = default)
         {
             var repoRoot = ResolveRepositoryRootOrThrow();
 
+            var allDiffs = TryReadCache(repoRoot, scope)
+                           ?? await LoadAllFileDiffsAsync(repoRoot, scope, cancellationToken);
+
+            var normalizedRequest = NormalizePath(filePath);
+            var match = allDiffs.Files.FirstOrDefault(
+                f => NormalizePath(f.Path).Equals(normalizedRequest, StringComparison.OrdinalIgnoreCase));
+
+            if (match is null)
+            {
+                _logger.LogWarning(Resources.LogLocalReviewProviderFileNotFound, filePath, scope);
+                throw new LocalFileNotFoundException(
+                    string.Format(Resources.ErrorFileNotFoundAmongLocalChanges, filePath, scope));
+            }
+
+            return BuildDiffEnvelope(scope, new List<FileChange> { match });
+        }
+
+        private async Task<PullRequestDiff> LoadAllFileDiffsAsync(
+            string repoRoot,
+            LocalReviewScope scope,
+            CancellationToken cancellationToken)
+        {
             _logger.LogInformation(Resources.LogLocalReviewProviderFetchingUnifiedDiff, scope, repoRoot);
             var sw = Stopwatch.StartNew();
 
@@ -105,29 +144,46 @@ namespace REBUSS.Pure.Services.LocalReview
                 Resources.LogLocalReviewProviderUnifiedDiffCompleted,
                 scope, fileChanges.Count, sw.ElapsedMilliseconds);
 
-            return BuildDiffEnvelope(scope, fileChanges);
+            var diff = BuildDiffEnvelope(scope, fileChanges);
+            StoreCache(repoRoot, scope, diff);
+            return diff;
         }
 
-        public async Task<PullRequestDiff> GetFileDiffAsync(
-            string filePath,
-            LocalReviewScope scope,
-            CancellationToken cancellationToken = default)
+        private PullRequestDiff? TryReadCache(string repoRoot, LocalReviewScope scope)
         {
-            var allDiffs = await GetAllFileDiffsAsync(scope, cancellationToken);
+            // Snapshot the field once: reference assignment is atomic so a concurrent writer
+            // can only swap in a newer entry, not corrupt our local view.
+            var snapshot = _diffCache;
+            if (snapshot is null)
+                return null;
+            if (!string.Equals(snapshot.RepositoryRoot, repoRoot, StringComparison.Ordinal))
+                return null;
+            if (snapshot.ScopeKind != scope.Kind)
+                return null;
+            if (!string.Equals(snapshot.ScopeBaseBranch, scope.BaseBranch, StringComparison.Ordinal))
+                return null;
+            if (Environment.TickCount64 > snapshot.ExpiresAtTicks)
+                return null;
 
-            var normalizedRequest = NormalizePath(filePath);
-            var match = allDiffs.Files.FirstOrDefault(
-                f => NormalizePath(f.Path).Equals(normalizedRequest, StringComparison.OrdinalIgnoreCase));
-
-            if (match is null)
-            {
-                _logger.LogWarning(Resources.LogLocalReviewProviderFileNotFound, filePath, scope);
-                throw new LocalFileNotFoundException(
-                    string.Format(Resources.ErrorFileNotFoundAmongLocalChanges, filePath, scope));
-            }
-
-            return BuildDiffEnvelope(scope, new List<FileChange> { match });
+            return snapshot.Diff;
         }
+
+        private void StoreCache(string repoRoot, LocalReviewScope scope, PullRequestDiff diff)
+        {
+            _diffCache = new DiffCacheSnapshot(
+                repoRoot,
+                scope.Kind,
+                scope.BaseBranch,
+                diff,
+                Environment.TickCount64 + CacheTtlMs);
+        }
+
+        private sealed record DiffCacheSnapshot(
+            string RepositoryRoot,
+            LocalReviewScopeKind ScopeKind,
+            string? ScopeBaseBranch,
+            PullRequestDiff Diff,
+            long ExpiresAtTicks);
 
         // --- Private helpers ------------------------------------------------------
 

@@ -902,7 +902,7 @@ public class InitCommand : ICliCommand
         await _output.WriteAsync(Resources.MsgChooseAgentPromptInline);
 
         string? answer;
-        try { answer = _input.ReadLine(); }
+        try { answer = await _input.ReadLineAsync(); }
         catch { return CliArgumentParser.AgentCopilot; }
 
         var normalized = (answer ?? string.Empty).Trim().ToLowerInvariant();

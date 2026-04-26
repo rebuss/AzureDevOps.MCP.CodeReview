@@ -28,11 +28,18 @@ public sealed class FindingSourceProviderSelector : IFindingSourceProviderSelect
 
     public IFindingSourceProvider SelectFor(string reviewKey)
     {
+        // Prefixes mirror `LocalReviewScope.ToString()` exactly:
+        //   Staged       → "staged"
+        //   WorkingTree  → "working-tree"
+        //   BranchDiff   → "branch-diff:<base>"
+        // The handler builds the key as $"local:{scope}:{repoRoot}", so any divergence here
+        // silently routes local reviews to the remote (PR-archive) provider — the validator
+        // then degrades every finding to "uncertain" with no obvious diagnostic.
         if (reviewKey.StartsWith("local:staged:", StringComparison.Ordinal))
             return new BoundLocalSourceProvider(_local, LocalGitClient.IndexRef, _logger);
-        if (reviewKey.StartsWith("local:unstaged:", StringComparison.Ordinal))
+        if (reviewKey.StartsWith("local:working-tree:", StringComparison.Ordinal))
             return new BoundLocalSourceProvider(_local, LocalGitClient.WorkingTreeRef, _logger);
-        if (reviewKey.StartsWith("local:branch:", StringComparison.Ordinal))
+        if (reviewKey.StartsWith("local:branch-diff:", StringComparison.Ordinal))
             return new BoundLocalSourceProvider(_local, "HEAD", _logger);
         return _remote;
     }

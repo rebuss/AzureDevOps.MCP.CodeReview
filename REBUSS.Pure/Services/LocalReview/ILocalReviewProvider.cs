@@ -20,6 +20,9 @@ namespace REBUSS.Pure.Services.LocalReview
 
         /// <summary>
         /// Returns a structured diff for a single file within the given <paramref name="scope"/>.
+        /// Implementations may serve repeated calls from a short-lived cache populated by
+        /// <see cref="GetAllFileDiffsAsync"/>, so a typical <em>fetch-all → per-file</em> flow
+        /// pays a single git invocation rather than O(n) per file.
         /// </summary>
         /// <exception cref="LocalRepositoryNotFoundException">
         /// Thrown when no valid git repository root can be resolved.

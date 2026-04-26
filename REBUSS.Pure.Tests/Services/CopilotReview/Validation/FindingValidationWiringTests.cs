@@ -13,7 +13,7 @@ namespace REBUSS.Pure.Tests.Services.CopilotReview.Validation;
 /// + real provider implementations; only the external dependencies
 /// (<see cref="IRepositoryDownloadOrchestrator"/>, <see cref="IWorkspaceRootProvider"/>,
 /// <see cref="ILocalGitClient"/>) are mocked. These tests verify each user-story review
-/// mode (US1 local:staged, US2 local:unstaged + local:branch, US3 PR) reaches the
+/// mode (US1 local:staged, US2 local:working-tree + local:branch-diff, US3 PR) reaches the
 /// correct underlying source primitive — covering the orchestrator's one-line change
 /// (forwarding job.ReviewKey to FindingScopeResolver.ResolveAsync) without standing up
 /// the full validator/agent stack.
@@ -89,11 +89,11 @@ public class FindingValidationWiringTests : IDisposable
     }
 
     /// <summary>
-    /// US2 — local:unstaged review reads the working tree (the diff's after-side for
-    /// uncommitted edits).
+    /// US2 — local:working-tree review reads the working tree (the diff's after-side for
+    /// uncommitted edits). Key form mirrors <c>LocalReviewScope.WorkingTree().ToString()</c>.
     /// </summary>
     [Fact]
-    public async Task ResolveAsync_LocalUnstagedReview_ReadsFromWorkingTree()
+    public async Task ResolveAsync_LocalWorkingTreeReview_ReadsFromWorkingTree()
     {
         _workspaceRootProvider.ResolveRepositoryRoot().Returns("C:/Repo");
         _localGitClient.GetFileContentAtRefAsync(
@@ -106,7 +106,7 @@ public class FindingValidationWiringTests : IDisposable
         var findings = new[] { MakeFinding("src/Foo.cs", line: 2) };
 
         var result = await _resolver.ResolveAsync(
-            findings, "local:unstaged:C:\\Repo", maxScopeLines: 150, CancellationToken.None);
+            findings, "local:working-tree:C:\\Repo", maxScopeLines: 150, CancellationToken.None);
 
         Assert.Equal(ScopeResolutionFailure.None, Assert.Single(result).ResolutionFailure);
         await _localGitClient.Received(1).GetFileContentAtRefAsync(
@@ -114,11 +114,12 @@ public class FindingValidationWiringTests : IDisposable
     }
 
     /// <summary>
-    /// US2 — local:branch review reads the current branch HEAD (the diff's after-side
-    /// for &lt;base&gt;...HEAD).
+    /// US2 — local:branch-diff review reads the current branch HEAD (the diff's after-side
+    /// for &lt;base&gt;...HEAD). Key form mirrors <c>LocalReviewScope.BranchDiff(base).ToString()</c>
+    /// (i.e. <c>"branch-diff:&lt;base&gt;"</c>).
     /// </summary>
     [Fact]
-    public async Task ResolveAsync_LocalBranchReview_ReadsFromBranchHead()
+    public async Task ResolveAsync_LocalBranchDiffReview_ReadsFromBranchHead()
     {
         _workspaceRootProvider.ResolveRepositoryRoot().Returns("C:/Repo");
         _localGitClient.GetFileContentAtRefAsync(
@@ -131,7 +132,7 @@ public class FindingValidationWiringTests : IDisposable
         var findings = new[] { MakeFinding("src/Foo.cs", line: 2) };
 
         var result = await _resolver.ResolveAsync(
-            findings, "local:branch:main:C:\\Repo", maxScopeLines: 150, CancellationToken.None);
+            findings, "local:branch-diff:main:C:\\Repo", maxScopeLines: 150, CancellationToken.None);
 
         Assert.Equal(ScopeResolutionFailure.None, Assert.Single(result).ResolutionFailure);
         await _localGitClient.Received(1).GetFileContentAtRefAsync(

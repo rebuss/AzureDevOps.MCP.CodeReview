@@ -479,10 +479,10 @@ get_local_content(scope, modelName)    ← computes pages internally and returns
 ```
 
 When `validateFindings` is enabled in `appsettings.json`, self-review (`local:staged`,
-`local:unstaged`, `local:branch:<branch>`) applies the same false-positive filter as
+`local:working-tree`, `local:branch-diff:<base>`) applies the same false-positive filter as
 PR review: each finding is re-checked against the file's diff-side source (the index
-for staged, the working tree for unstaged, the current branch HEAD for branch reviews)
-and obvious false positives are removed from the surfaced output.
+for staged, the working tree for working-tree, the current branch HEAD for branch-diff
+reviews) and obvious false positives are removed from the surfaced output.
 
 ---
 

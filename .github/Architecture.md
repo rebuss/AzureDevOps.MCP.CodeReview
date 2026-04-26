@@ -665,9 +665,14 @@ forwarded into `FindingScopeResolver.ResolveAsync`):
 | `reviewKey` prefix | Source provider | Underlying read |
 |---|---|---|
 | `local:staged:…` | `LocalWorkspaceSourceProvider` (bound to `LocalGitClient.IndexRef`) | `git show :<path>` — stage-0 index content |
-| `local:unstaged:…` | `LocalWorkspaceSourceProvider` (bound to `LocalGitClient.WorkingTreeRef`) | `File.ReadAllTextAsync` from the working tree |
-| `local:branch:<branch>:…` | `LocalWorkspaceSourceProvider` (bound to `"HEAD"`) | `git show HEAD:<path>` — current branch tip |
+| `local:working-tree:…` | `LocalWorkspaceSourceProvider` (bound to `LocalGitClient.WorkingTreeRef`) | `File.ReadAllTextAsync` from the working tree |
+| `local:branch-diff:<base>:…` | `LocalWorkspaceSourceProvider` (bound to `"HEAD"`) | `git show HEAD:<path>` — current branch tip |
 | anything else (PR-style keys) | `RemoteArchiveSourceProvider` | `IRepositoryDownloadOrchestrator.GetExtractedPathAsync` → `RepositoryFileResolver.ResolvePath` → `File.ReadAllTextAsync` |
+
+Prefixes mirror `LocalReviewScope.ToString()` exactly. The handler builds review keys
+as `$"local:{scope}:{repoRoot}"`; the selector matches the same forms. A divergence
+between the emitter and the selector silently routes local reviews to the remote
+provider and the validator degrades every finding to "uncertain" — keep them in sync.
 
 Why per-mode read paths matter: each local mode's diff reports a different "after"
 side. `local:staged` compares index vs HEAD, so the after-side is the index — not

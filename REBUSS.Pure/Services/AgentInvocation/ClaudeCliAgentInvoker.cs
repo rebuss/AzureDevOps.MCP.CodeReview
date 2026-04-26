@@ -97,8 +97,8 @@ public sealed class ClaudeCliAgentInvoker : IAgentInvoker
             var stderrTask = process.StandardError.ReadToEndAsync(cts.Token);
             await Task.WhenAll(stdoutTask, stderrTask).ConfigureAwait(false);
             await process.WaitForExitAsync(cts.Token).ConfigureAwait(false);
-            stdout = await stdoutTask.ConfigureAwait(false);
-            stderr = await stderrTask.ConfigureAwait(false);
+            stdout = stdoutTask.Result;
+            stderr = stderrTask.Result;
         }
         catch (OperationCanceledException)
         {

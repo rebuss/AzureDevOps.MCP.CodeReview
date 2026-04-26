@@ -42,14 +42,18 @@ public class FindingSourceProviderSelectorTests
     }
 
     [Fact]
-    public async Task SelectFor_LocalUnstaged_BindsWorkingTreeRef()
+    public async Task SelectFor_LocalWorkingTree_BindsWorkingTreeRef()
     {
+        // Review key prefix matches LocalReviewScope.ToString() exactly — the production
+        // emitter (GetLocalContentToolHandler) builds $"local:{scope}:{root}" and
+        // WorkingTree.ToString() is "working-tree". The selector MUST use the same form;
+        // otherwise local working-tree reviews silently route to the remote provider.
         _workspaceRootProvider.ResolveRepositoryRoot().Returns("C:/Repo");
         _localGitClient.GetFileContentAtRefAsync(
                 "C:/Repo", "src/Foo.cs", LocalGitClient.WorkingTreeRef, Arg.Any<CancellationToken>())
             .Returns(Task.FromResult<string?>("working-tree-content"));
 
-        var provider = _selector.SelectFor("local:unstaged:C:\\Repo");
+        var provider = _selector.SelectFor("local:working-tree:C:\\Repo");
         var result = await provider.GetAfterCodeAsync("src/Foo.cs", CancellationToken.None);
 
         Assert.Equal("working-tree-content", result);
@@ -58,19 +62,49 @@ public class FindingSourceProviderSelectorTests
     }
 
     [Fact]
-    public async Task SelectFor_LocalBranch_BindsHeadRef()
+    public async Task SelectFor_LocalBranchDiff_BindsHeadRef()
     {
+        // BranchDiff(base).ToString() emits "branch-diff:<base>", so the prefix is
+        // "local:branch-diff:" with the base as part of the segment (not parsed by the
+        // selector — the source provider only needs the HEAD ref).
         _workspaceRootProvider.ResolveRepositoryRoot().Returns("C:/Repo");
         _localGitClient.GetFileContentAtRefAsync(
                 "C:/Repo", "src/Foo.cs", "HEAD", Arg.Any<CancellationToken>())
             .Returns(Task.FromResult<string?>("head-content"));
 
-        var provider = _selector.SelectFor("local:branch:main:C:\\Repo");
+        var provider = _selector.SelectFor("local:branch-diff:main:C:\\Repo");
         var result = await provider.GetAfterCodeAsync("src/Foo.cs", CancellationToken.None);
 
         Assert.Equal("head-content", result);
         await _localGitClient.Received(1).GetFileContentAtRefAsync(
             "C:/Repo", "src/Foo.cs", "HEAD", Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task SelectFor_KeyEmittedByLocalContentHandler_RoutesToLocalProvider()
+    {
+        // Regression guard: build the review key the same way GetLocalContentToolHandler
+        // does ($"local:{scope}:{root}") for every LocalReviewScope. Each must route to
+        // the local provider — none should fall through to remote.
+        _workspaceRootProvider.ResolveRepositoryRoot().Returns("C:/Repo");
+        _localGitClient.GetFileContentAtRefAsync(
+                Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<string?>("ok"));
+
+        foreach (var scope in new[]
+        {
+            LocalReviewScope.Staged(),
+            LocalReviewScope.WorkingTree(),
+            LocalReviewScope.BranchDiff("main"),
+        })
+        {
+            var key = $"local:{scope}:C:\\Repo";
+
+            var provider = _selector.SelectFor(key);
+            var result = await provider.GetAfterCodeAsync("src/Foo.cs", CancellationToken.None);
+
+            Assert.Equal("ok", result);
+        }
     }
 
     [Theory]

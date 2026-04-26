@@ -2,9 +2,9 @@ namespace REBUSS.Pure.Core;
 
 /// <summary>
 /// Selects an <see cref="IFindingSourceProvider"/> appropriate for a given review.
-/// Local prefixes (<c>local:staged:</c>, <c>local:unstaged:</c>, <c>local:branch:</c>)
-/// map to the local-workspace provider bound to the matching git ref. All other review
-/// keys map to the PR-archive provider.
+/// Local prefixes (<c>local:staged:</c>, <c>local:working-tree:</c>, <c>local:branch-diff:</c>)
+/// — matching <c>LocalReviewScope.ToString()</c> — map to the local-workspace provider bound
+/// to the matching git ref. All other review keys map to the PR-archive provider.
 /// </summary>
 public interface IFindingSourceProviderSelector
 {

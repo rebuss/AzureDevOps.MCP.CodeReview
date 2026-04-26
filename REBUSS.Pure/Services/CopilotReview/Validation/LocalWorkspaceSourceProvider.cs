@@ -11,8 +11,8 @@ namespace REBUSS.Pure.Services.CopilotReview.Validation;
 /// always reads the exact bytes the diff under review presented:
 /// <list type="bullet">
 ///   <item><c>local:staged</c> → <see cref="LocalGitClient.IndexRef"/> (stage-0 index)</item>
-///   <item><c>local:unstaged</c> → <see cref="LocalGitClient.WorkingTreeRef"/> (on-disk)</item>
-///   <item><c>local:branch:&lt;branch&gt;</c> → <c>"HEAD"</c> (current branch HEAD)</item>
+///   <item><c>local:working-tree</c> → <see cref="LocalGitClient.WorkingTreeRef"/> (on-disk)</item>
+///   <item><c>local:branch-diff:&lt;base&gt;</c> → <c>"HEAD"</c> (current branch HEAD)</item>
 /// </list>
 /// Workspace root is resolved per call (Constitution §V) so that a workspace re-rooted
 /// mid-session is honored on the next review.
@@ -77,7 +77,12 @@ public sealed class LocalWorkspaceSourceProvider
             return null;
         }
 
-        // Cheap upper-bound check: char count >= byte count for any encoding we read.
+        // Cheap one-sided guard: string.Length counts UTF-16 code units; UTF-8 byte count
+        // is always >= char count, so Length > MaxFileSizeBytes implies the underlying
+        // file is at least that many bytes — safe to reject. The converse does NOT hold:
+        // a string with Length <= MaxFileSizeBytes can still encode to more bytes when
+        // dense in multi-byte codepoints (up to ~4× for emoji-heavy text). We accept that
+        // slack as the price of avoiding a re-encode just to size-check.
         if (content.Length > MaxFileSizeBytes)
         {
             _logger.LogDebug("File {FilePath} exceeds size limit ({Length} chars), validation source unavailable", filePath, content.Length);

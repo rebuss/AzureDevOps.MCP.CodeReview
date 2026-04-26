@@ -337,7 +337,7 @@ public class LocalReviewProviderTests
         _gitClient.GetUnifiedDiffAsync(RepoRoot, Arg.Any<LocalReviewScope>(), Arg.Any<CancellationToken>())
             .Returns(diff);
 
-        var result = await _provider.GetFileDiffAsync("/obj/Debug/net8.0/out.cs", LocalReviewScope.WorkingTree());
+        var result = await _provider.GetFileDiffAsync("obj/Debug/net8.0/out.cs", LocalReviewScope.WorkingTree());
 
         Assert.Equal("generated file", result.Files[0].SkipReason);
         Assert.Empty(result.Files[0].Hunks);
@@ -359,6 +359,61 @@ public class LocalReviewProviderTests
         await _provider.GetFileDiffAsync("src/Service.cs", scope);
 
         await _gitClient.Received(1).GetUnifiedDiffAsync(RepoRoot, scope, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GetFileDiffAsync_AfterGetAllFileDiffs_ServesFromCache_WithoutSecondGitCall()
+    {
+        const string diff =
+            "diff --git a/src/A.cs b/src/A.cs\n" +
+            "--- a/src/A.cs\n" +
+            "+++ b/src/A.cs\n" +
+            "@@ -1 +1 @@\n" +
+            "-old\n" +
+            "+new\n" +
+            "diff --git a/src/B.cs b/src/B.cs\n" +
+            "--- a/src/B.cs\n" +
+            "+++ b/src/B.cs\n" +
+            "@@ -1 +1 @@\n" +
+            "-x\n" +
+            "+y";
+        var scope = LocalReviewScope.WorkingTree();
+        _gitClient.GetUnifiedDiffAsync(RepoRoot, Arg.Any<LocalReviewScope>(), Arg.Any<CancellationToken>())
+            .Returns(diff);
+
+        // Prime the cache via the orchestrator-style aggregate call.
+        _ = await _provider.GetAllFileDiffsAsync(scope);
+
+        // Two single-file lookups against the same scope must hit the cache; only the
+        // initial GetAllFileDiffsAsync should reach git.
+        var a = await _provider.GetFileDiffAsync("src/A.cs", scope);
+        var b = await _provider.GetFileDiffAsync("src/B.cs", scope);
+
+        Assert.Equal("src/A.cs", a.Files[0].Path);
+        Assert.Equal("src/B.cs", b.Files[0].Path);
+        await _gitClient.Received(1).GetUnifiedDiffAsync(
+            RepoRoot, Arg.Any<LocalReviewScope>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GetFileDiffAsync_DoesNotReuseCache_AcrossDifferentScopes()
+    {
+        const string diff =
+            "diff --git a/src/A.cs b/src/A.cs\n" +
+            "--- a/src/A.cs\n" +
+            "+++ b/src/A.cs\n" +
+            "@@ -1 +1 @@\n" +
+            "-old\n" +
+            "+new";
+        _gitClient.GetUnifiedDiffAsync(RepoRoot, Arg.Any<LocalReviewScope>(), Arg.Any<CancellationToken>())
+            .Returns(diff);
+
+        _ = await _provider.GetAllFileDiffsAsync(LocalReviewScope.WorkingTree());
+        _ = await _provider.GetFileDiffAsync("src/A.cs", LocalReviewScope.Staged());
+
+        // Different scope → cache miss → second git invocation expected.
+        await _gitClient.Received(2).GetUnifiedDiffAsync(
+            RepoRoot, Arg.Any<LocalReviewScope>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
