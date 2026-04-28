@@ -333,7 +333,7 @@ internal sealed class CopilotCliSetupStep
             return await _processRunner(arguments, cancellationToken);
 
         var (fileName, args) = GitHubCliProcessHelper.GetProcessStartArgs(arguments, _ghCliPathOverride);
-        return await InitCommand.RunProcessAsync(fileName, args, cancellationToken);
+        return await CliProcessRunner.Shared.RunAsync(fileName, args, cancellationToken);
     }
 
     private async Task<int> RunGhInteractiveAsync(string arguments, CancellationToken cancellationToken)
@@ -345,7 +345,7 @@ internal sealed class CopilotCliSetupStep
         }
 
         var (fileName, args) = GitHubCliProcessHelper.GetProcessStartArgs(arguments, _ghCliPathOverride);
-        return await InitCommand.RunInteractiveProcessAsync(fileName, args, cancellationToken);
+        return await CliProcessRunner.Shared.RunInteractiveAsync(fileName, args, cancellationToken);
     }
 
     private async Task<int> RunGhCliInstallAsync(CancellationToken cancellationToken)
@@ -359,13 +359,13 @@ internal sealed class CopilotCliSetupStep
         if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
                 System.Runtime.InteropServices.OSPlatform.Windows))
         {
-            return await InitCommand.RunInteractiveProcessAsync(
+            return await CliProcessRunner.Shared.RunInteractiveAsync(
                 "winget",
                 "install -e --id GitHub.cli --accept-source-agreements --accept-package-agreements",
                 cancellationToken);
         }
 
-        return await InitCommand.RunInteractiveProcessAsync(
+        return await CliProcessRunner.Shared.RunInteractiveAsync(
             "bash",
             "-c \"curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg && echo deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null && sudo apt update && sudo apt install gh -y\"",
             cancellationToken);

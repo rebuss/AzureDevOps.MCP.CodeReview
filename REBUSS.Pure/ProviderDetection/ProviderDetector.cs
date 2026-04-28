@@ -37,18 +37,38 @@ namespace REBUSS.Pure.ProviderDetection
                 return AzureDevOpsNames.Provider;
 
             // 4. Auto-detect from git remote URL
-            var remoteUrl = GetGitRemoteUrl(repoPath);
-            if (remoteUrl is not null)
-            {
-                if (remoteUrl.Contains(GitHubNames.Domain, StringComparison.OrdinalIgnoreCase))
-                    return GitHubNames.Provider;
+            return DetectFromGitRemote(repoPath);
+        }
 
-                if (remoteUrl.Contains(AzureDevOpsNames.Domain, StringComparison.OrdinalIgnoreCase) ||
-                    remoteUrl.Contains(AzureDevOpsNames.LegacyDomain, StringComparison.OrdinalIgnoreCase))
-                    return AzureDevOpsNames.Provider;
-            }
+        /// <summary>
+        /// Auto-detects the SCM provider purely from the git remote URL of
+        /// <paramref name="workingDirectory"/>, ignoring configuration. Falls back to
+        /// <see cref="AzureDevOpsNames.Provider"/> when the remote cannot be read or
+        /// the URL does not match any known domain. Used by the <c>init</c> CLI flow,
+        /// where configuration does not yet exist on disk.
+        /// </summary>
+        internal static string DetectFromGitRemote(string? workingDirectory)
+            => MapRemoteUrlToProvider(GetGitRemoteUrl(workingDirectory));
 
-            // 5. Default
+        /// <summary>
+        /// Maps a git remote URL to a provider name. Returns
+        /// <see cref="GitHubNames.Provider"/> for github.com URLs,
+        /// <see cref="AzureDevOpsNames.Provider"/> for dev.azure.com / visualstudio.com URLs,
+        /// and falls back to <see cref="AzureDevOpsNames.Provider"/> for null or unknown URLs
+        /// (preserves pre-refactor behavior).
+        /// </summary>
+        internal static string MapRemoteUrlToProvider(string? remoteUrl)
+        {
+            if (remoteUrl is null)
+                return AzureDevOpsNames.Provider;
+
+            if (remoteUrl.Contains(GitHubNames.Domain, StringComparison.OrdinalIgnoreCase))
+                return GitHubNames.Provider;
+
+            if (remoteUrl.Contains(AzureDevOpsNames.Domain, StringComparison.OrdinalIgnoreCase) ||
+                remoteUrl.Contains(AzureDevOpsNames.LegacyDomain, StringComparison.OrdinalIgnoreCase))
+                return AzureDevOpsNames.Provider;
+
             return AzureDevOpsNames.Provider;
         }
 

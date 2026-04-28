@@ -250,7 +250,7 @@ internal sealed class ClaudeCliSetupStep
         {
             var r = _processRunner is not null
                 ? await _processRunner(command, probeArgs, cancellationToken)
-                : await InitCommand.RunProcessAsync(command, probeArgs, cancellationToken);
+                : await CliProcessRunner.Shared.RunAsync(command, probeArgs, cancellationToken);
             return r.ExitCode == 0;
         }
         catch { return false; }
@@ -262,7 +262,7 @@ internal sealed class ClaudeCliSetupStep
         var exe = _claudeCliPathOverride ?? "claude";
         if (_processRunner is not null)
             return await _processRunner(exe, arguments, cancellationToken);
-        return await InitCommand.RunProcessAsync(exe, arguments, cancellationToken);
+        return await CliProcessRunner.Shared.RunAsync(exe, arguments, cancellationToken);
     }
 
     private async Task<int> RunClaudeInteractiveAsync(string arguments, CancellationToken cancellationToken)
@@ -273,7 +273,7 @@ internal sealed class ClaudeCliSetupStep
             var r = await _processRunner(exe, arguments, cancellationToken);
             return r.ExitCode;
         }
-        return await InitCommand.RunInteractiveProcessAsync(exe, arguments, cancellationToken);
+        return await CliProcessRunner.Shared.RunInteractiveAsync(exe, arguments, cancellationToken);
     }
 
     private async Task<int> RunInteractiveAsync(string exe, string arguments, CancellationToken cancellationToken)
@@ -283,7 +283,7 @@ internal sealed class ClaudeCliSetupStep
             var r = await _processRunner(exe, arguments, cancellationToken);
             return r.ExitCode;
         }
-        return await InitCommand.RunInteractiveProcessAsync(exe, arguments, cancellationToken);
+        return await CliProcessRunner.Shared.RunInteractiveAsync(exe, arguments, cancellationToken);
     }
 
     private async Task WriteDeclineBannerAsync()

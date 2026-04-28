@@ -1,5 +1,6 @@
 using REBUSS.Pure.AzureDevOps.Configuration;
 using REBUSS.Pure.Cli;
+using REBUSS.Pure.Cli.Mcp;
 using REBUSS.Pure.GitHub.Configuration;
 
 namespace REBUSS.Pure.Tests.Cli;
@@ -360,7 +361,7 @@ public class InitCommandTests
     {
         var existing = "{\"servers\": {}}";
 
-        var result = InitCommand.MergeConfigContent(existing, "exe", @"C:\repo");
+        var result = McpConfigJsonBuilder.Merge(existing, "exe", @"C:\repo");
 
         Assert.Contains("\"REBUSS.Pure\"", result);
         Assert.Contains("\"--repo\"", result);
@@ -378,7 +379,7 @@ public class InitCommandTests
             }
             """;
 
-        var result = InitCommand.MergeConfigContent(existing, "exe", "C:\\\\repo");
+        var result = McpConfigJsonBuilder.Merge(existing, "exe", "C:\\\\repo");
 
         Assert.Contains("\"OtherTool\"", result);
         Assert.Contains("\"REBUSS.Pure\"", result);
@@ -395,7 +396,7 @@ public class InitCommandTests
             }
             """;
 
-        var result = InitCommand.MergeConfigContent(existing, "new.exe", @"C:\newrepo");
+        var result = McpConfigJsonBuilder.Merge(existing, "new.exe", @"C:\newrepo");
 
         Assert.Contains("\"new.exe\"", result);
         Assert.Contains("C:\\\\newrepo", result);
@@ -408,7 +409,7 @@ public class InitCommandTests
     {
         var existing = "{\"servers\": {}}";
 
-        var result = InitCommand.MergeConfigContent(existing, "exe", @"C:\repo", "my-pat");
+        var result = McpConfigJsonBuilder.Merge(existing, "exe", @"C:\repo", "my-pat");
 
         Assert.Contains("\"--pat\"", result);
         Assert.Contains("\"my-pat\"", result);
@@ -417,7 +418,7 @@ public class InitCommandTests
     [Fact]
     public void MergeConfigContent_FallsBackToBuildConfigContent_WhenInvalidJson()
     {
-        var result = InitCommand.MergeConfigContent("not valid json !!!", "exe", @"C:\repo");
+        var result = McpConfigJsonBuilder.Merge("not valid json !!!", "exe", @"C:\repo");
 
         Assert.Contains("\"REBUSS.Pure\"", result);
         Assert.Contains("\"--repo\"", result);
@@ -433,7 +434,7 @@ public class InitCommandTests
             }
             """;
 
-        var result = InitCommand.MergeConfigContent(existing, "exe", @"C:\repo");
+        var result = McpConfigJsonBuilder.Merge(existing, "exe", @"C:\repo");
 
         Assert.Contains("\"inputs\"", result);
         Assert.Contains("\"REBUSS.Pure\"", result);
@@ -480,7 +481,7 @@ public class InitCommandTests
 
         try
         {
-            var targets = InitCommand.ResolveConfigTargets(tempDir);
+            var targets = McpConfigTargetResolver.Resolve(tempDir);
 
             Assert.Equal(2, targets.Count);
             Assert.Contains(targets, t => t.IdeName == "VS Code");
@@ -500,7 +501,7 @@ public class InitCommandTests
 
         try
         {
-            var targets = InitCommand.ResolveConfigTargets(tempDir);
+            var targets = McpConfigTargetResolver.Resolve(tempDir);
 
             Assert.Single(targets);
             Assert.Equal("Visual Studio", targets[0].IdeName);
@@ -520,7 +521,7 @@ public class InitCommandTests
 
         try
         {
-            var targets = InitCommand.ResolveConfigTargets(tempDir);
+            var targets = McpConfigTargetResolver.Resolve(tempDir);
 
             Assert.Equal(2, targets.Count);
             Assert.Contains(targets, t => t.IdeName == "VS Code");
@@ -539,7 +540,7 @@ public class InitCommandTests
     [Fact]
     public void BuildConfigContent_ProducesValidJsonStructure()
     {
-        var content = InitCommand.BuildConfigContent("C:\\\\tools\\\\REBUSS.Pure.exe", "C:\\\\repo\\\\myproject");
+        var content = McpConfigJsonBuilder.Build("C:\\\\tools\\\\REBUSS.Pure.exe", "C:\\\\repo\\\\myproject");
 
         Assert.Contains("\"REBUSS.Pure\"", content);
         Assert.Contains("\"stdio\"", content);
@@ -552,7 +553,7 @@ public class InitCommandTests
     [Fact]
     public void BuildConfigContent_IncludesPat_WhenProvided()
     {
-        var content = InitCommand.BuildConfigContent("C:\\\\tools\\\\REBUSS.Pure.exe", "C:\\\\repo", "my-secret-pat");
+        var content = McpConfigJsonBuilder.Build("C:\\\\tools\\\\REBUSS.Pure.exe", "C:\\\\repo", "my-secret-pat");
 
         Assert.Contains("\"--pat\"", content);
         Assert.Contains("\"my-secret-pat\"", content);
@@ -561,9 +562,9 @@ public class InitCommandTests
     [Fact]
     public void BuildConfigContent_OmitsPat_WhenNullOrEmpty()
     {
-        var contentNull = InitCommand.BuildConfigContent("exe", "C:\\\\repo", null);
-        var contentEmpty = InitCommand.BuildConfigContent("exe", "C:\\\\repo", "");
-        var contentWhite = InitCommand.BuildConfigContent("exe", "C:\\\\repo", "   ");
+        var contentNull = McpConfigJsonBuilder.Build("exe", "C:\\\\repo", null);
+        var contentEmpty = McpConfigJsonBuilder.Build("exe", "C:\\\\repo", "");
+        var contentWhite = McpConfigJsonBuilder.Build("exe", "C:\\\\repo", "   ");
 
         Assert.DoesNotContain("--pat", contentNull);
         Assert.DoesNotContain("--pat", contentEmpty);
@@ -638,7 +639,7 @@ public class InitCommandTests
             }
             """;
 
-        var result = InitCommand.MergeConfigContent(existing, "new.exe", @"C:\newrepo");
+        var result = McpConfigJsonBuilder.Merge(existing, "new.exe", @"C:\newrepo");
 
         Assert.Contains("\"--pat\"", result);
         Assert.Contains("\"saved-pat\"", result);
@@ -659,7 +660,7 @@ public class InitCommandTests
             }
             """;
 
-        var result = InitCommand.MergeConfigContent(existing, "new.exe", @"C:\newrepo", "new-pat");
+        var result = McpConfigJsonBuilder.Merge(existing, "new.exe", @"C:\newrepo", "new-pat");
 
         Assert.Contains("\"new-pat\"", result);
         Assert.DoesNotContain("old-pat", result);
@@ -1671,7 +1672,7 @@ public class InitCommandTests
     [Fact]
     public void ResolveGlobalConfigTargets_ReturnsAllGlobalTargets()
     {
-        var targets = InitCommand.ResolveGlobalConfigTargets();
+        var targets = McpConfigTargetResolver.ResolveGlobal();
 
         Assert.Equal(3, targets.Count);
         Assert.Contains(targets, t => t.IdeName == "Visual Studio (global)");
@@ -1697,7 +1698,7 @@ public class InitCommandTests
 
         try
         {
-            var targets = InitCommand.ResolveConfigTargets(tempDir, "vscode");
+            var targets = McpConfigTargetResolver.Resolve(tempDir, "vscode");
 
             Assert.Single(targets);
             Assert.Equal("VS Code", targets[0].IdeName);
@@ -1717,7 +1718,7 @@ public class InitCommandTests
 
         try
         {
-            var targets = InitCommand.ResolveConfigTargets(tempDir, "vs");
+            var targets = McpConfigTargetResolver.Resolve(tempDir, "vs");
 
             Assert.Single(targets);
             Assert.Equal("Visual Studio", targets[0].IdeName);
@@ -1737,11 +1738,11 @@ public class InitCommandTests
 
         try
         {
-            var vscodeTargets = InitCommand.ResolveConfigTargets(tempDir, "VSCODE");
+            var vscodeTargets = McpConfigTargetResolver.Resolve(tempDir, "VSCODE");
             Assert.Single(vscodeTargets);
             Assert.Equal("VS Code", vscodeTargets[0].IdeName);
 
-            var vsTargets = InitCommand.ResolveConfigTargets(tempDir, "VS");
+            var vsTargets = McpConfigTargetResolver.Resolve(tempDir, "VS");
             Assert.Single(vsTargets);
             Assert.Equal("Visual Studio", vsTargets[0].IdeName);
         }
@@ -1759,7 +1760,7 @@ public class InitCommandTests
 
         try
         {
-            var targets = InitCommand.ResolveConfigTargets(tempDir, null);
+            var targets = McpConfigTargetResolver.Resolve(tempDir, null);
 
             Assert.Equal(2, targets.Count);
             Assert.Contains(targets, t => t.IdeName == "VS Code");
@@ -1780,7 +1781,7 @@ public class InitCommandTests
 
         try
         {
-            var targets = InitCommand.ResolveConfigTargets(tempDir, "vscode");
+            var targets = McpConfigTargetResolver.Resolve(tempDir, "vscode");
 
             Assert.Single(targets);
             Assert.Equal("VS Code", targets[0].IdeName);
@@ -2146,7 +2147,7 @@ public class InitCommandTests
         Directory.CreateDirectory(tempDir);
         try
         {
-            var targets = InitCommand.ResolveConfigTargets(tempDir, ide: null, agent: "claude");
+            var targets = McpConfigTargetResolver.Resolve(tempDir, ide: null, agent: "claude");
 
             Assert.Single(targets);
             Assert.Equal("Claude Code", targets[0].IdeName);
@@ -2163,7 +2164,7 @@ public class InitCommandTests
         Directory.CreateDirectory(Path.Combine(tempDir, ".vscode"));
         try
         {
-            var targets = InitCommand.ResolveConfigTargets(tempDir, ide: null, agent: "copilot");
+            var targets = McpConfigTargetResolver.Resolve(tempDir, ide: null, agent: "copilot");
 
             Assert.DoesNotContain(targets, t => t.IdeName == "Claude Code");
             Assert.All(targets, t => Assert.False(t.UseMcpServersKey));
@@ -2174,7 +2175,7 @@ public class InitCommandTests
     [Fact]
     public void ResolveGlobalConfigTargets_AgentClaude_ReturnsOnlyClaudeGlobal()
     {
-        var targets = InitCommand.ResolveGlobalConfigTargets(agent: "claude");
+        var targets = McpConfigTargetResolver.ResolveGlobal(agent: "claude");
 
         Assert.Single(targets);
         Assert.Equal("Claude Code (global)", targets[0].IdeName);
@@ -2186,7 +2187,7 @@ public class InitCommandTests
     [Fact]
     public void ResolveGlobalConfigTargets_AgentCopilot_ReturnsVsVsCodeAndCopilotCli()
     {
-        var targets = InitCommand.ResolveGlobalConfigTargets(agent: "copilot");
+        var targets = McpConfigTargetResolver.ResolveGlobal(agent: "copilot");
 
         Assert.Equal(3, targets.Count);
         Assert.Contains(targets, t => t.IdeName == "Visual Studio (global)");
@@ -2203,7 +2204,7 @@ public class InitCommandTests
         // not a typo. `MergeConfigContent` differs: it uses Utf8JsonWriter and takes raw
         // paths. The path-content assertion locks that contract so a future regression
         // (e.g. accidental re-escaping) would fail this test.
-        var content = InitCommand.BuildConfigContent("exe", @"C:\\repo", null, useMcpServersKey: true, agent: "claude");
+        var content = McpConfigJsonBuilder.Build("exe", @"C:\\repo", null, useMcpServersKey: true, agent: "claude");
 
         Assert.Contains("\"mcpServers\"", content);
         Assert.DoesNotContain("\"servers\":", content);
@@ -2215,7 +2216,7 @@ public class InitCommandTests
     public void BuildConfigContent_DefaultKeyIsServers()
     {
         // Same pre-escaped-path contract as the test above.
-        var content = InitCommand.BuildConfigContent("exe", @"C:\\repo", null);
+        var content = McpConfigJsonBuilder.Build("exe", @"C:\\repo", null);
 
         Assert.Contains("\"servers\"", content);
         Assert.DoesNotContain("\"mcpServers\"", content);
@@ -2234,7 +2235,7 @@ public class InitCommandTests
             }
             """;
 
-        var merged = InitCommand.MergeConfigContent(existing, "exe", @"C:\repo",
+        var merged = McpConfigJsonBuilder.Merge(existing, "exe", @"C:\repo",
             pat: null, useMcpServersKey: true, agent: "claude");
 
         Assert.Contains("\"someUserSetting\"", merged);
@@ -2340,7 +2341,7 @@ public class InitCommandTests
         Directory.CreateDirectory(Path.Combine(tempDir, ".claude"));
         try
         {
-            Assert.True(InitCommand.DetectsClaudeCode(tempDir));
+            Assert.True(McpConfigTargetResolver.DetectsClaudeCode(tempDir));
         }
         finally { Directory.Delete(tempDir, recursive: true); }
     }
@@ -2353,7 +2354,7 @@ public class InitCommandTests
         File.WriteAllText(Path.Combine(tempDir, "CLAUDE.md"), "# notes");
         try
         {
-            Assert.True(InitCommand.DetectsClaudeCode(tempDir));
+            Assert.True(McpConfigTargetResolver.DetectsClaudeCode(tempDir));
         }
         finally { Directory.Delete(tempDir, recursive: true); }
     }
@@ -2365,7 +2366,7 @@ public class InitCommandTests
         Directory.CreateDirectory(tempDir);
         try
         {
-            Assert.False(InitCommand.DetectsClaudeCode(tempDir));
+            Assert.False(McpConfigTargetResolver.DetectsClaudeCode(tempDir));
         }
         finally { Directory.Delete(tempDir, recursive: true); }
     }

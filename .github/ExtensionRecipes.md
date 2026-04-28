@@ -276,12 +276,12 @@ Orchestrator auto-discovers via `IEnumerable<IReviewAnalyzer>`.
 
 ## 5. Add or Modify a Prompt
 
-### Reference: `Cli/Prompts/review-pr.md`, `InitCommand.PromptFileNames`, `REBUSS.Pure.csproj`
+### Reference: `Cli/Prompts/review-pr.prompt.md`, `Cli/Deployment/PromptDeployer.PromptFileNames`, `REBUSS.Pure.csproj`
 
 ### Steps (new prompt)
-1. Create `REBUSS.Pure/Cli/Prompts/{name}.md`
-2. Add to csproj: `<EmbeddedResource Include="Cli\Prompts\{name}.md" />`
-3. Add to `InitCommand.PromptFileNames` array
+1. Create `REBUSS.Pure/Cli/Prompts/{name}.prompt.md`
+2. Add to csproj: `<EmbeddedResource Include="Cli\Prompts\{name}.prompt.md" />`
+3. Add to `PromptDeployer.PromptFileNames` array (in `REBUSS.Pure/Cli/Deployment/PromptDeployer.cs`)
 4. Rebuild — `rebuss-pure init` copies to `.github/prompts/`
 
 **For modifications:** edit ONLY the source in `Cli/Prompts/`, never the deployed copy.

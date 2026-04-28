@@ -159,13 +159,13 @@ internal sealed class AzureDevOpsCliAuthFlow : ICliAuthFlow
         if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
                 System.Runtime.InteropServices.OSPlatform.Windows))
         {
-            return await InitCommand.RunInteractiveProcessAsync(
+            return await CliProcessRunner.Shared.RunInteractiveAsync(
                 "winget",
                 "install -e --id Microsoft.AzureCLI --accept-source-agreements --accept-package-agreements",
                 cancellationToken);
         }
 
-        return await InitCommand.RunInteractiveProcessAsync(
+        return await CliProcessRunner.Shared.RunInteractiveAsync(
             "bash", "-c \"curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash\"", cancellationToken);
     }
 
@@ -243,7 +243,7 @@ internal sealed class AzureDevOpsCliAuthFlow : ICliAuthFlow
             return await _processRunner(arguments, cancellationToken);
 
         var (fileName, args) = AzureCliProcessHelper.GetProcessStartArgs(arguments, _azCliPathOverride);
-        return await InitCommand.RunProcessAsync(fileName, args, cancellationToken);
+        return await CliProcessRunner.Shared.RunAsync(fileName, args, cancellationToken);
     }
 
     private async Task<int> RunAzLoginInteractiveAsync(CancellationToken cancellationToken)
@@ -260,6 +260,6 @@ internal sealed class AzureDevOpsCliAuthFlow : ICliAuthFlow
         };
 
         var (fileName, args) = AzureCliProcessHelper.GetProcessStartArgs("login --allow-no-subscriptions", _azCliPathOverride);
-        return await InitCommand.RunInteractiveProcessAsync(fileName, args, cancellationToken, envOverrides);
+        return await CliProcessRunner.Shared.RunInteractiveAsync(fileName, args, cancellationToken, envOverrides);
     }
 }

@@ -113,7 +113,7 @@ Two parallel deployment formats — both shipped on every `init`, regardless of 
 **A — Copilot/IDE prompt (`.github/prompts/`)**
 1. **Source** → edit/create embedded resource in `REBUSS.Pure/Cli/Prompts/{name}.prompt.md`
 2. **Embedded entry** → if new file, add `<EmbeddedResource Include="Cli\Prompts\{name}.prompt.md" />` to `REBUSS.Pure.csproj`
-3. **Deploy list** → if new file, add `{name}.prompt.md` to `PromptFileNames` in `InitCommand.cs`
+3. **Deploy list** → if new file, add `{name}.prompt.md` to `PromptFileNames` in `REBUSS.Pure/Cli/Deployment/PromptDeployer.cs`
 4. Rebuild — `init` overwrites `.github/prompts/{name}.prompt.md` (does **not** touch `.github/instructions/`)
 
 **B — Claude Code skill (`.claude/skills/`)**
@@ -127,7 +127,7 @@ Two parallel deployment formats — both shipped on every `init`, regardless of 
    ```
    Body **must mirror** the corresponding `Cli/Prompts/{name}.prompt.md` body verbatim — the `InitCommandTests.ExecuteAsync_SkillBodyMatchesPromptBody_AfterStrippingFrontmatter` desync guard enforces this.
 2. **Embedded entry** → add `<EmbeddedResource Include="Cli\Skills\{name}\SKILL.md" LogicalName="REBUSS.Pure.Cli.Skills.{name}.SKILL.md" />` to `REBUSS.Pure.csproj` — `LogicalName` is required because hyphens in directory names confuse the default resource path resolver.
-3. **Deploy list** → add `"{name}"` to `SkillNames` in `InitCommand.cs`
+3. **Deploy list** → add `"{name}"` to `SkillNames` in `REBUSS.Pure/Cli/Deployment/ClaudeSkillDeployer.cs`
 4. Rebuild — `init` writes `.claude/skills/{name}/SKILL.md`. User-modified copies are saved to `.bak` before re-deploy; identical content is a no-op.
 
 **Note:** prompts and skills must contain identical body content; only the skill carries frontmatter. Drift is caught by the desync test.

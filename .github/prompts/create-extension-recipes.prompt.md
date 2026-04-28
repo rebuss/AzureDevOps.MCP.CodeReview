@@ -56,7 +56,7 @@ For each recipe, read the **reference implementation** files listed below **in f
 - `REBUSS.Pure.Tests/Cli/CliArgumentParserTests.cs` — first ~50 lines for parser test pattern
 
 **Recipe: New/modified prompt — read these:**
-- `REBUSS.Pure/Cli/InitCommand.cs` — search for `PromptFileNames` array and `CopyEmbeddedResourceFiles` method
+- `REBUSS.Pure/Cli/Deployment/PromptDeployer.cs` — `PromptFileNames` array + `DeployAsync` method (the deployer that `InitCommand` invokes for prompt deployment)
 - `REBUSS.Pure/Cli/Prompts/review-pr.md` — embedded resource example
 - `REBUSS.Pure/REBUSS.Pure.csproj` — verify `<EmbeddedResource>` includes
 
@@ -214,7 +214,7 @@ Test template: mock IRepositoryArchiveProvider if content fetch needed.]
 ## 5. Add or Modify a Prompt
 
 ### Reference implementation
-[Cli/Prompts/*.md files, InitCommand PromptFileNames array, REBUSS.Pure.csproj EmbeddedResource]
+[Cli/Prompts/*.prompt.md files, PromptDeployer.PromptFileNames array, REBUSS.Pure.csproj EmbeddedResource]
 
 ### Steps
 [How embedded resources work. Where to add new file. How InitCommand discovers 
