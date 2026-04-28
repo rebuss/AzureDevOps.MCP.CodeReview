@@ -59,30 +59,44 @@ internal sealed class ExtractedArchiveWorkspace : IAsyncDisposable
 
         Directory.CreateDirectory(instanceDir);
 
-        var sw = Stopwatch.StartNew();
-        await Task.WhenAll(
-            archiveProvider.DownloadRepositoryZipAsync(baseCommit, baseZip, cancellationToken),
-            archiveProvider.DownloadRepositoryZipAsync(targetCommit, targetZip, cancellationToken));
-        sw.Stop();
+        // Defensive cleanup: until we hand the workspace back to the caller, the
+        // `await using` on the consumer side cannot fire — so any exception from
+        // download/extract here would orphan instanceDir. Mirror the try/finally
+        // semantics of the pre-refactor BuildFileDiffsViaZipAsync.
+        try
+        {
+            var sw = Stopwatch.StartNew();
+            await Task.WhenAll(
+                archiveProvider.DownloadRepositoryZipAsync(baseCommit, baseZip, cancellationToken),
+                archiveProvider.DownloadRepositoryZipAsync(targetCommit, targetZip, cancellationToken));
+            sw.Stop();
 
-        logger.LogInformation(
-            "Downloaded base + target archives in {ElapsedMs}ms (base={BaseSize}B, target={TargetSize}B)",
-            sw.ElapsedMilliseconds,
-            new FileInfo(baseZip).Length,
-            new FileInfo(targetZip).Length);
+            logger.LogInformation(
+                "Downloaded base + target archives in {ElapsedMs}ms (base={BaseSize}B, target={TargetSize}B)",
+                sw.ElapsedMilliseconds,
+                new FileInfo(baseZip).Length,
+                new FileInfo(targetZip).Length);
 
-        var extractSw = Stopwatch.StartNew();
-        ZipFile.ExtractToDirectory(baseZip, baseDir);
-        ZipFile.ExtractToDirectory(targetZip, targetDir);
-        extractSw.Stop();
+            var extractSw = Stopwatch.StartNew();
+            ZipFile.ExtractToDirectory(baseZip, baseDir);
+            ZipFile.ExtractToDirectory(targetZip, targetDir);
+            extractSw.Stop();
 
-        // Free disk space — extracted trees are kept, ZIPs are not needed past this point.
-        TryDelete(baseZip, logger);
-        TryDelete(targetZip, logger);
+            // Free disk space — extracted trees are kept, ZIPs are not needed past this point.
+            TryDelete(baseZip, logger);
+            TryDelete(targetZip, logger);
 
-        logger.LogDebug("Extracted archives in {ElapsedMs}ms", extractSw.ElapsedMilliseconds);
+            logger.LogDebug("Extracted archives in {ElapsedMs}ms", extractSw.ElapsedMilliseconds);
 
-        return new ExtractedArchiveWorkspace(instanceDir, baseDir, targetDir, logger);
+            return new ExtractedArchiveWorkspace(instanceDir, baseDir, targetDir, logger);
+        }
+        catch
+        {
+            // TryDeleteDirectory is best-effort + logs; never throws — safe to call from
+            // a catch block without masking the original exception.
+            TryDeleteDirectory(instanceDir, logger);
+            throw;
+        }
     }
 
     public ValueTask DisposeAsync()

@@ -7,6 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="REBUSS.Pure.RoslynProcessor.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\REBUSS.Pure.Core\REBUSS.Pure.Core.csproj" />
   </ItemGroup>
 
