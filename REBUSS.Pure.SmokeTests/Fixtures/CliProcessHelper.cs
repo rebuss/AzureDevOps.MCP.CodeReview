@@ -218,7 +218,7 @@ public static class CliProcessHelper
         {
             if (_shadowDir is not null)
             {
-                try { Directory.Delete(_shadowDir, recursive: true); } catch { }
+                try { Directory.Delete(_shadowDir, recursive: true); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
             }
         }
     }

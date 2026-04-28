@@ -23,7 +23,7 @@ public class RepositoryCleanupServiceTests : IDisposable
         // Best-effort cleanup of any directories we created
         foreach (var dir in Directory.EnumerateDirectories(_tempDir, $"rebuss-repo-{_deadPid}*"))
         {
-            try { Directory.Delete(dir, true); } catch { }
+            try { Directory.Delete(dir, true); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
         }
     }
 
@@ -90,7 +90,7 @@ public class RepositoryCleanupServiceTests : IDisposable
         }
         finally
         {
-            try { Directory.Delete(activeDir, true); } catch { }
+            try { Directory.Delete(activeDir, true); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
         }
     }
 

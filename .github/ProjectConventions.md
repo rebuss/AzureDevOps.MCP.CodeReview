@@ -77,6 +77,7 @@ args → CliArgumentParser.Parse → Program.RunCliCommandAsync → InitCommand.
 | **Provider tests** | Use real parsers + real `StructuredDiffBuilder`/`LcsDiffAlgorithm`; mock only API client |
 | **Unit vs Smoke vs Contract** | Unit: isolated class. Smoke: compiled binary as child process (`McpProcessFixture`). Contract: real APIs with fixture PRs (env-var gated, auto-skip) |
 | **`InternalsVisibleTo`** | Each project grants access to its test project + `REBUSS.Pure` (for composition) |
+| **Test fixture cleanup** | Temp-dir cleanup in `Dispose()` uses `try { Directory.Delete(_tempDir, true); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }` — narrow filter swallows expected file-lock / permission failures (best-effort cleanup, parent `rebuss-repo-{pid}/` is sweepable on next start anyway) but lets unexpected `OutOfMemoryException` / `OperationCanceledException` / `NullReferenceException` etc. surface as a real test failure. Bare `catch { }` is **not** the convention — it would hide bugs in fixture setup itself. |
 
 ## 5. Extension Recipes
 

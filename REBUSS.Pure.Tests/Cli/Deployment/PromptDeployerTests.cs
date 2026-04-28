@@ -69,7 +69,7 @@ public class PromptDeployerTests
         }
         public void Dispose()
         {
-            try { Directory.Delete(Path, recursive: true); } catch { }
+            try { Directory.Delete(Path, recursive: true); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
         }
     }
 }

@@ -134,7 +134,7 @@ public class McpConfigTargetResolverTests
                 if (Directory.Exists(Path))
                     Directory.Delete(Path, recursive: true);
             }
-            catch
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 // Best-effort cleanup — keeping a stale temp dir is acceptable.
             }

@@ -66,15 +66,16 @@ internal sealed class AgentReviewOrchestrator : IAgentReviewOrchestrator, IAsync
 
         // Idempotent — TryRegister returns null when a job for this key is already in
         // flight; the caller will observe the same result via WaitForReviewAsync.
-        var job = _registry.TryRegister(reviewKey);
-        if (job is null)
-            return;
-
-        // IMPORTANT: Task.Run with its own None token; the body honors _shutdownToken internally.
-        // The handle is retained on the job so DisposeAsync can drain in-flight reviews on
-        // host shutdown — otherwise the process may terminate before the body's
-        // catch(OCE) branch updates Status/completes the TCS for pending waiters.
-        job.BackgroundTask = Task.Run(() => BackgroundBodyAsync(job, enrichmentResult), CancellationToken.None);
+        // The body factory is invoked atomically inside the registry lock so that
+        // BackgroundTask is set before any concurrent DisposeAsync iterates _jobs;
+        // otherwise the drain would skip a freshly-registered job with a null handle
+        // and the body could outlive shutdown without updating Status / signalling
+        // pending waiters.
+        // Task.Run uses CancellationToken.None — the body honours _shutdownToken
+        // internally via its own catch(OCE) branch.
+        _ = _registry.TryRegister(
+            reviewKey,
+            j => Task.Run(() => BackgroundBodyAsync(j, enrichmentResult), CancellationToken.None));
     }
 
     /// <summary>

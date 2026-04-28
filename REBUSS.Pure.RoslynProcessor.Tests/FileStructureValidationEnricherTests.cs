@@ -24,7 +24,7 @@ public class FileStructureValidationEnricherTests : IDisposable
 
     public void Dispose()
     {
-        try { if (Directory.Exists(_tempDir)) Directory.Delete(_tempDir, true); } catch { }
+        try { if (Directory.Exists(_tempDir)) Directory.Delete(_tempDir, true); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
     }
 
     [Fact]

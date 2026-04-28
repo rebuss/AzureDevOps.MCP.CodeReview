@@ -30,8 +30,18 @@ internal sealed class AgentReviewJobRegistry
     /// in a long-running MCP server. Returns the newly created job, or <c>null</c> when
     /// a job for this key is already in flight (idempotency — the caller will observe
     /// the same result via the existing job's <see cref="AgentReviewJob.Completion"/>).
+    /// <para>
+    /// <paramref name="backgroundBodyFactory"/> is invoked atomically inside the
+    /// registry lock — its <see cref="Task"/> result is assigned to
+    /// <see cref="AgentReviewJob.BackgroundTask"/> before this method returns, so a
+    /// concurrent <see cref="AgentReviewOrchestrator.DisposeAsync"/> draining
+    /// <c>_jobs</c> via <see cref="All"/> can never observe a freshly-registered job
+    /// with <c>BackgroundTask == null</c>. The factory MUST be cheap (queue-only) —
+    /// e.g. <see cref="Task.Run(Func{Task})"/> — because the lock is held while it
+    /// runs; doing real work here would serialize all other registrations behind it.
+    /// </para>
     /// </summary>
-    public AgentReviewJob? TryRegister(string reviewKey)
+    public AgentReviewJob? TryRegister(string reviewKey, Func<AgentReviewJob, Task> backgroundBodyFactory)
     {
         lock (_lock)
         {
@@ -47,6 +57,10 @@ internal sealed class AgentReviewJobRegistry
                     TaskCreationOptions.RunContinuationsAsynchronously),
             };
             _jobs[reviewKey] = job;
+
+            // Assigned inside the lock so DisposeAsync can never see the job before
+            // BackgroundTask is set — graceful shutdown drain stays correct.
+            job.BackgroundTask = backgroundBodyFactory(job);
             return job;
         }
     }
@@ -62,13 +76,28 @@ internal sealed class AgentReviewJobRegistry
     /// while holding the registry lock — keeps <see cref="Snapshot"/> readers from
     /// observing torn writes across <c>Status</c> / <c>Result</c> / <c>ErrorMessage</c> /
     /// <c>CompletedAt</c>.
+    /// <para>
+    /// Invariant: <c>Ready</c> requires a non-null <paramref name="result"/> — every
+    /// production caller transitioning to <c>Ready</c> has produced an
+    /// <see cref="AgentReviewResult"/>, and consumers reading a <c>Ready</c> snapshot
+    /// expect <c>Result</c> to be present. <c>Failed</c> accepts a null result (and
+    /// usually a non-null <paramref name="errorMessage"/>) — the OCE / general-catch
+    /// branches in <see cref="AgentReviewOrchestrator"/> finalize without a result.
+    /// </para>
     /// </summary>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when <paramref name="status"/> is <see cref="AgentReviewStatus.Ready"/>
+    /// and <paramref name="result"/> is null.
+    /// </exception>
     public void CompleteUnderLock(
         AgentReviewJob job,
         AgentReviewStatus status,
         AgentReviewResult? result,
         string? errorMessage)
     {
+        if (status == AgentReviewStatus.Ready)
+            ArgumentNullException.ThrowIfNull(result);
+
         lock (_lock)
         {
             job.Status = status;

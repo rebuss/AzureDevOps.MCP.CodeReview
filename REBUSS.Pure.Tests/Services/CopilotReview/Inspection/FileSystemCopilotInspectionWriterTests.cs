@@ -22,7 +22,7 @@ public class FileSystemAgentInspectionWriterTests : IDisposable
 
     public void Dispose()
     {
-        try { if (Directory.Exists(_tempDir)) Directory.Delete(_tempDir, recursive: true); } catch { }
+        try { if (Directory.Exists(_tempDir)) Directory.Delete(_tempDir, recursive: true); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
     }
 
     private FileSystemAgentInspectionWriter CreateWriter() =>

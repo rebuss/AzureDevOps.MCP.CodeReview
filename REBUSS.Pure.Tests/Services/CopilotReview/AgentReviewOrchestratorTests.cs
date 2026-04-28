@@ -197,7 +197,8 @@ public class AgentReviewOrchestratorTests
         // Rewind CompletedAt to force the sweep to consider the job stale. Reach the
         // job through the orchestrator's registry collaborator (post-Step-2 refactor).
         var registryField = typeof(AgentReviewOrchestrator)
-            .GetField("_registry", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+            .GetField("_registry", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        Assert.NotNull(registryField); // _registry field renamed?
         var registry = (AgentReviewJobRegistry)registryField.GetValue(orchestrator)!;
         Assert.True(registry.TryGet("pr:42", out var staleJob));
         staleJob.CompletedAt = DateTimeOffset.UtcNow.AddMinutes(-10);
@@ -242,7 +243,8 @@ public class AgentReviewOrchestratorTests
         // Rewind CompletedAt — should still NOT evict because retention is disabled.
         // Reach the job through the orchestrator's registry collaborator.
         var registryField = typeof(AgentReviewOrchestrator)
-            .GetField("_registry", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+            .GetField("_registry", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        Assert.NotNull(registryField); // _registry field renamed?
         var registry = (AgentReviewJobRegistry)registryField.GetValue(orchestrator)!;
         Assert.True(registry.TryGet("pr:42", out var staleJob));
         staleJob.CompletedAt = DateTimeOffset.UtcNow.AddDays(-30);

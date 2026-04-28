@@ -184,7 +184,7 @@ public class AgentInspectionRegistrationTests
         }
         finally
         {
-            try { Directory.Delete(watchDir, recursive: true); } catch { }
+            try { Directory.Delete(watchDir, recursive: true); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
         }
     }
 }

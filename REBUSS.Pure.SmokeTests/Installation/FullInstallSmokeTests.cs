@@ -335,6 +335,6 @@ public class FullInstallSmokeTests : IAsyncLifetime
 
     private static void TryDeleteDirectory(string path)
     {
-        try { Directory.Delete(path, recursive: true); } catch { }
+        try { Directory.Delete(path, recursive: true); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
     }
 }
