@@ -115,6 +115,18 @@ namespace REBUSS.Pure.Tools
                 await _progressReporter.ReportAsync(progress, 2, null,
                     "Enrichment complete — checking review mode", cancellationToken);
 
+                // Short-circuit: nothing to review at all. Without this, an empty enrichment
+                // still produces an (empty) page that gets shipped to the agent SDK, where
+                // the LLM hallucinates a "MCP tool not available" refusal instead of the
+                // intended verdict. Surface a friendly status block instead.
+                if (result.RawChangedFileCount == 0 && result.RawFileChangesFromDiff == 0)
+                {
+                    _logger.LogInformation(
+                        "No local changes detected (scope '{Scope}') — short-circuiting before agent dispatch",
+                        scopeString);
+                    return BuildFriendlyNoChangesBlocks(scopeString);
+                }
+
                 // Contradiction guard: git status enumerated changed files but the unified
                 // diff returned nothing. Surface as McpException (IsError=true) so the AI
                 // agent does not interpret an empty review as "all good — no changes."
@@ -211,6 +223,27 @@ namespace REBUSS.Pure.Tools
                         headline: "Response is still being prepared",
                         explanation: $"Background enrichment for local changes ({scopeString}) is still running.",
                         suggestedNextAction: "Retry get_local_content in a moment")
+                }
+            ];
+        }
+
+        private static List<ContentBlock> BuildFriendlyNoChangesBlocks(string scopeString)
+        {
+            var explanation = scopeString.Equals("staged", StringComparison.OrdinalIgnoreCase)
+                ? "Git index is empty — no staged changes were found."
+                : $"No changes detected for scope '{scopeString}'.";
+            var nextAction = scopeString.Equals("staged", StringComparison.OrdinalIgnoreCase)
+                ? "Stage changes with 'git add <files>' before retrying, or invoke with scope 'working-tree'."
+                : "Make local changes or pick a different scope (e.g. 'staged', 'working-tree', or a branch ref).";
+
+            return
+            [
+                new TextContentBlock
+                {
+                    Text = PlainTextFormatter.FormatFriendlyStatus(
+                        headline: $"No changes to review (scope: {scopeString})",
+                        explanation: explanation,
+                        suggestedNextAction: nextAction)
                 }
             ];
         }

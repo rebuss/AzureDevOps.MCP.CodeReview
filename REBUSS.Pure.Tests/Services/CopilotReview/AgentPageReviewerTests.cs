@@ -86,6 +86,26 @@ public class AgentPageReviewerTests
         Assert.Contains("idle without assistant message", result.ErrorMessage);
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("\n\t  \n")]
+    public async Task ReviewPage_EmptyEnrichedContent_ReturnsFailureWithoutDispatch(string emptyContent)
+    {
+        // Without this guard an empty diff would ship to the agent SDK with only the
+        // review-instruction template; the LLM then hallucinates a refusal (commonly
+        // "MCP tool not available"). The reviewer must short-circuit instead.
+        var invoker = new FakeAgentInvoker();
+
+        var reviewer = CreateReviewer(invoker);
+        var result = await reviewer.ReviewPageAsync("pr:42", 7, emptyContent);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(7, result.PageNumber);
+        Assert.Contains("Empty enriched page content", result.ErrorMessage);
+        Assert.Null(invoker.LastPrompt); // invoker never called
+    }
+
     [Fact]
     public async Task ReviewPage_PromptAssembly_ContainsTemplateAndContent()
     {

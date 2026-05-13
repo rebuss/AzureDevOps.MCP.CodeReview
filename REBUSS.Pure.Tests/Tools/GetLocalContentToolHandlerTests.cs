@@ -523,6 +523,64 @@ public class GetLocalContentToolHandlerTests
         Assert.NotNull(blocks);
     }
 
+    // --- No changes at all: friendly short-circuit, no agent dispatch ---
+
+    [Fact]
+    public async Task ExecuteAsync_NoChangesAtAll_StagedScope_ReturnsFriendlyBlock_NoReviewDispatched()
+    {
+        _enrichmentOrchestrator.WaitForEnrichmentAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new LocalEnrichmentResult
+            {
+                RepositoryRoot = "C:\\Projects\\MyRepo",
+                CurrentBranch = "main",
+                Scope = "staged",
+                SortedCandidates = Array.Empty<PackingCandidate>(),
+                EnrichedByPath = new Dictionary<string, string>(),
+                Allocation = new PageAllocation(Array.Empty<PageSlice>(), 0, 0),
+                SafeBudgetTokens = 140000,
+                CompletedAt = DateTimeOffset.UtcNow,
+                RawChangedFileCount = 0,
+                RawFileChangesFromDiff = 0,
+            });
+
+        var blocks = (await _handler.ExecuteAsync(pageNumber: 1, scope: "staged")).ToList();
+        var text = AllText(blocks);
+
+        Assert.Contains("No changes to review", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("staged", text);
+        Assert.Contains("git add", text, StringComparison.OrdinalIgnoreCase);
+
+        // Critical: the agent SDK must never be dispatched in this case. Otherwise the
+        // LLM hallucinates a refusal that looks like a missing-MCP-tool error.
+        _reviewOrchestrator.DidNotReceive().TriggerReview(Arg.Any<string>(), Arg.Any<IEnrichmentResult>());
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_NoChangesAtAll_WorkingTreeScope_ReturnsFriendlyBlock()
+    {
+        _enrichmentOrchestrator.WaitForEnrichmentAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new LocalEnrichmentResult
+            {
+                RepositoryRoot = "C:\\Projects\\MyRepo",
+                CurrentBranch = "main",
+                Scope = "working-tree",
+                SortedCandidates = Array.Empty<PackingCandidate>(),
+                EnrichedByPath = new Dictionary<string, string>(),
+                Allocation = new PageAllocation(Array.Empty<PageSlice>(), 0, 0),
+                SafeBudgetTokens = 140000,
+                CompletedAt = DateTimeOffset.UtcNow,
+                RawChangedFileCount = 0,
+                RawFileChangesFromDiff = 0,
+            });
+
+        var blocks = (await _handler.ExecuteAsync(pageNumber: 1, scope: "working-tree")).ToList();
+        var text = AllText(blocks);
+
+        Assert.Contains("No changes to review", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("working-tree", text);
+        _reviewOrchestrator.DidNotReceive().TriggerReview(Arg.Any<string>(), Arg.Any<IEnrichmentResult>());
+    }
+
     // --- Strict mode -> CopilotUnavailableException propagated ---
 
     [Fact]

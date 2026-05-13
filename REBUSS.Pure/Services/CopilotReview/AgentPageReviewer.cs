@@ -45,6 +45,23 @@ internal sealed class AgentPageReviewer : IAgentPageReviewer
         ArgumentNullException.ThrowIfNull(reviewKey);
         ArgumentNullException.ThrowIfNull(enrichedPageContent);
 
+        // Defence-in-depth: never dispatch an empty diff to the agent SDK. With no diff
+        // text below the review-instruction template, the LLM treats the template as the
+        // entire input and hallucinates a refusal (commonly the "MCP tool not available"
+        // pattern). Upstream short-circuits should make this unreachable, but if they
+        // are bypassed (custom orchestrator, future code path), fail loudly here.
+        if (string.IsNullOrWhiteSpace(enrichedPageContent))
+        {
+            _logger.LogWarning(
+                "Refusing to dispatch empty enriched content for review key '{ReviewKey}' page {Page}",
+                reviewKey, pageNumber);
+            return AgentPageReviewResult.Failure(
+                pageNumber,
+                Array.Empty<string>(),
+                "Empty enriched page content — refusing to dispatch to agent SDK to avoid hallucinated refusals.",
+                attemptsMade: 1);
+        }
+
         string prompt;
         try
         {
